@@ -1,356 +1,235 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#111111">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111">
 <title>RUSH POS</title>
 <style>
-:root{
-  --bg:#f5f5f5;--card:#fff;--ink:#111;--muted:#6b7280;--line:#e5e7eb;
-  --accent:#111;--accent2:#e5e7eb;--ok:#16803c;--warn:#b45309;--danger:#b91c1c;
-}
-*{box-sizing:border-box}
-body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
-button,input,select,textarea{font:inherit}
-button{cursor:pointer}
-.app{min-height:100vh}
-header{
-  position:sticky;top:0;z-index:20;background:#111;color:#fff;padding:12px 16px;
-  display:flex;align-items:center;justify-content:space-between;gap:12px
-}
-.brand{font-size:22px;font-weight:800;letter-spacing:.5px}
-.sub{font-size:12px;color:#bbb}
-.header-right{display:flex;align-items:center;gap:8px}
-.status{font-size:12px;padding:6px 9px;border-radius:999px;background:#333}
-.status.ok{background:#14532d}.status.bad{background:#7f1d1d}
-main{max-width:1400px;margin:auto;padding:14px}
-.nav{
- display:flex;gap:8px;overflow:auto;padding-bottom:10px;position:sticky;top:61px;z-index:10;
- background:var(--bg)
-}
-.nav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 14px;white-space:nowrap}
-.nav button.active{background:#111;color:#fff;border-color:#111}
-.view{display:none}.view.active{display:block}
-.grid{display:grid;grid-template-columns:1.6fr 1fr;gap:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
-h2,h3{margin:0 0 12px}
-.muted{color:var(--muted)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
-.stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
-.stat .n{font-size:28px;font-weight:800;margin-top:5px}
-.products{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.product{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px;text-align:left;min-height:105px}
-.product:active{transform:scale(.99)}
-.product .name{font-weight:700}.product .price{margin-top:8px;font-weight:800}
-.category-title{margin:18px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.order-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
-.row:last-child{border-bottom:0}
-.qty{display:flex;align-items:center;gap:5px}
-.qty button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#fff}
-.btn{border:0;border-radius:10px;padding:10px 13px;background:#111;color:#fff}
-.btn.secondary{background:#fff;color:#111;border:1px solid var(--line)}
-.btn.success{background:var(--ok)}.btn.warn{background:var(--warn)}.btn.danger{background:var(--danger)}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.total{font-size:22px;font-weight:800;display:flex;justify-content:space-between;margin-top:12px}
-input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff}
-label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.table-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.table-btn{padding:16px 8px;border:1px solid var(--line);background:#fff;border-radius:12px;text-align:center}
-.table-btn.selected{border:2px solid #111;background:#f0f0f0}
-.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;background:#eee}
-.badge.open{background:#fef3c7;color:#92400e}.badge.preparing{background:#dbeafe;color:#1d4ed8}
-.badge.ready{background:#dcfce7;color:#166534}.badge.paid{background:#dcfce7;color:#166534}
-.order-card{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:#fff}
-.order-card .top{display:flex;justify-content:space-between;gap:8px}
-.empty{text-align:center;padding:35px 15px;color:var(--muted)}
-.toast{
- position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111;color:#fff;
- padding:11px 16px;border-radius:10px;z-index:100;display:none;max-width:90%
-}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:15px}
-.modal.show{display:flex}.modal-box{background:#fff;border-radius:16px;width:min(520px,100%);padding:18px;max-height:90vh;overflow:auto}
-.small{font-size:12px}
-@media(max-width:850px){
- .grid{grid-template-columns:1fr}
- .products{grid-template-columns:repeat(2,1fr)}
- .table-grid{grid-template-columns:repeat(3,1fr)}
- .stats{grid-template-columns:1fr}
- .nav{top:58px}
-}
-@media(max-width:480px){
- main{padding:9px}.products{grid-template-columns:repeat(2,1fr);gap:7px}
- .product{padding:10px;min-height:95px}.form-grid{grid-template-columns:1fr}
- header{padding:10px}.brand{font-size:19px}
-}
+:root{font-family:Arial,Helvetica,sans-serif;color:#111;background:#f5f5f5}
+*{box-sizing:border-box}body{margin:0;background:#f5f5f5}.hidden{display:none!important}
+button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid #ddd;background:white;border-radius:14px;padding:14px 18px}
+button.primary{background:#111;color:#fff;border-color:#111}button.danger{background:#b91c1c;color:#fff;border-color:#b91c1c}
+input,select,textarea{width:100%;padding:14px;border:1px solid #ddd;border-radius:12px;background:#fff}
+header{background:#111;color:#fff;padding:18px 20px;position:sticky;top:0;z-index:5}
+.top{display:flex;justify-content:space-between;align-items:center;gap:15px}.brand{font-size:25px;font-weight:800}.sub{color:#bbb;margin-top:3px}.pill{padding:9px 14px;border-radius:999px;background:#205f32}
+nav{display:flex;gap:10px;overflow:auto;padding:12px 16px;background:#fff;border-bottom:1px solid #ddd}
+nav button{white-space:nowrap}.active{background:#111;color:#fff}
+main{max-width:1100px;margin:auto;padding:18px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.card{background:#fff;border:1px solid #e1e1e1;border-radius:18px;padding:18px}.title{font-size:30px;font-weight:800;margin:0 0 14px}
+.product{min-height:120px;text-align:left}.product b{font-size:20px}.price{font-size:18px;margin-top:8px}
+.row{display:flex;gap:10px;align-items:center}.between{justify-content:space-between}.stack>*+*{margin-top:10px}
+.order-item{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #eee}
+.total{font-size:28px;font-weight:800}.muted{color:#777}.login{min-height:100vh;display:grid;place-items:center;padding:20px}.loginbox{width:min(430px,100%);background:#fff;border-radius:24px;padding:28px;border:1px solid #ddd}
+.status{padding:6px 10px;border-radius:999px;background:#eee;font-size:13px}.status.open{background:#fff2cc}.status.preparing{background:#dbeafe}.status.ready{background:#dcfce7}.status.paid{background:#e5e7eb}
+table{width:100%;border-collapse:collapse;background:#fff}th,td{text-align:left;padding:12px;border-bottom:1px solid #eee}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:14px 18px;border-radius:12px;z-index:20}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:30;display:grid;place-items:center;padding:12px}.modalbox{background:#fff;border-radius:22px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:20px}.split-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.payer{border:1px solid #ddd;border-radius:16px;padding:14px}.payer h3{margin:0 0 8px}.alloc{display:grid;grid-template-columns:1fr 70px 90px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #eee}.big-pay{font-size:22px;font-weight:800}.payment-summary{background:#f7f7f7;border-radius:14px;padding:12px}.terminal{background:#fff7d6;border:1px solid #ead78b;border-radius:14px;padding:12px}
+@media(max-width:650px){main{padding:12px}.title{font-size:25px}.top{align-items:flex-start}.top button{padding:9px}.card{padding:15px}}
 </style>
 </head>
 <body>
-<div class="app">
+
+<section id="loginView" class="login">
+  <div class="loginbox">
+    <h1 style="font-size:36px;margin:0">RUSH POS</h1>
+    <p class="muted">Rush Club Pádel · Punto de venta</p>
+    <div class="stack">
+      <label>Usuario<input id="loginUser" autocomplete="username" placeholder="Usuario"></label>
+      <label>Contraseña<input id="loginPass" type="password" autocomplete="current-password" placeholder="Contraseña"></label>
+      <button class="primary" onclick="login()">Iniciar sesión</button>
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:18px">Acceso por perfiles: Administrador, Mesero y Cocina.</p>
+  </div>
+</section>
+
+<section id="appView" class="hidden">
 <header>
-  <div><div class="brand">RUSH POS</div><div class="sub">Rush Club Pádel · Punto de venta</div></div>
-  <div class="header-right"><span id="apiStatus" class="status">Conectando…</span></div>
+  <div class="top">
+    <div><div class="brand">RUSH POS</div><div class="sub">Rush Club Pádel · Punto de venta</div></div>
+    <div class="row"><span id="userPill" class="pill">● Conectado</span><button onclick="logout()">Salir</button></div>
+  </div>
 </header>
-
+<nav id="nav"></nav>
 <main>
-<nav class="nav">
-  <button class="active" data-view="venta">🛒 Venta</button>
-  <button data-view="mesas">🪑 Mesas</button>
-  <button data-view="cocina">👨‍🍳 Cocina</button>
-  <button data-view="caja">💵 Caja</button>
-  <button data-view="ventas">📊 Ventas</button>
-</nav>
+  <section id="venta" class="view">
+    <h1 class="title">Venta</h1>
+    <div class="grid">
+      <div class="card">
+        <h2>Productos</h2>
+        <button onclick="loadAll()">↻ Actualizar</button>
+        <div id="products" class="grid" style="margin-top:14px"></div>
+      </div>
+      <div class="card">
+        <h2>Orden</h2>
+        <label>Mesa<select id="tableSelect"></select></label>
+        <label style="display:block;margin-top:10px">Cliente<input id="customer" placeholder="Nombre"></label>
+        <div id="cart" style="margin-top:15px"></div>
+        <div class="row between" style="margin-top:15px"><span class="total">Total</span><span id="cartTotal" class="total">$0.00</span></div>
+        <label style="display:block;margin-top:10px">Notas<textarea id="notes" rows="3" placeholder="Sin azúcar, entrega en mesa, etc."></textarea></label>
+        <button class="primary" style="width:100%;margin-top:10px" onclick="sendOrder()">Enviar a cocina</button>
+      </div>
+    </div>
+  </section>
 
-<section id="venta" class="view active">
- <div class="grid">
-  <div class="card">
-   <div class="order-head"><h2>Productos</h2><button class="btn secondary" onclick="loadAll()">↻ Actualizar</button></div>
-   <div id="products"></div>
-  </div>
-  <div class="card">
-   <div class="order-head"><h2>Orden</h2><button class="btn secondary" onclick="clearCart()">Vaciar</button></div>
-   <div class="form-grid" style="margin:10px 0">
-    <div><label>Mesa</label><select id="orderTable"><option value="">Sin mesa</option></select></div>
-    <div><label>Cliente</label><input id="customerName" placeholder="Nombre"></div>
-   </div>
-   <div id="cart"></div>
-   <div class="total"><span>Total</span><span id="cartTotal">$0.00</span></div>
-   <div><label style="margin-top:12px">Notas</label><textarea id="orderNotes" rows="2" placeholder="Sin azúcar, entrega en mesa, etc."></textarea></div>
-   <div class="actions">
-    <button class="btn" id="sendOrder" onclick="sendOrder()">Enviar a cocina</button>
-   </div>
-  </div>
- </div>
-</section>
-
-<section id="mesas" class="view">
- <div class="card">
-  <h2>Mesas</h2><p class="muted small">Selecciona una mesa para la siguiente orden.</p>
-  <div id="tables" class="table-grid"></div>
- </div>
-</section>
-
-<section id="cocina" class="view">
- <div class="card">
-  <div class="order-head"><h2>Cocina</h2><button class="btn secondary" onclick="loadOrders()">↻ Actualizar</button></div>
-  <div id="kitchenOrders"></div>
- </div>
-</section>
-
-<section id="caja" class="view">
- <div class="stats">
-  <div class="stat"><div class="muted">Ventas de hoy</div><div id="cashSales" class="n">$0.00</div></div>
-  <div class="stat"><div class="muted">Órdenes abiertas</div><div id="cashOpen" class="n">0</div></div>
-  <div class="stat"><div class="muted">En cocina</div><div id="cashKitchen" class="n">0</div></div>
- </div>
- <div class="grid">
-  <div class="card">
-   <h2>Movimiento de caja</h2>
-   <div class="form-grid">
-    <div><label>Tipo</label><select id="cashType"><option value="in">Entrada</option><option value="out">Salida</option></select></div>
-    <div><label>Monto</label><input id="cashAmount" type="number" step="0.01" min="0"></div>
-   </div>
-   <div style="margin-top:10px"><label>Concepto</label><input id="cashConcept" placeholder="Ej. compra de hielo"></div>
-   <div class="actions"><button class="btn" onclick="addCash()">Registrar</button></div>
-  </div>
-  <div class="card">
-   <h2>Cobrar orden</h2>
-   <p class="muted">Elige una orden abierta desde Ventas y utiliza el botón Cobrar.</p>
-  </div>
- </div>
-</section>
-
-<section id="ventas" class="view">
- <div class="card">
-  <div class="order-head"><h2>Ventas y órdenes</h2><button class="btn secondary" onclick="loadOrders()">↻ Actualizar</button></div>
-  <div id="salesOrders"></div>
- </div>
-</section>
+  <section id="mesas" class="view hidden"><h1 class="title">Mesas</h1><div id="tables" class="grid"></div></section>
+  <section id="cocina" class="view hidden"><h1 class="title">Cocina</h1><div id="kitchenOrders" class="grid"></div></section>
+  <section id="ordenes" class="view hidden"><h1 class="title">Órdenes</h1><div id="orders" class="grid"></div></section>
+  <section id="caja" class="view hidden"><h1 class="title">Caja</h1><div id="dashboard" class="grid"></div><div class="card" style="margin-top:15px"><h2>Movimiento de caja</h2><div class="grid"><input id="cashAmount" type="number" placeholder="Monto"><input id="cashConcept" placeholder="Concepto"><button class="primary" onclick="cashIn()">Registrar ingreso</button><button onclick="cashOut()">Registrar egreso</button></div></div></section>
+  <section id="productos" class="view hidden"><h1 class="title">Productos</h1><div class="card"><div class="grid"><input id="pName" placeholder="Nombre"><input id="pCategory" placeholder="Categoría"><input id="pPrice" type="number" step=".01" placeholder="Precio"><input id="pDesc" placeholder="Descripción"><button class="primary" onclick="createProduct()">Crear producto</button></div></div><div id="productAdmin" class="grid" style="margin-top:15px"></div></section>
+  <section id="usuarios" class="view hidden"><h1 class="title">Usuarios</h1><div class="card"><h2>Crear usuario</h2><div class="grid"><input id="uName" placeholder="Nombre"><input id="uUsername" placeholder="Usuario"><input id="uPassword" type="password" placeholder="Contraseña"><select id="uRole"><option value="mesero">Mesero</option><option value="cocina">Cocina</option><option value="admin">Administrador</option></select><button class="primary" onclick="createUser()">Crear usuario</button></div></div><div id="users" style="margin-top:15px"></div></section>
 </main>
+</section>
+
+<div id="paymentModal" class="modal hidden">
+  <div class="modalbox">
+    <div class="row between"><div><h2 style="margin:0">Cobro de cuenta</h2><p id="payOrderInfo" class="muted" style="margin:5px 0"></p></div><button onclick="closePayment()">✕</button></div>
+    <div id="paymentBody" style="margin-top:14px"></div>
+  </div>
 </div>
 
-<div id="toast" class="toast"></div>
-
-<div id="payModal" class="modal">
- <div class="modal-box">
-  <h2>Cobrar orden</h2>
-  <div id="payInfo" style="margin:10px 0"></div>
-  <label>Método de pago</label>
-  <select id="paymentMethod"><option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option></select>
-  <div class="actions"><button class="btn secondary" onclick="closePay()">Cancelar</button><button class="btn success" onclick="confirmPay()">Confirmar pago</button></div>
- </div>
-</div>
+<div id="toast" class="toast hidden"></div>
 
 <script>
-const API = "/api";
-let menu=[], tables=[], orders=[], cart=[], selectedTable="";
-let payOrderId=null;
+const API="/api";
+let token=localStorage.getItem("rush_token");
+let me=null, products=[], tables=[], cart=[];
 
-const money = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(n)||0);
-const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-const toast = msg => {const t=document.getElementById("toast");t.textContent=msg;t.style.display="block";clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.style.display="none",2600)};
-async function api(path, opts={}){
-  const r=await fetch(API+path,{headers:{"Content-Type":"application/json",...(opts.headers||{})},...opts});
-  let d={}; try{d=await r.json()}catch{}
-  if(!r.ok) throw new Error(d.error||"Error del servidor");
-  return d;
+const $=id=>document.getElementById(id);
+function toast(msg){$("toast").textContent=msg;$("toast").classList.remove("hidden");setTimeout(()=>$("toast").classList.add("hidden"),3000)}
+async function api(path,opts={}){
+  opts.headers={...(opts.headers||{}),"Content-Type":"application/json"};
+  if(token) opts.headers.Authorization="Bearer "+token;
+  const r=await fetch(API+path,opts);
+  const data=await r.json().catch(()=>({}));
+  if(r.status===401){logout(false);throw new Error(data.error||"Sesión expirada")}
+  if(!r.ok) throw new Error(data.error||"Error");
+  return data;
 }
-async function health(){
-  try{await api("/health");const s=document.getElementById("apiStatus");s.textContent="● Conectado";s.className="status ok"}
-  catch(e){const s=document.getElementById("apiStatus");s.textContent="Sin conexión";s.className="status bad"}
+async function login(){
+  try{
+    const data=await api("/login",{method:"POST",body:JSON.stringify({username:$("loginUser").value,password:$("loginPass").value})});
+    token=data.token;localStorage.setItem("rush_token",token);me=data.user;showApp();loadAll();
+  }catch(e){toast(e.message)}
 }
-async function loadMenu(){
-  menu=await api("/menu"); renderProducts();
+async function logout(show=true){
+  try{if(token) await api("/logout",{method:"POST"})}catch{}
+  token=null;me=null;localStorage.removeItem("rush_token");$("appView").classList.add("hidden");$("loginView").classList.remove("hidden");if(show) toast("Sesión cerrada");
 }
-async function loadTables(){
-  tables=await api("/tables");
-  const sel=document.getElementById("orderTable");
-  sel.innerHTML='<option value="">Sin mesa</option>'+tables.map(t=>`<option value="${esc(t.id)}">${esc(t.name||("Mesa "+t.number))}</option>`).join("");
-  if(selectedTable) sel.value=selectedTable;
-  renderTables();
+async function boot(){
+  if(!token)return;
+  try{const d=await api("/me");me=d.user;showApp();loadAll()}catch{}
 }
-async function loadOrders(){
-  orders=await api("/orders"); renderKitchen(); renderSales(); await loadDashboard();
+function showApp(){
+  $("loginView").classList.add("hidden");$("appView").classList.remove("hidden");
+  $("userPill").textContent=`● ${me.name} · ${roleName(me.role)}`;
+  const nav=[];
+  if(["admin","mesero"].includes(me.role)) nav.push(["venta","🛒 Venta"]);
+  if(["admin","mesero"].includes(me.role)) nav.push(["mesas","🪑 Mesas"]);
+  if(["admin","cocina"].includes(me.role)) nav.push(["cocina","👨‍🍳 Cocina"]);
+  if(["admin","mesero"].includes(me.role)) nav.push(["ordenes","📋 Órdenes"]);
+  if(me.role==="admin") nav.push(["caja","💰 Caja"],["productos","📦 Productos"],["usuarios","👥 Usuarios"]);
+  $("nav").innerHTML=nav.map((x,i)=>`<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`).join("");
+  if(nav[0]) view(nav[0][0],$("nav").firstElementChild);
 }
-async function loadDashboard(){
- try{
-  const d=await api("/dashboard");
-  document.getElementById("cashSales").textContent=money(d.sales?.total);
-  document.getElementById("cashOpen").textContent=d.open?.count||0;
-  document.getElementById("cashKitchen").textContent=d.kitchen?.count||0;
- }catch(e){}
+function roleName(r){return r==="admin"?"Administrador":r==="mesero"?"Mesero":"Cocina"}
+function view(id,btn){
+  document.querySelectorAll(".view").forEach(x=>x.classList.add("hidden"));$(id).classList.remove("hidden");
+  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));if(btn)btn.classList.add("active");
+  if(id==="mesas")renderTables(); if(id==="cocina")loadKitchen();if(id==="ordenes")loadOrders();if(id==="caja")loadDashboard();if(id==="productos")renderProductAdmin();if(id==="usuarios")loadUsers();
 }
 async function loadAll(){
- try{await Promise.all([health(),loadMenu(),loadTables(),loadOrders()]);}
- catch(e){toast(e.message)}
+  try{
+    products=await api("/menu");tables=await api("/tables");
+    renderProducts();renderTableSelect();renderTables();
+    if(me.role==="cocina"||me.role==="admin")loadKitchen();
+  }catch(e){toast(e.message)}
 }
 function renderProducts(){
- const box=document.getElementById("products");
- if(!menu.length){box.innerHTML='<div class="empty">No hay productos activos en el menú.</div>';return}
- const cats={};menu.forEach(x=>(cats[x.category||"General"]??=[]).push(x));
- box.innerHTML=Object.entries(cats).map(([cat,items])=>`
-   <div class="category-title">${esc(cat)}</div>
-   <div class="products">${items.map(p=>`
-     <button class="product" onclick="addProduct('${esc(p.id)}')">
-       <div class="name">${esc(p.name)}</div>
-       <div class="muted small">${esc(p.description||"")}</div>
-       <div class="price">${money(p.price)}</div>
-     </button>`).join("")}</div>`).join("");
+  $("products").innerHTML=products.length?products.map(p=>`<button class="product" onclick="addCart('${p.id}')"><b>${esc(p.name)}</b><div class="muted">${esc(p.category||"")}</div><div class="price">$${money(p.price)}</div></button>`).join(""):"<p class='muted'>No hay productos. El administrador debe crearlos.</p>";
 }
-function addProduct(id){
- const p=menu.find(x=>x.id===id);if(!p)return;
- const found=cart.find(x=>x.menu_item_id===id);
- if(found)found.qty++;else cart.push({menu_item_id:p.id,name:p.name,qty:1,unit_price:Number(p.price)||0,modifiers:[],notes:""});
- renderCart();
-}
-function changeQty(i,d){cart[i].qty+=d;if(cart[i].qty<=0)cart.splice(i,1);renderCart()}
-function clearCart(){cart=[];renderCart()}
-function renderCart(){
- const box=document.getElementById("cart");
- if(!cart.length){box.innerHTML='<div class="empty">Agrega productos para crear una orden.</div>';document.getElementById("cartTotal").textContent=money(0);return}
- box.innerHTML=cart.map((x,i)=>`<div class="row">
-  <div style="flex:1"><b>${esc(x.name)}</b><div class="muted small">${money(x.unit_price)} c/u</div></div>
-  <div class="qty"><button onclick="changeQty(${i},-1)">−</button><b>${x.qty}</b><button onclick="changeQty(${i},1)">+</button></div>
-  <b>${money(x.qty*x.unit_price)}</b>
- </div>`).join("");
- document.getElementById("cartTotal").textContent=money(cart.reduce((s,x)=>s+x.qty*x.unit_price,0));
+function renderTableSelect(){
+  $("tableSelect").innerHTML="<option value=''>Sin mesa</option>"+tables.map(t=>`<option value="${t.id}">${esc(t.name||"Mesa "+t.number)}</option>`).join("");
 }
 function renderTables(){
- const box=document.getElementById("tables");
- if(!tables.length){box.innerHTML='<div class="empty">No hay mesas configuradas.</div>';return}
- box.innerHTML=tables.map(t=>`<button class="table-btn ${selectedTable===t.id?"selected":""}" onclick="selectTable('${esc(t.id)}')">
-  <b>${esc(t.name||("Mesa "+t.number))}</b><br><span class="muted small">${esc(t.type||"Mesa")}</span>
- </button>`).join("");
+  $("tables").innerHTML=tables.map(t=>`<div class="card"><div class="row between"><h2>${esc(t.name||"Mesa "+t.number)}</h2><span class="status">${esc(t.status)}</span></div><p>Capacidad: ${t.capacity}</p>${me.role==="admin"||me.role==="mesero"?`<button onclick="setTable('${t.id}','available')">Disponible</button> <button onclick="setTable('${t.id}','reserved')">Reservar</button>`:""}</div>`).join("");
 }
-function selectTable(id){selectedTable=id;document.getElementById("orderTable").value=id;renderTables();showView("venta")}
-document.getElementById("orderTable").addEventListener("change",e=>{selectedTable=e.target.value;renderTables()});
-
-async function sendOrder(){
- if(!cart.length){toast("Agrega al menos un producto.");return}
- const btn=document.getElementById("sendOrder");btn.disabled=true;
- try{
-  const d=await api("/orders",{method:"POST",body:JSON.stringify({
-   table_id:document.getElementById("orderTable").value||null,
-   customer_name:document.getElementById("customerName").value.trim(),
-   notes:document.getElementById("orderNotes").value.trim(),
-   items:cart
-  })});
-  toast("Orden enviada a cocina · "+money(d.total));
-  clearCart();document.getElementById("customerName").value="";document.getElementById("orderNotes").value="";
-  await loadOrders();
- }catch(e){toast(e.message)}finally{btn.disabled=false}
+async function setTable(id,status){try{await api("/tables/"+id,{method:"PATCH",body:JSON.stringify({status})});tables=await api("/tables");renderTables();renderTableSelect()}catch(e){toast(e.message)}}
+function addCart(id){const p=products.find(x=>x.id===id);if(!p)return;const x=cart.find(x=>x.menu_item_id===id);if(x)x.qty++;else cart.push({menu_item_id:id,name:p.name,qty:1,unit_price:Number(p.price)});renderCart()}
+function renderCart(){$("cart").innerHTML=cart.length?cart.map((x,i)=>`<div class="order-item"><span>${x.qty} × ${esc(x.name)}</span><span>$${money(x.qty*x.unit_price)} <button onclick="cart[${i}].qty--;if(cart[${i}].qty<=0)cart.splice(${i},1);renderCart()">−</button></span></div>`).join(""):"<p class='muted'>Agrega productos.</p>";$("cartTotal").textContent="$"+money(cart.reduce((s,x)=>s+x.qty*x.unit_price,0))}
+async function sendOrder(){if(!cart.length)return toast("Agrega al menos un producto.");try{await api("/orders",{method:"POST",body:JSON.stringify({table_id:$("tableSelect").value||null,customer_name:$("customer").value,notes:$("notes").value,items:cart})});toast("Orden enviada a cocina");cart=[];renderCart();$("customer").value="";$("notes").value="";tables=await api("/tables");renderTableSelect()}catch(e){toast(e.message)}}
+async function loadKitchen(){try{const os=await api("/orders");const open=os.filter(x=>["open","preparing","ready"].includes(x.status));$("kitchenOrders").innerHTML=open.map(o=>`<div class="card"><div class="row between"><h2>Mesa ${tableName(o.table_id)}</h2><span class="status ${o.status}">${o.status}</span></div><p>${esc(o.customer_name||"Sin cliente")}</p><p>$${money(o.total)}</p><div class="row">${o.status==="open"?`<button class="primary" onclick="orderStatus('${o.id}','preparing')">Preparando</button>`:""}${o.status==="preparing"?`<button class="primary" onclick="orderStatus('${o.id}','ready')">Listo</button>`:""}${o.status==="ready"&&me.role==="admin"?`<button onclick="orderStatus('${o.id}','paid')">Cobrar</button>`:""}</div></div>`).join("")||"<p class='muted'>No hay pedidos pendientes.</p>"}catch(e){toast(e.message)}}
+async function orderStatus(id,status){try{await api("/orders/"+id,{method:"PATCH",body:JSON.stringify({status})});loadKitchen();if(status==="paid")loadOrders()}catch(e){toast(e.message)}}
+async function loadOrders(){try{const os=await api("/orders");$("orders").innerHTML=os.map(o=>`<div class="card"><div class="row between"><h3>Orden ${o.id.slice(0,8)}</h3><span class="status ${o.status}">${o.status}</span></div><p>Mesa: ${tableName(o.table_id)}</p><p>${esc(o.customer_name||"Sin cliente")}</p><b>$${money(o.total)}</b>${Number(o.paid_amount||0)>0?`<div class="payment-summary" style="margin-top:10px"><b>Cobrado: $${money(o.paid_amount)}</b><br><small>Efectivo $${money(o.paid_cash)} · Tarjeta $${money(o.paid_card)} · Terminal $${money(o.terminal_amount)}</small>${o.paid_amount<o.total?`<br><small class="muted">Pendiente $${money(o.total-o.paid_amount)}</small>`:""}</div>`:""}${["mesero","admin"].includes(me.role)&&["ready"].includes(o.status)?`<button class="primary" style="margin-top:10px" onclick="pay('${o.id}')">Cobrar / dividir cuenta</button>`:""}</div>`).join("")}catch(e){toast(e.message)}}
+let paymentState=null;
+async function pay(id){
+  try{
+    const d=await api("/orders/"+id);
+    paymentState={...d,payers:[{name:"Cliente 1",alloc:{},method:"cash",cash:0,card:0,terminal:0,ref:""}]};
+    $("paymentModal").classList.remove("hidden"); renderPaymentModal();
+  }catch(e){toast(e.message)}
 }
-
-function statusLabel(s){return {open:"Abierta",preparing:"Preparando",ready:"Lista",paid:"Pagada",cancelled:"Cancelada"}[s]||s}
-function badge(s){return `<span class="badge ${esc(s)}">${esc(statusLabel(s))}</span>`}
-function renderKitchen(){
- const active=orders.filter(o=>["open","preparing","ready"].includes(o.status));
- const box=document.getElementById("kitchenOrders");
- if(!active.length){box.innerHTML='<div class="empty">No hay órdenes pendientes.</div>';return}
- box.innerHTML=active.map(o=>`<div class="order-card">
-  <div class="top"><div><b>Orden ${esc(o.id?.slice(0,8))}</b><div class="muted small">${esc(o.customer_name||"Sin nombre")} · ${esc(o.table_id||"Sin mesa")}</div></div>${badge(o.status)}</div>
-  <div class="small muted" style="margin-top:7px">Total: ${money(o.total)}</div>
-  <div class="actions">
-   ${o.status==="open"?`<button class="btn" onclick="setStatus('${esc(o.id)}','preparing')">Preparar</button>`:""}
-   ${o.status==="preparing"?`<button class="btn success" onclick="setStatus('${esc(o.id)}','ready')">Marcar lista</button>`:""}
-   ${o.status==="ready"?`<button class="btn warn" onclick="openPay('${esc(o.id)}')">Cobrar</button>`:""}
-  </div>
- </div>`).join("");
+function closePayment(){paymentState=null;$("paymentModal").classList.add("hidden")}
+function addPayer(){const n=paymentState.payers.length+1;paymentState.payers.push({name:"Cliente "+n,alloc:{},method:"cash",cash:0,card:0,terminal:0,ref:""});renderPaymentModal()}
+function removePayer(i){if(paymentState.payers.length<=1)return;paymentState.payers.splice(i,1);renderPaymentModal()}
+function assignedQty(itemId){return paymentState.payers.reduce((s,p)=>s+Number(p.alloc[itemId]||0),0)}
+function payerTotal(p){return paymentState.items.reduce((s,it)=>s+Number(p.alloc[it.id]||0)*Number(it.unit_price||0),0)}
+function renderPaymentModal(){
+  const d=paymentState;
+  const paid=Number(d.paid||0), remaining=Math.max(0,Number(d.order.total||0)-paid);
+  $("payOrderInfo").textContent=`Orden ${d.order.id.slice(0,8)} · Total $${money(d.order.total)} · Pendiente $${money(remaining)}`;
+  $("paymentBody").innerHTML=`
+    <div class="payment-summary"><b>¿Cómo dividir la cuenta?</b><p class="muted">Puedes cobrar todo a una persona o repartir productos entre varios invitados. Cada persona puede pagar en efectivo, tarjeta o combinar ambos.</p></div>
+    <div class="row" style="margin:12px 0;flex-wrap:wrap"><button class="primary" onclick="addPayer()">＋ Agregar persona</button><button onclick="assignAllToFirst()">Asignar todo al primero</button></div>
+    <div class="split-grid">${d.payers.map((p,i)=>payerCard(p,i)).join("")}</div>
+    <div class="payment-summary" style="margin-top:14px"><div class="row between"><span>Asignado entre invitados</span><b>$${money(d.payers.reduce((s,p)=>s+payerTotal(p),0))}</b></div><div class="row between"><span>Saldo de la cuenta</span><b>$${money(remaining)}</b></div></div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px"><button onclick="closePayment()">Cancelar</button><button class="primary" onclick="submitPayments()">Registrar cobros</button></div>`;
 }
-function renderSales(){
- const box=document.getElementById("salesOrders");
- if(!orders.length){box.innerHTML='<div class="empty">Todavía no hay órdenes.</div>';return}
- box.innerHTML=orders.map(o=>`<div class="order-card">
-  <div class="top"><div><b>Orden ${esc(o.id?.slice(0,8))}</b><div class="muted small">${esc(o.created_at||"")} · ${esc(o.customer_name||"Sin nombre")}</div></div>${badge(o.status)}</div>
-  <div style="display:flex;justify-content:space-between;margin-top:8px"><span class="muted">Total</span><b>${money(o.total)}</b></div>
-  <div class="actions">
-   ${o.status!=="paid"?`<button class="btn success" onclick="openPay('${esc(o.id)}')">Cobrar</button>`:""}
-   ${o.status!=="paid"?`<button class="btn secondary" onclick="setStatus('${esc(o.id)}','cancelled')">Cancelar</button>`:""}
-  </div>
- </div>`).join("");
+function payerCard(p,i){
+  const total=payerTotal(p); const method=p.method;
+  return `<div class="payer"><div class="row between"><h3>${esc(p.name)}</h3>${paymentState.payers.length>1?`<button onclick="removePayer(${i})">Eliminar</button>`:""}</div>
+    <input value="${esc(p.name)}" onchange="paymentState.payers[${i}].name=this.value" placeholder="Nombre del invitado">
+    <div style="margin-top:10px"><b>Productos de esta persona</b></div>
+    ${paymentState.items.map(it=>{const max=Math.max(0,Number(it.qty)-assignedQty(it.id)+Number(p.alloc[it.id]||0)); const q=Number(p.alloc[it.id]||0); return `<div class="alloc"><span>${q?`${q} × `:""}${esc(it.name)}<br><small class="muted">$${money(it.unit_price)} c/u · disponible ${max}</small></span><select onchange="setAlloc(${i},${it.id},this.value)"><option value="0">0</option>${Array.from({length:Math.floor(max)},(_,k)=>`<option value="${k+1}" ${q===k+1?"selected":""}>${k+1}</option>`).join("")}</select><b>$${money(q*Number(it.unit_price||0))}</b></div>`}).join("")}
+    <div class="big-pay" style="margin-top:10px">Total: $${money(total)}</div>
+    <label style="display:block;margin-top:10px">Forma de pago<select onchange="setMethod(${i},this.value)"><option value="cash" ${method==='cash'?'selected':''}>💵 Todo efectivo</option><option value="card" ${method==='card'?'selected':''}>💳 Todo tarjeta</option><option value="mixed" ${method==='mixed'?'selected':''}>💳＋💵 Efectivo + tarjeta</option></select></label>
+    ${methodFields(p,i,total)}</div>`;
 }
-async function setStatus(id,status){
- try{await api("/orders/"+id,{method:"PATCH",body:JSON.stringify({status})});toast("Orden actualizada");await loadOrders()}
- catch(e){toast(e.message)}
+function methodFields(p,i,total){
+  if(!total)return `<p class="muted">Selecciona productos para este invitado.</p>`;
+  if(p.method==='cash') return `<label style="display:block;margin-top:10px">Efectivo recibido<input type="number" step=".01" value="${p.cash||total}" onchange="paymentState.payers[${i}].cash=Number(this.value)" /></label><p class="muted">El cobro registrado será $${money(total)} en efectivo.</p>`;
+  if(p.method==='card') return `<div class="terminal" style="margin-top:10px"><b>💳 Llevar terminal</b><p style="margin:6px 0">Cargar exactamente <strong>$${money(total)}</strong> a la tarjeta.</p><label>Monto cargado en terminal<input type="number" step=".01" value="${p.terminal||total}" onchange="paymentState.payers[${i}].terminal=Number(this.value)" /></label><label style="display:block;margin-top:8px">Referencia / últimos 4 (opcional)<input value="${esc(p.ref||"")}" onchange="paymentState.payers[${i}].ref=this.value" placeholder="Ej. últimos 4 dígitos" /></label></div>`;
+  const card=Number(p.card||0), cash=Math.max(0,total-card);
+  return `<label style="display:block;margin-top:10px">Efectivo<input type="number" step=".01" value="${cash}" onchange="paymentState.payers[${i}].cash=Number(this.value);paymentState.payers[${i}].card=Math.max(0,${total}-Number(this.value));renderPaymentModal()" /></label><div class="terminal" style="margin-top:8px"><b>💳 Terminal</b><p style="margin:6px 0">Cargar <strong>$${money(card)}</strong> a la tarjeta.</p><input type="number" step=".01" value="${card}" onchange="paymentState.payers[${i}].card=Number(this.value);paymentState.payers[${i}].cash=Math.max(0,${total}-Number(this.value));paymentState.payers[${i}].terminal=Number(this.value);renderPaymentModal()" /><small class="muted">La tarjeta + efectivo deben sumar $${money(total)}.</small></div>`;
 }
-function openPay(id){
- const o=orders.find(x=>x.id===id);if(!o)return;
- payOrderId=id;document.getElementById("payInfo").innerHTML=`<b>Orden ${esc(id.slice(0,8))}</b><br>Total a cobrar: <strong>${money(o.total)}</strong>`;
- document.getElementById("payModal").classList.add("show");
+function setAlloc(i,itemId,value){const q=Number(value||0);if(q)paymentState.payers[i].alloc[itemId]=q;else delete paymentState.payers[i].alloc[itemId];renderPaymentModal()}
+function setMethod(i,m){paymentState.payers[i].method=m;const total=payerTotal(paymentState.payers[i]);if(m==='cash'){paymentState.payers[i].cash=total;paymentState.payers[i].card=0;paymentState.payers[i].terminal=0}else if(m==='card'){paymentState.payers[i].cash=0;paymentState.payers[i].card=total;paymentState.payers[i].terminal=total}else{paymentState.payers[i].card=0;paymentState.payers[i].cash=total;paymentState.payers[i].terminal=0}renderPaymentModal()}
+function assignAllToFirst(){paymentState.payers.forEach(p=>p.alloc={});paymentState.items.forEach(it=>paymentState.payers[0].alloc[it.id]=Number(it.qty));paymentState.payers[0].method='cash';paymentState.payers[0].cash=Number(paymentState.order.total);renderPaymentModal()}
+async function submitPayments(){
+  const d=paymentState; const remaining=Math.max(0,Number(d.order.total)-Number(d.paid||0));
+  const totalAssigned=d.payers.reduce((s,p)=>s+payerTotal(p),0);
+  if(Math.abs(totalAssigned-remaining)>0.01)return toast(`Faltan asignar $${money(remaining-totalAssigned)} de la cuenta.`);
+  for(const p of d.payers){
+    const amount=payerTotal(p); if(!amount)continue;
+    let cash=0,card=0,terminal=0;
+    if(p.method==='cash'){cash=amount;if(Math.abs(Number(p.cash||amount)-amount)>0.01)return toast(`El efectivo de ${p.name||'cliente'} debe ser $${money(amount)}.`)}
+    if(p.method==='card'){card=amount;terminal=Number(p.terminal||0);if(Math.abs(terminal-amount)>0.01)return toast(`La terminal de ${p.name||'cliente'} debe cargarse por $${money(amount)}.`)}
+    if(p.method==='mixed'){cash=Number(p.cash||0);card=Number(p.card||0);terminal=card;if(Math.abs(cash+card-amount)>0.01)return toast(`Efectivo + tarjeta de ${p.name||'cliente'} deben sumar $${money(amount)}.`)}
+    const allocations=Object.entries(p.alloc).map(([order_item_id,qty])=>({order_item_id:Number(order_item_id),qty:Number(qty)}));
+    try{await api(`/orders/${d.order.id}/payments`,{method:'POST',body:JSON.stringify({payer_name:p.name,method:p.method,amount,cash_amount:cash,card_amount:card,terminal_amount:terminal,terminal_reference:p.ref||'',allocations})})}catch(e){return toast(e.message)}
+  }
+  toast('Cobro registrado correctamente');closePayment();loadOrders();if(me.role==='admin')loadDashboard();
 }
-function closePay(){payOrderId=null;document.getElementById("payModal").classList.remove("show")}
-async function confirmPay(){
- if(!payOrderId)return;
- try{
-  const method=document.getElementById("paymentMethod").value;
-  await api("/orders/"+payOrderId,{method:"PATCH",body:JSON.stringify({status:"paid",payment_status:"paid",payment_method:method})});
-  toast("Pago registrado");closePay();await loadOrders();
- }catch(e){toast(e.message)}
-}
-async function addCash(){
- const amount=Number(document.getElementById("cashAmount").value);
- if(!(amount>0)){toast("Indica un monto válido.");return}
- try{
-  await api("/cash",{method:"POST",body:JSON.stringify({
-   type:document.getElementById("cashType").value,
-   amount,
-   concept:document.getElementById("cashConcept").value.trim()
-  })});
-  document.getElementById("cashAmount").value="";document.getElementById("cashConcept").value="";
-  toast("Movimiento registrado");
- }catch(e){toast(e.message)}
-}
-function showView(v){
- document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id===v));
- document.querySelectorAll(".nav button").forEach(x=>x.classList.toggle("active",x.dataset.view===v));
- if(v==="caja")loadDashboard();
- if(v==="cocina"||v==="ventas")loadOrders();
-}
-document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.view)));
-loadAll();
+async function loadDashboard(){try{const d=await api("/dashboard");$("dashboard").innerHTML=`<div class="card"><h2>Ventas de hoy</h2><div class="total">$${money(d.sales.total)}</div><p>${d.sales.orders} órdenes pagadas</p></div><div class="card"><h2>Órdenes abiertas</h2><div class="total">${d.open.count}</div></div><div class="card"><h2>En cocina</h2><div class="total">${d.kitchen.count}</div></div><div class="card"><h2>Cobros de hoy</h2><p><b>Total cobrado:</b> $${money(d.payments.total)}</p><p>💵 Efectivo: $${money(d.payments.cash)}</p><p>💳 Tarjeta: $${money(d.payments.card)}</p><p>🏧 Terminal: $${money(d.payments.terminal)}</p><p class="muted">${d.payments.transactions} movimientos de cobro</p></div>`}catch(e){toast(e.message)}}
+async function cashIn(){cash("ingreso")}async function cashOut(){cash("egreso")}async function cash(type){const amount=Number($("cashAmount").value);if(!amount)return toast("Indica un monto.");try{await api("/cash",{method:"POST",body:JSON.stringify({type,amount,concept:$("cashConcept").value})});toast("Movimiento registrado");$("cashAmount").value="";$("cashConcept").value=""}catch(e){toast(e.message)}}
+function renderProductAdmin(){$("productAdmin").innerHTML=products.map(p=>`<div class="card"><h3>${esc(p.name)}</h3><p>${esc(p.category)} · $${money(p.price)}</p></div>`).join("")}
+async function createProduct(){try{await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value,category:$("pCategory").value,price:Number($("pPrice").value),description:$("pDesc").value})});toast("Producto creado");["pName","pCategory","pPrice","pDesc"].forEach(x=>$(x).value="");products=await api("/menu");renderProducts();renderProductAdmin()}catch(e){toast(e.message)}}
+async function loadUsers(){try{const us=await api("/users");$("users").innerHTML=`<div class="card"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Activo</th></tr></thead><tbody>${us.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.username)}</td><td>${roleName(u.role)}</td><td>${u.active?"Sí":"No"}</td></tr>`).join("")}</tbody></table></div>`}catch(e){toast(e.message)}}
+async function createUser(){try{await api("/users",{method:"POST",body:JSON.stringify({name:$("uName").value,username:$("uUsername").value,password:$("uPassword").value,role:$("uRole").value})});toast("Usuario creado");["uName","uUsername","uPassword"].forEach(x=>$(x).value="");loadUsers()}catch(e){toast(e.message)}}
+function tableName(id){const t=tables.find(x=>x.id===id);return t?t.name||("Mesa "+t.number):"Sin mesa"}
+function money(n){return Number(n||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+boot();
 </script>
 </body>
 </html>
