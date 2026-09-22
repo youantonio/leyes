@@ -1,0 +1,13 @@
+name = "rush-pos"
+main = "worker.js"
+compatibility_date = "2026-09-22"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rush-pos"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"
