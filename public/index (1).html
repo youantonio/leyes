@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<title>RUSH POS</title>
+<style>
+:root{
+  --bg:#f5f5f5;--card:#fff;--ink:#111;--muted:#6b7280;--line:#e5e7eb;
+  --accent:#111;--accent2:#e5e7eb;--ok:#16803c;--warn:#b45309;--danger:#b91c1c;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.app{min-height:100vh}
+header{
+  position:sticky;top:0;z-index:20;background:#111;color:#fff;padding:12px 16px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px
+}
+.brand{font-size:22px;font-weight:800;letter-spacing:.5px}
+.sub{font-size:12px;color:#bbb}
+.header-right{display:flex;align-items:center;gap:8px}
+.status{font-size:12px;padding:6px 9px;border-radius:999px;background:#333}
+.status.ok{background:#14532d}.status.bad{background:#7f1d1d}
+main{max-width:1400px;margin:auto;padding:14px}
+.nav{
+ display:flex;gap:8px;overflow:auto;padding-bottom:10px;position:sticky;top:61px;z-index:10;
+ background:var(--bg)
+}
+.nav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 14px;white-space:nowrap}
+.nav button.active{background:#111;color:#fff;border-color:#111}
+.view{display:none}.view.active{display:block}
+.grid{display:grid;grid-template-columns:1.6fr 1fr;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+h2,h3{margin:0 0 12px}
+.muted{color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
+.stat .n{font-size:28px;font-weight:800;margin-top:5px}
+.products{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.product{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px;text-align:left;min-height:105px}
+.product:active{transform:scale(.99)}
+.product .name{font-weight:700}.product .price{margin-top:8px;font-weight:800}
+.category-title{margin:18px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.order-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.qty{display:flex;align-items:center;gap:5px}
+.qty button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#fff}
+.btn{border:0;border-radius:10px;padding:10px 13px;background:#111;color:#fff}
+.btn.secondary{background:#fff;color:#111;border:1px solid var(--line)}
+.btn.success{background:var(--ok)}.btn.warn{background:var(--warn)}.btn.danger{background:var(--danger)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.total{font-size:22px;font-weight:800;display:flex;justify-content:space-between;margin-top:12px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.table-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.table-btn{padding:16px 8px;border:1px solid var(--line);background:#fff;border-radius:12px;text-align:center}
+.table-btn.selected{border:2px solid #111;background:#f0f0f0}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;background:#eee}
+.badge.open{background:#fef3c7;color:#92400e}.badge.preparing{background:#dbeafe;color:#1d4ed8}
+.badge.ready{background:#dcfce7;color:#166534}.badge.paid{background:#dcfce7;color:#166534}
+.order-card{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:#fff}
+.order-card .top{display:flex;justify-content:space-between;gap:8px}
+.empty{text-align:center;padding:35px 15px;color:var(--muted)}
+.toast{
+ position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111;color:#fff;
+ padding:11px 16px;border-radius:10px;z-index:100;display:none;max-width:90%
+}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:15px}
+.modal.show{display:flex}.modal-box{background:#fff;border-radius:16px;width:min(520px,100%);padding:18px;max-height:90vh;overflow:auto}
+.small{font-size:12px}
+@media(max-width:850px){
+ .grid{grid-template-columns:1fr}
+ .products{grid-template-columns:repeat(2,1fr)}
+ .table-grid{grid-template-columns:repeat(3,1fr)}
+ .stats{grid-template-columns:1fr}
+ .nav{top:58px}
+}
+@media(max-width:480px){
+ main{padding:9px}.products{grid-template-columns:repeat(2,1fr);gap:7px}
+ .product{padding:10px;min-height:95px}.form-grid{grid-template-columns:1fr}
+ header{padding:10px}.brand{font-size:19px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div><div class="brand">RUSH POS</div><div class="sub">Rush Club Pádel · Punto de venta</div></div>
+  <div class="header-right"><span id="apiStatus" class="status">Conectando…</span></div>
+</header>
+
+<main>
+<nav class="nav">
+  <button class="active" data-view="venta">🛒 Venta</button>
+  <button data-view="mesas">🪑 Mesas</button>
+  <button data-view="cocina">👨‍🍳 Cocina</button>
+  <button data-view="caja">💵 Caja</button>
+  <button data-view="ventas">📊 Ventas</button>
+</nav>
+
+<section id="venta" class="view active">
+ <div class="grid">
+  <div class="card">
+   <div class="order-head"><h2>Productos</h2><button class="btn secondary" onclick="loadAll()">↻ Actualizar</button></div>
+   <div id="products"></div>
+  </div>
+  <div class="card">
+   <div class="order-head"><h2>Orden</h2><button class="btn secondary" onclick="clearCart()">Vaciar</button></div>
+   <div class="form-grid" style="margin:10px 0">
+    <div><label>Mesa</label><select id="orderTable"><option value="">Sin mesa</option></select></div>
+    <div><label>Cliente</label><input id="customerName" placeholder="Nombre"></div>
+   </div>
+   <div id="cart"></div>
+   <div class="total"><span>Total</span><span id="cartTotal">$0.00</span></div>
+   <div><label style="margin-top:12px">Notas</label><textarea id="orderNotes" rows="2" placeholder="Sin azúcar, entrega en mesa, etc."></textarea></div>
+   <div class="actions">
+    <button class="btn" id="sendOrder" onclick="sendOrder()">Enviar a cocina</button>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section id="mesas" class="view">
+ <div class="card">
+  <h2>Mesas</h2><p class="muted small">Selecciona una mesa para la siguiente orden.</p>
+  <div id="tables" class="table-grid"></div>
+ </div>
+</section>
+
+<section id="cocina" class="view">
+ <div class="card">
+  <div class="order-head"><h2>Cocina</h2><button class="btn secondary" onclick="loadOrders()">↻ Actualizar</button></div>
+  <div id="kitchenOrders"></div>
+ </div>
+</section>
+
+<section id="caja" class="view">
+ <div class="stats">
+  <div class="stat"><div class="muted">Ventas de hoy</div><div id="cashSales" class="n">$0.00</div></div>
+  <div class="stat"><div class="muted">Órdenes abiertas</div><div id="cashOpen" class="n">0</div></div>
+  <div class="stat"><div class="muted">En cocina</div><div id="cashKitchen" class="n">0</div></div>
+ </div>
+ <div class="grid">
+  <div class="card">
+   <h2>Movimiento de caja</h2>
+   <div class="form-grid">
+    <div><label>Tipo</label><select id="cashType"><option value="in">Entrada</option><option value="out">Salida</option></select></div>
+    <div><label>Monto</label><input id="cashAmount" type="number" step="0.01" min="0"></div>
+   </div>
+   <div style="margin-top:10px"><label>Concepto</label><input id="cashConcept" placeholder="Ej. compra de hielo"></div>
+   <div class="actions"><button class="btn" onclick="addCash()">Registrar</button></div>
+  </div>
+  <div class="card">
+   <h2>Cobrar orden</h2>
+   <p class="muted">Elige una orden abierta desde Ventas y utiliza el botón Cobrar.</p>
+  </div>
+ </div>
+</section>
+
+<section id="ventas" class="view">
+ <div class="card">
+  <div class="order-head"><h2>Ventas y órdenes</h2><button class="btn secondary" onclick="loadOrders()">↻ Actualizar</button></div>
+  <div id="salesOrders"></div>
+ </div>
+</section>
+</main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div id="payModal" class="modal">
+ <div class="modal-box">
+  <h2>Cobrar orden</h2>
+  <div id="payInfo" style="margin:10px 0"></div>
+  <label>Método de pago</label>
+  <select id="paymentMethod"><option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option></select>
+  <div class="actions"><button class="btn secondary" onclick="closePay()">Cancelar</button><button class="btn success" onclick="confirmPay()">Confirmar pago</button></div>
+ </div>
+</div>
+
+<script>
+const API = "/api";
+let menu=[], tables=[], orders=[], cart=[], selectedTable="";
+let payOrderId=null;
+
+const money = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(n)||0);
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+const toast = msg => {const t=document.getElementById("toast");t.textContent=msg;t.style.display="block";clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.style.display="none",2600)};
+async function api(path, opts={}){
+  const r=await fetch(API+path,{headers:{"Content-Type":"application/json",...(opts.headers||{})},...opts});
+  let d={}; try{d=await r.json()}catch{}
+  if(!r.ok) throw new Error(d.error||"Error del servidor");
+  return d;
+}
+async function health(){
+  try{await api("/health");const s=document.getElementById("apiStatus");s.textContent="● Conectado";s.className="status ok"}
+  catch(e){const s=document.getElementById("apiStatus");s.textContent="Sin conexión";s.className="status bad"}
+}
+async function loadMenu(){
+  menu=await api("/menu"); renderProducts();
+}
+async function loadTables(){
+  tables=await api("/tables");
+  const sel=document.getElementById("orderTable");
+  sel.innerHTML='<option value="">Sin mesa</option>'+tables.map(t=>`<option value="${esc(t.id)}">${esc(t.name||("Mesa "+t.number))}</option>`).join("");
+  if(selectedTable) sel.value=selectedTable;
+  renderTables();
+}
+async function loadOrders(){
+  orders=await api("/orders"); renderKitchen(); renderSales(); await loadDashboard();
+}
+async function loadDashboard(){
+ try{
+  const d=await api("/dashboard");
+  document.getElementById("cashSales").textContent=money(d.sales?.total);
+  document.getElementById("cashOpen").textContent=d.open?.count||0;
+  document.getElementById("cashKitchen").textContent=d.kitchen?.count||0;
+ }catch(e){}
+}
+async function loadAll(){
+ try{await Promise.all([health(),loadMenu(),loadTables(),loadOrders()]);}
+ catch(e){toast(e.message)}
+}
+function renderProducts(){
+ const box=document.getElementById("products");
+ if(!menu.length){box.innerHTML='<div class="empty">No hay productos activos en el menú.</div>';return}
+ const cats={};menu.forEach(x=>(cats[x.category||"General"]??=[]).push(x));
+ box.innerHTML=Object.entries(cats).map(([cat,items])=>`
+   <div class="category-title">${esc(cat)}</div>
+   <div class="products">${items.map(p=>`
+     <button class="product" onclick="addProduct('${esc(p.id)}')">
+       <div class="name">${esc(p.name)}</div>
+       <div class="muted small">${esc(p.description||"")}</div>
+       <div class="price">${money(p.price)}</div>
+     </button>`).join("")}</div>`).join("");
+}
+function addProduct(id){
+ const p=menu.find(x=>x.id===id);if(!p)return;
+ const found=cart.find(x=>x.menu_item_id===id);
+ if(found)found.qty++;else cart.push({menu_item_id:p.id,name:p.name,qty:1,unit_price:Number(p.price)||0,modifiers:[],notes:""});
+ renderCart();
+}
+function changeQty(i,d){cart[i].qty+=d;if(cart[i].qty<=0)cart.splice(i,1);renderCart()}
+function clearCart(){cart=[];renderCart()}
+function renderCart(){
+ const box=document.getElementById("cart");
+ if(!cart.length){box.innerHTML='<div class="empty">Agrega productos para crear una orden.</div>';document.getElementById("cartTotal").textContent=money(0);return}
+ box.innerHTML=cart.map((x,i)=>`<div class="row">
+  <div style="flex:1"><b>${esc(x.name)}</b><div class="muted small">${money(x.unit_price)} c/u</div></div>
+  <div class="qty"><button onclick="changeQty(${i},-1)">−</button><b>${x.qty}</b><button onclick="changeQty(${i},1)">+</button></div>
+  <b>${money(x.qty*x.unit_price)}</b>
+ </div>`).join("");
+ document.getElementById("cartTotal").textContent=money(cart.reduce((s,x)=>s+x.qty*x.unit_price,0));
+}
+function renderTables(){
+ const box=document.getElementById("tables");
+ if(!tables.length){box.innerHTML='<div class="empty">No hay mesas configuradas.</div>';return}
+ box.innerHTML=tables.map(t=>`<button class="table-btn ${selectedTable===t.id?"selected":""}" onclick="selectTable('${esc(t.id)}')">
+  <b>${esc(t.name||("Mesa "+t.number))}</b><br><span class="muted small">${esc(t.type||"Mesa")}</span>
+ </button>`).join("");
+}
+function selectTable(id){selectedTable=id;document.getElementById("orderTable").value=id;renderTables();showView("venta")}
+document.getElementById("orderTable").addEventListener("change",e=>{selectedTable=e.target.value;renderTables()});
+
+async function sendOrder(){
+ if(!cart.length){toast("Agrega al menos un producto.");return}
+ const btn=document.getElementById("sendOrder");btn.disabled=true;
+ try{
+  const d=await api("/orders",{method:"POST",body:JSON.stringify({
+   table_id:document.getElementById("orderTable").value||null,
+   customer_name:document.getElementById("customerName").value.trim(),
+   notes:document.getElementById("orderNotes").value.trim(),
+   items:cart
+  })});
+  toast("Orden enviada a cocina · "+money(d.total));
+  clearCart();document.getElementById("customerName").value="";document.getElementById("orderNotes").value="";
+  await loadOrders();
+ }catch(e){toast(e.message)}finally{btn.disabled=false}
+}
+
+function statusLabel(s){return {open:"Abierta",preparing:"Preparando",ready:"Lista",paid:"Pagada",cancelled:"Cancelada"}[s]||s}
+function badge(s){return `<span class="badge ${esc(s)}">${esc(statusLabel(s))}</span>`}
+function renderKitchen(){
+ const active=orders.filter(o=>["open","preparing","ready"].includes(o.status));
+ const box=document.getElementById("kitchenOrders");
+ if(!active.length){box.innerHTML='<div class="empty">No hay órdenes pendientes.</div>';return}
+ box.innerHTML=active.map(o=>`<div class="order-card">
+  <div class="top"><div><b>Orden ${esc(o.id?.slice(0,8))}</b><div class="muted small">${esc(o.customer_name||"Sin nombre")} · ${esc(o.table_id||"Sin mesa")}</div></div>${badge(o.status)}</div>
+  <div class="small muted" style="margin-top:7px">Total: ${money(o.total)}</div>
+  <div class="actions">
+   ${o.status==="open"?`<button class="btn" onclick="setStatus('${esc(o.id)}','preparing')">Preparar</button>`:""}
+   ${o.status==="preparing"?`<button class="btn success" onclick="setStatus('${esc(o.id)}','ready')">Marcar lista</button>`:""}
+   ${o.status==="ready"?`<button class="btn warn" onclick="openPay('${esc(o.id)}')">Cobrar</button>`:""}
+  </div>
+ </div>`).join("");
+}
+function renderSales(){
+ const box=document.getElementById("salesOrders");
+ if(!orders.length){box.innerHTML='<div class="empty">Todavía no hay órdenes.</div>';return}
+ box.innerHTML=orders.map(o=>`<div class="order-card">
+  <div class="top"><div><b>Orden ${esc(o.id?.slice(0,8))}</b><div class="muted small">${esc(o.created_at||"")} · ${esc(o.customer_name||"Sin nombre")}</div></div>${badge(o.status)}</div>
+  <div style="display:flex;justify-content:space-between;margin-top:8px"><span class="muted">Total</span><b>${money(o.total)}</b></div>
+  <div class="actions">
+   ${o.status!=="paid"?`<button class="btn success" onclick="openPay('${esc(o.id)}')">Cobrar</button>`:""}
+   ${o.status!=="paid"?`<button class="btn secondary" onclick="setStatus('${esc(o.id)}','cancelled')">Cancelar</button>`:""}
+  </div>
+ </div>`).join("");
+}
+async function setStatus(id,status){
+ try{await api("/orders/"+id,{method:"PATCH",body:JSON.stringify({status})});toast("Orden actualizada");await loadOrders()}
+ catch(e){toast(e.message)}
+}
+function openPay(id){
+ const o=orders.find(x=>x.id===id);if(!o)return;
+ payOrderId=id;document.getElementById("payInfo").innerHTML=`<b>Orden ${esc(id.slice(0,8))}</b><br>Total a cobrar: <strong>${money(o.total)}</strong>`;
+ document.getElementById("payModal").classList.add("show");
+}
+function closePay(){payOrderId=null;document.getElementById("payModal").classList.remove("show")}
+async function confirmPay(){
+ if(!payOrderId)return;
+ try{
+  const method=document.getElementById("paymentMethod").value;
+  await api("/orders/"+payOrderId,{method:"PATCH",body:JSON.stringify({status:"paid",payment_status:"paid",payment_method:method})});
+  toast("Pago registrado");closePay();await loadOrders();
+ }catch(e){toast(e.message)}
+}
+async function addCash(){
+ const amount=Number(document.getElementById("cashAmount").value);
+ if(!(amount>0)){toast("Indica un monto válido.");return}
+ try{
+  await api("/cash",{method:"POST",body:JSON.stringify({
+   type:document.getElementById("cashType").value,
+   amount,
+   concept:document.getElementById("cashConcept").value.trim()
+  })});
+  document.getElementById("cashAmount").value="";document.getElementById("cashConcept").value="";
+  toast("Movimiento registrado");
+ }catch(e){toast(e.message)}
+}
+function showView(v){
+ document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id===v));
+ document.querySelectorAll(".nav button").forEach(x=>x.classList.toggle("active",x.dataset.view===v));
+ if(v==="caja")loadDashboard();
+ if(v==="cocina"||v==="ventas")loadOrders();
+}
+document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.view)));
+loadAll();
+</script>
+</body>
+</html>
