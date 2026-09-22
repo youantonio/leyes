@@ -8,6 +8,6 @@ binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "rush-pos"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_name = "rush-pos-db"
+database_id = "79ed43c7-40b8-4a8a-bec5-1fd69449774b"
 migrations_dir = "migrations"
