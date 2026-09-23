@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v7</title>
+<title>RUSH POS v8</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -70,7 +70,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v7</div>
+      <div class="brand">RUSH POS v8</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -109,7 +109,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </section>
 
-<!-- CANCHAS Y RESERVAS -->
+<!-- CANCHAS Y RESERVAS CON OPCIÓN DE EDITAR Y ELIMINAR -->
 <section id="canchas" class="view hidden">
   <h1 class="title">🎾 Reservas de Canchas de Pádel</h1>
   <div class="card" style="margin-bottom:15px; background:#f0fdf4; border:1px solid #16a34a;">
@@ -137,7 +137,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="tables" class="grid"></div>
 </section>
 
-<!-- COCINA (KDS) UNIFICADO -->
+<!-- COCINA (KDS) -->
 <section id="cocina" class="view hidden">
   <div class="row between" style="margin-bottom:14px;">
     <h1 class="title" style="margin:0">👨‍🍳 Pantalla de Cocina (KDS)</h1>
@@ -254,12 +254,29 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </main>
 </section>
 
-<!-- MODALES -->
+<!-- MODAL DE CHAT -->
 <div id="chatModal" class="modal hidden">
   <div class="modalbox">
     <div class="row between"><h2 style="margin:0" id="chatModalTitle">Chat de Comanda</h2><button onclick="closeChat()">✕</button></div>
     <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow:auto; background:#f9fafb; padding:12px; border-radius:12px;"></div>
     <div class="row"><input id="chatInput" placeholder="Escribe un mensaje..."><button class="primary" onclick="sendChat()">Enviar</button></div>
+  </div>
+</div>
+
+<!-- MODAL DE EDICIÓN DE RESERVA -->
+<div id="editResModal" class="modal hidden">
+  <div class="modalbox" style="max-width:500px;">
+    <div class="row between"><h2 style="margin:0">Modificar Reserva</h2><button onclick="$('editResModal').classList.add('hidden')">✕</button></div>
+    <div class="stack" style="margin-top:15px;">
+      <input type="hidden" id="editResId">
+      <label>Fecha:<input type="date" id="editResDate"></label>
+      <label>Hora de inicio:<input type="time" id="editResTime"></label>
+      <label>Duración (horas):<input type="number" id="editResHours" step="0.5"></label>
+      <label>Nombre del cliente:<input id="editResName"></label>
+      <label>WhatsApp:<input id="editResPhone"></label>
+      <label>Anticipo / Seña ($):<input type="number" id="editResDeposit"></label>
+      <button class="primary" onclick="saveEditedReservation()">Guardar Cambios</button>
+    </div>
   </div>
 </div>
 
@@ -424,14 +441,32 @@ async function sendOrder(){
 }
 
 // -----------------------------------------------------
-// CANCHAS Y RESERVAS
+// CANCHAS Y RESERVAS (CON EDICIÓN Y ELIMINACIÓN)
 // -----------------------------------------------------
+let activeReservations = [];
+
 async function loadCanchasData(){
   try{
     const courts = await api("/courts");
     $("resCourtSelect").innerHTML = courts.map(c=>`<option value="${c.id}">${c.name} ($${c.hourly_rate}/hr)</option>`).join("");
-    const res = await api("/reservations");
-    $("reservationsList").innerHTML = res.length ? `<table><thead><tr><th>Cancha</th><th>Cliente</th><th>Fecha/Hora</th><th>Total</th><th>Anticipo</th></tr></thead><tbody>${res.map(r=>`<tr><td><b>${r.court_name}</b></td><td>${r.customer_name} (${r.customer_phone})</td><td>${r.date} a las ${r.start_time} (${r.hours}h)</td><td>$${r.total_price}</td><td>$${r.deposit}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>No hay reservas registradas.</p>";
+    activeReservations = await api("/reservations");
+    
+    $("reservationsList").innerHTML = activeReservations.length ? `
+      <table>
+        <thead><tr><th>Cancha</th><th>Cliente</th><th>Fecha/Hora</th><th>Total</th><th>Anticipo</th><th>Acciones</th></tr></thead>
+        <tbody>${activeReservations.map(r=>`
+          <tr>
+            <td><b>${r.court_name}</b></td>
+            <td>${r.customer_name} (${r.customer_phone})</td>
+            <td>${r.date} a las ${r.start_time} (${r.hours}h)</td>
+            <td>$${r.total_price}</td>             <td>$${r.deposit}</td>
+            <td>
+              <button type="button" onclick="openEditReservation('${r.id}')">✏️ Editar</button>
+              <button type="button" class="danger" onclick="deleteReservation('${r.id}')">🗑️ Eliminar</button>
+            </td>
+          </tr>`).join("")}
+        </tbody>
+      </table>` : "<p class='muted'>No hay reservas registradas.</p>";
   }catch(e){}
 }
 
@@ -459,8 +494,50 @@ async function createReservation(){
   } catch(e) { toast(e.message); }
 }
 
+function openEditReservation(id){
+  const r = activeReservations.find(x=>x.id===id);
+  if(!r) return;
+  $("editResId").value = r.id;
+  $("editResDate").value = r.date;
+  $("editResTime").value = r.start_time;
+  $("editResHours").value = r.hours;
+  $("editResName").value = r.customer_name;
+  $("editResPhone").value = r.customer_phone;
+  $("editResDeposit").value = r.deposit;
+  $("editResModal").classList.remove("hidden");
+}
+
+async function saveEditedReservation(){
+  const id = $("editResId").value;
+  try{
+    await api("/reservations/"+id, {
+      method:"PATCH",
+      body: JSON.stringify({
+        date: $("editResDate").value,
+        start_time: $("editResTime").value,
+        hours: Number($("editResHours").value),
+        customer_name: $("editResName").value,
+        customer_phone: $("editResPhone").value,
+        deposit: Number($("editResDeposit").value)
+      })
+    });
+    toast("Reserva actualizada con éxito");
+    $("editResModal").classList.add("hidden");
+    loadCanchasData();
+  }catch(e){toast(e.message)}
+}
+
+async function deleteReservation(id){
+  if(!confirm("¿Seguro que deseas eliminar esta reserva y su cuenta asociada?")) return;
+  try{
+    await api("/reservations/"+id, {method:"DELETE"});
+    toast("Reserva eliminada");
+    loadCanchasData();
+  }catch(e){toast(e.message)}
+}
+
 // -----------------------------------------------------
-// COCINA (KDS) CON FLUJO DE PROGRESO Y COBRO
+// COCINA (KDS)
 // -----------------------------------------------------
 function renderTables(){
   $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`
@@ -473,7 +550,6 @@ function renderTables(){
 
 async function loadKitchen(){
   const os = await api("/orders");
-  // Solo mostramos las que estén abiertas o preparándose en la pantalla del cocinero
   const activeOrders = os.filter(x=>["open","preparing"].includes(x.status));
   if(!activeOrders.length) {
     $("kitchenOrders").innerHTML = "<p class='muted'>¡Excelente trabajo! No hay pedidos pendientes en cocina por ahora.</p>";
@@ -496,7 +572,6 @@ async function loadKitchen(){
     } catch(e) {}
     itemsHtml += "</div>";
 
-    // Botones dinámicos según el estatus del pedido
     let actionButtons = "";
     if(o.status === 'open') {
       actionButtons = `<button class="warning" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'preparing')">🛠️ Tomar Pedido (En Proceso)</button>`;
