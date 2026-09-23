@@ -587,7 +587,7 @@ function sendNextCampaign(){
 }
 
 // -----------------------------------------------------
-// MENÚ Y USUARIOS
+// MENÚ Y USUARIOS (CON CAMBIO DE CLAVE Y ELIMINACIÓN)
 // -----------------------------------------------------
 function renderProductAdmin(){
   $("productAdmin").innerHTML = products.map(p=>`
@@ -612,7 +612,15 @@ async function createProduct(){
 async function loadUsers(){
   const us = await api("/users");
   $("users").innerHTML = `<table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`
-    <tr><td>${u.username}</td><td>${u.name}</td><td>${u.role}</td><td><button onclick="changePass('${u.id}')">🔑 Cambiar Clave</button></td></tr>
+    <tr>
+      <td>${u.username}</td>
+      <td>${u.name}</td>
+      <td>${u.role}</td>
+      <td>
+        <button onclick="changePass('${u.id}')">🔑 Clave</button>
+        <button class="danger" onclick="deleteUser('${u.id}')">🗑️ Eliminar</button>
+      </td>
+    </tr>
   `).join("")}</tbody></table>`;
 }
 
@@ -622,6 +630,16 @@ async function changePass(id){
     try{
       await api("/users/"+id, {method:"PATCH", body:JSON.stringify({password:p})});
       toast("Contraseña actualizada con éxito");
+    }catch(e){toast(e.message)}
+  }
+}
+
+async function deleteUser(id){
+  if(confirm("¿Estás seguro de eliminar este usuario? Perderá acceso al sistema.")){
+    try{
+      await api("/users/"+id, {method:"DELETE"});
+      toast("Usuario eliminado");
+      loadUsers();
     }catch(e){toast(e.message)}
   }
 }
