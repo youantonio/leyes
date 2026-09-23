@@ -34,7 +34,8 @@ main{max-width:1180px;margin:auto;padding:16px}
 .loginbox{width:min(430px,100%);background:#fff;border-radius:24px;padding:28px;border:1px solid #ddd}
 .search{font-size:17px;padding:15px 16px;border-radius:16px}
 .chips{display:flex;gap:8px;overflow:auto;padding:3px 0 12px}
-.chip{white-space:nowrap;border-radius:999px;padding:10px 15px;background:#fff} .chip.active{background:#111;color:#fff}
+.chip{white-space:nowrap;border-radius:999px;padding:10px 15px;background:#e5e7eb;cursor:pointer;border:0;font-weight:600} 
+.chip.active{background:#111;color:#fff}
 .product-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .product{ min-height:142px;text-align:left;padding:15px;border-radius:17px; display:flex;flex-direction:column;justify-content:space-between; border:1px solid #e2e2e2;background:#fff }
 .product b{font-size:17px;line-height:1.2} .product .desc{font-size:12px;color:#777;margin-top:5px;line-height:1.3}
@@ -48,7 +49,6 @@ main{max-width:1180px;margin:auto;padding:16px}
 .modalbox{background:#fff;border-radius:22px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:20px}
 table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:13px 18px;border-radius:12px;z-index:80}
-.section-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#777;font-weight:800;margin:16px 2px 8px}
 .report-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; text-align: center; }
 .report-val { font-size: 24px; font-weight: 900; color: #111; margin-top: 5px; }
 </style>
@@ -84,7 +84,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <nav id="nav"></nav>
 
 <main>
-<!-- VENTAS -->
+<!-- VENTAS (TIPO STARBUCKS CON FILTROS CLasificados) -->
 <section id="venta" class="view">
   <h1 class="title">Nueva Venta / Servicio</h1>
   <div class="card">
@@ -92,6 +92,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <div style="flex:1"><input id="productSearch" class="search" placeholder="🔎 Buscar platillo, bebida, café..." oninput="renderProducts()"></div>
       <button onclick="loadAll()">↻</button>
     </div>
+    <!-- Filtros por Categoría tipo Starbucks -->
     <div id="categoryChips" class="chips"></div>
     <div id="products"></div>
   </div>
@@ -108,7 +109,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <label style="display:block;margin-top:10px">Notas generales<textarea id="notes" rows="2" placeholder="Indicaciones especiales..."></textarea></label>
     <button class="primary" style="width:100%;margin-top:10px" onclick="sendOrder()">Enviar a Cocina / Registrar</button>
   </div>
-  <div id="stickyCart" class="sticky-cart hidden"><div class="cartbar"><div><b id="stickyCount">0 productos</b><br><small id="stickyTotal">$0.00</small></div><button onclick="document.getElementById('cart').scrollIntoView({behavior:'smooth'})">Ver pedido</button></div></div>
 </section>
 
 <!-- CANCHAS Y RESERVAS -->
@@ -140,16 +140,16 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="tables" class="grid"></div>
 </section>
 
-<!-- COCINA -->
+<!-- COCINA (KDS) CON CHAT -->
 <section id="cocina" class="view hidden">
-  <h1 class="title">Cocina (KDS)</h1>
+  <h1 class="title">Cocina (KDS) y Comunicación</h1>
   <div id="kitchenOrders" class="grid"></div>
 </section>
 
 <!-- ÓRDENES -->
 <section id="ordenes" class="view hidden">
   <div class="row between">
-    <h1 class="title" style="margin:0">Control de Órdenes</h1>
+    <h1 class="title" style="margin:0">Control de Órdenes y Chat</h1>
     <button onclick="exportData('orders')">📥 Respaldar Órdenes (CSV)</button>
   </div>
   <div id="orders" class="grid" style="margin-top:15px"></div>
@@ -158,15 +158,12 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <!-- REPORTES Y CAJA -->
 <section id="caja" class="view hidden">
   <h1 class="title">Reporte Financiero y Corte de Caja</h1>
-  
   <div class="card" style="margin-bottom:15px; background:#fff7ed; border-color:#fdba74;">
     <h2>🔒 Cierre de Turno / Corte Diario</h2>
     <p class="muted">Recuerda realizar tu corte y descargar el respaldo de caja semanalmente para seguridad del negocio.</p>
     <button class="danger" onclick="makeCashCut()">Realizar Corte de Caja de Hoy</button>
   </div>
-
   <div id="dashboard" class="grid"></div>
-  
   <div class="card" style="margin-top:15px">
     <h2>Historial de Cortes Realizados</h2>
     <div id="cutsList" style="overflow-x:auto;"></div>
@@ -229,7 +226,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div class="card" style="margin-top:15px;">
     <div class="grid">
       <input id="pName" placeholder="Nombre">
-      <input id="pCategory" placeholder="Categoría">
+      <input id="pCategory" placeholder="Categoría (Ej. Desayunos, Alimentos, Café, Bebidas)">
       <input id="pPrice" type="number" step=".01" placeholder="Precio">
       <input id="pDesc" placeholder="Descripción">
       <button class="primary" onclick="createProduct()">Crear producto</button>
@@ -257,7 +254,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </main>
 </section>
 
-<!-- MODALES -->
+<!-- MODALES (PAGO, CHAT, HISTORIAL) -->
 <div id="paymentModal" class="modal hidden">
   <div class="modalbox">
     <div class="row between"><h2 style="margin:0">Cobro de cuenta</h2><button onclick="closePayment()">✕</button></div>
@@ -267,16 +264,9 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 
 <div id="chatModal" class="modal hidden">
   <div class="modalbox">
-    <div class="row between"><h2 style="margin:0">Chat de Orden</h2><button onclick="closeChat()">✕</button></div>
-    <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow:auto;"></div>
-    <div class="row"><input id="chatInput" placeholder="Mensaje..."><button class="primary" onclick="sendChat()">Enviar</button></div>
-  </div>
-</div>
-
-<div id="historyModal" class="modal hidden">
-  <div class="modalbox">
-    <div class="row between"><h2 style="margin:0">Historial</h2><button onclick="$('historyModal').classList.add('hidden')">✕</button></div>
-    <div id="historyBody"></div>
+    <div class="row between"><h2 style="margin:0" id="chatModalTitle">Chat de Comanda</h2><button onclick="closeChat()">✕</button></div>
+    <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow:auto; background:#f9fafb; padding:12px; border-radius:12px;"></div>
+    <div class="row"><input id="chatInput" placeholder="Escribe un mensaje a cocina/mesero..."><button class="primary" onclick="sendChat()">Enviar</button></div>
   </div>
 </div>
 
@@ -285,7 +275,8 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <script>
 const API="/api";
 let token=localStorage.getItem("rush_token");
-let me=null, products=[], tables=[], cart=[], inventoryItems=[];
+let me=null, products=[], tables=[], cart=[], inventoryItems=[], currentCategory="TODOS";
+let activeChatOrderId=null;
 const $=id=>document.getElementById(id);
 
 function toast(msg){
@@ -327,9 +318,19 @@ function isAdmin(){ return me?.role==="admin"; }
 
 function showApp(){
   $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
-  $("userPill").textContent=`● ${me.name}`;
-  const nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
-  if(isAdmin()) nav.push(["caja","📊 Caja"],["lealtad","⭐ Lealtad"],["inventario","📦 Inventario"],["productos","🍔 Menú"],["usuarios","👥 Usuarios"]);
+  $("userPill").textContent=`● ${me.name} (${me.role})`;
+  
+  // Opciones de navegación según rol
+  let nav=[];
+  if(me.role==="cocina"){
+    nav=[["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
+  } else if(me.role==="mesero"){
+    nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
+  } else {
+    // Admin ve todo
+    nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"],["caja","📊 Caja"],["lealtad","⭐ Lealtad"],["inventario","📦 Inventario"],["productos","🍔 Menú"],["usuarios","👥 Usuarios"]];
+  }
+
   $("nav").innerHTML=nav.map((x,i)=>`<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`).join("");
   view(nav[0][0], $("nav").firstElementChild);
 }
@@ -355,14 +356,35 @@ function view(id,btn){
 async function loadAll(){
   products=await api("/menu");
   tables=await api("/tables");
+  renderCategoryChips();
   renderProducts(); renderTableSelect(); renderTables(); renderCart();
 }
 
 // -----------------------------------------------------
-// VENTAS Y MENÚ
+// VENTAS TIPO STARBUCKS (FILTROS Y CATEGORÍAS)
 // -----------------------------------------------------
+function renderCategoryChips(){
+  const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))];
+  $("categoryChips").innerHTML = cats.map(c=>`
+    <button class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>
+  `).join("");
+}
+
+function filterCategory(cat){
+  currentCategory=cat;
+  renderCategoryChips();
+  renderProducts();
+}
+
 function renderProducts(){
-  $("products").innerHTML=`<div class="product-grid">`+products.map(p=>`
+  const search = ($("productSearch")?.value || "").toLowerCase();
+  const filtered = products.filter(p=>{
+    const matchCat = currentCategory==="TODOS" || (p.category||"General")===currentCategory;
+    const matchSearch = p.name.toLowerCase().includes(search) || (p.description||"").toLowerCase().includes(search);
+    return matchCat && matchSearch;
+  });
+
+  $("products").innerHTML=`<div class="product-grid">`+filtered.map(p=>`
     <button class="product" onclick="addToCart('${p.id}')">
       <div><b>${p.name}</b><div class="desc">${p.description||""}</div></div>
       <div><div class="price">$${p.price}</div><div class="add">＋ Agregar</div></div>
@@ -398,13 +420,13 @@ async function sendOrder(){
       method:"POST",
       body:JSON.stringify({
         table_id: $("tableSelect").value||null,
-        customer_name: $("customerName").value,
-        customer_phone: $("customerPhone").value,
-        notes: $("notes").value,
+        customer_name: $("customerName").value || "Mostrador",
+        customer_phone: $("customerPhone").value || "",
+        notes: $("notes").value || "",
         items: cart
       })
     });
-    toast("Orden enviada exitosamente");
+    toast("¡Orden enviada a cocina con éxito!");
     cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("notes").value="";
     loadAll();
   }catch(e){toast(e.message)}
@@ -447,7 +469,7 @@ async function createReservation(){
 }
 
 // -----------------------------------------------------
-// MESAS, COCINA Y ÓRDENES
+// MESAS, COCINA Y CHAT
 // -----------------------------------------------------
 function renderTables(){
   $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`
@@ -463,8 +485,11 @@ async function loadKitchen(){
   $("kitchenOrders").innerHTML = os.filter(x=>["open","preparing"].includes(x.status)).map(o=>`
     <div class="card">
       <h3>Orden #${o.id.slice(0,6)}</h3>
-      <p>Total: $${o.total}</p>
-      <button class="primary" onclick="api('/orders/${o.id}',{method:'PATCH',body:JSON.stringify({status:'ready'})}).then(loadKitchen)">Marcar Lista</button>
+      <p>Total: $${o.total} | ${o.notes ? 'Nota: '+o.notes : ''}</p>
+      <div class="row" style="margin-top:10px;">
+        <button class="primary" onclick="api('/orders/${o.id}',{method:'PATCH',body:JSON.stringify({status:'ready'})}).then(loadKitchen)">Marcar Lista</button>
+        <button onclick="openChat('${o.id}')">💬 Chat</button>
+      </div>
     </div>
   `).join("")||"<p class='muted'>Sin pedidos pendientes en cocina.</p>";
 }
@@ -478,10 +503,44 @@ async function loadOrders(){
       <span class="status ${o.status}">${o.status}</span>
       <div class="row" style="margin-top:10px;">
         <button class="primary" onclick="pay('${o.id}')">Cobrar</button>
+        <button onclick="openChat('${o.id}')">💬 Chat</button>
         ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
       </div>
     </div>
   `).join("");
+}
+
+// CHAT DE COMANDAS
+async function openChat(orderId){
+  activeChatOrderId = orderId;
+  $("chatModalTitle").textContent = `Chat de Comanda #${orderId.slice(0,6)}`;
+  $("chatModal").classList.remove("hidden");
+  loadChatMessages();
+}
+
+async function loadChatMessages(){
+  if(!activeChatOrderId) return;
+  try{
+    const msgs = await api(`/orders/${activeChatOrderId}/comments`);
+    $("chatMessages").innerHTML = msgs.length ? msgs.map(m=>`
+      <div><b>${m.user_name} (${m.role}):</b> ${m.comment} <small class="muted" style="float:right;">${m.created_at.slice(11,16)}</small></div>
+    `).join("") : "<p class='muted'>Sin mensajes en esta orden aún.</p>";
+  }catch(e){}
+}
+
+async function sendChat(){
+  const text = $("chatInput").value.trim();
+  if(!text || !activeChatOrderId) return;
+  try{
+    await api(`/orders/${activeChatOrderId}/comments`, {method:"POST", body:JSON.stringify({comment: text})});
+    $("chatInput").value="";
+    loadChatMessages();
+  }catch(e){toast(e.message)}
+}
+
+function closeChat(){
+  $("chatModal").classList.add("hidden");
+  activeChatOrderId=null;
 }
 
 async function deleteOrder(id){
@@ -587,12 +646,12 @@ function sendNextCampaign(){
 }
 
 // -----------------------------------------------------
-// MENÚ Y USUARIOS (CON CAMBIO DE CLAVE Y ELIMINACIÓN)
+// MENÚ Y USUARIOS
 // -----------------------------------------------------
 function renderProductAdmin(){
   $("productAdmin").innerHTML = products.map(p=>`
     <div class="card">
-      <h3>${p.name}</h3><p>$${p.price} · ${p.category}</p>
+      <h3>${p.name}</h3><p>$${p.price} · <b>${p.category}</b></p>
       <button class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button>
     </div>
   `).join("");
@@ -601,7 +660,7 @@ function renderProductAdmin(){
 async function createProduct(){
   try{
     await api("/menu",{method:"POST",body:JSON.stringify({
-      name: $("pName").value, category: $("pCategory").value, price: Number($("pPrice").value), description: $("pDesc").value
+      name: $("pName").value, category: $("pCategory").value || "General", price: Number($("pPrice").value), description: $("pDesc").value
     })});
     toast("Producto creado");
     $("pName").value=""; $("pCategory").value=""; $("pPrice").value=""; $("pDesc").value="";
