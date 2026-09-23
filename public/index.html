@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v12</title>
+<title>RUSH POS v13</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -50,6 +50,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 .report-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; text-align: center; }
 .report-val { font-size: 24px; font-weight: 900; color: #111; margin-top: 5px; }
 .kitchen-item { font-size: 16px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
+.ticket-preview { font-family: 'Courier New', Courier, monospace; background: #fff; padding: 20px; border: 1px dashed #333; max-width: 320px; margin: auto; }
 </style>
 </head>
 <body>
@@ -70,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v12</div>
+      <div class="brand">RUSH POS v13</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -114,7 +115,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <h1 class="title">🎾 Reservas de Canchas de Pádel</h1>
   <div class="card" style="margin-bottom:15px; background:#f0fdf4; border:1px solid #16a34a;">
     <h2>📅 Agendar Cancha y Crear Cuenta Global</h2>
-    <p class="muted">Al registrar la reserva, el cliente se guardará automáticamente en tu base de datos de lealtad para futuras promociones.</p>
+    <p class="muted">Al registrar la reserva, el cliente se guardará automáticamente en tu base de datos de lealtad.</p>
     <div class="grid" style="margin-top:12px;">
       <label>Cancha:<select id="resCourtSelect" onchange="updateResTotal()"></select></label>
       <label>Fecha:<input type="date" id="resDate"></label>
@@ -148,10 +149,10 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="kitchenOrders" class="grid"></div>
 </section>
 
-<!-- ÓRDENES -->
+<!-- ÓRDENES Y GESTIÓN DE CUENTAS -->
 <section id="ordenes" class="view hidden">
   <div class="row between">
-    <h1 class="title" style="margin:0">Control de Órdenes y Soporte</h1>
+    <h1 class="title" style="margin:0">Control de Órdenes y Cuentas</h1>
     <button onclick="exportData('orders')">📥 Respaldar Órdenes (CSV)</button>
   </div>
   <div id="orders" class="grid" style="margin-top:15px"></div>
@@ -256,7 +257,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </main>
 </section>
 
-<!-- MODALES -->
+<!-- MODAL DE CHAT -->
 <div id="chatModal" class="modal hidden">
   <div class="modalbox">
     <div class="row between"><h2 style="margin:0" id="chatModalTitle">Chat de Comanda</h2><button onclick="closeChat()">✕</button></div>
@@ -265,6 +266,19 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </div>
 
+<!-- MODAL DE TICKET / VISTA PREVIA E IMPRESIÓN -->
+<div id="ticketModal" class="modal hidden">
+  <div class="modalbox" style="max-width:420px; text-align:center;">
+    <div class="row between"><h2 style="margin:0">Ticket de Venta</h2><button onclick="$('ticketModal').classList.add('hidden')">✕</button></div>
+    <div id="ticketContent" style="margin:15px 0;"></div>
+    <div class="row" style="margin-top:15px;">
+      <button class="primary" style="flex:1;" onclick="window.print()">🖨️ Imprimir Ticket</button>
+      <button class="success" style="flex:1;" onclick="sendTicketWhatsApp()">💬 Enviar WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE EDICIÓN DE RESERVA -->
 <div id="editResModal" class="modal hidden">
   <div class="modalbox" style="max-width:500px;">
     <div class="row between"><h2 style="margin:0">Modificar Reserva</h2><button onclick="$('editResModal').classList.add('hidden')">✕</button></div>
@@ -289,6 +303,7 @@ const API="/api";
 let token=localStorage.getItem("rush_token");
 let me=null, products=[], tables=[], cart=[], inventoryItems=[], courtsList=[], currentCategory="TODOS";
 let activeChatOrderId=null;
+let currentTicketData=null;
 const $=id=>document.getElementById(id);
 
 function toast(msg){
@@ -443,7 +458,7 @@ async function sendOrder(){
 }
 
 // -----------------------------------------------------
-// CANCHAS Y RESERVAS (CON REGISTRO AUTOMÁTICO EN LEALTAD)
+// CANCHAS Y RESERVAS
 // -----------------------------------------------------
 let activeReservations = [];
 
@@ -498,7 +513,6 @@ async function createReservation(){
   if(!total || total <= 0) return toast("Por favor ingresa un precio válido.");
 
   try {
-    // 1. Crear la reserva y cuenta global
     await api("/reservations", {method:"POST", body:JSON.stringify({
       court_id: courtId,
       customer_name: name,
@@ -510,17 +524,15 @@ async function createReservation(){
       deposit: Number($("resDeposit").value||0)
     })});
 
-    // 2. Registrar/Actualizar automáticamente en la base de datos de Lealtad del backend
     await api("/loyalty/register", {method:"POST", body:JSON.stringify({
       name: name,
       phone: phone,
       amount: total
-    })}).catch(()=>{}); // Respaldo por si el endpoint varía, asegurando que no bloquee
+    })}).catch(()=>{});
 
     toast("Reserva agendada y cliente registrado en lealtad.");
     loadCanchasData();
     
-    // Lanzar WhatsApp automático
     const msg = `Hola *${name}* 👋 Te confirmamos tu reserva en *Rush Club Pádel* 🎾:\n\n📅 Fecha: ${date}\n⏰ Hora: ${time}\n⏳ Duración: ${hours} hrs\n💰 Total: $${total}\n\n¡Te esperamos!`;
     window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
 
@@ -651,6 +663,9 @@ async function updateOrderStatus(id, newStatus){
   }catch(e){toast(e.message)}
 }
 
+// -----------------------------------------------------
+// ÓRDENES, IMPRESIÓN DE TICKET Y WHATSAPP
+// -----------------------------------------------------
 async function loadOrders(){
   const os = await api("/orders");
   $("orders").innerHTML = os.map(o=>`
@@ -658,8 +673,9 @@ async function loadOrders(){
       <h3>Orden #${o.id.slice(0,6)}</h3>
       <p>Cliente: ${o.customer_name||"General"} | Total: <b>$${o.total}</b></p>
       <span class="status ${o.status}">${o.status}</span>
-      <div class="row" style="margin-top:10px;">
-        <button class="primary" onclick="payAndClear('${o.id}')">💵 Cobrar y Entregar</button>
+      <div class="row" style="margin-top:10px; flex-wrap:wrap;">
+        <button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ver / Imprimir Ticket</button>
+        <button class="success" style="flex:1;" onclick="payAndClear('${o.id}')">💵 Finalizar Cuenta</button>
         <button onclick="openChat('${o.id}')">💬 Chat</button>
         ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
       </div>
@@ -667,11 +683,68 @@ async function loadOrders(){
   `).join("");
 }
 
+async function previewTicket(id){
+  try{
+    const o = await api("/orders/" + id);
+    currentTicketData = o;
+    
+    let itemsHtml = "";
+    if(o.items && o.items.length){
+      itemsHtml = o.items.map(it=>`
+        <div style="display:flex; justify-content:space-between; margin:4px 0; font-size:14px;">
+          <span>${it.qty}x ${it.name}</span>
+          <span>$${it.qty * it.unit_price}</span>
+        </div>
+      `).join("");
+    }
+
+    $("ticketContent").innerHTML = `
+      <div class="ticket-preview">
+        <b>RUSH CLUB PÁDEL</b><br>
+        <small>Punto de Venta · Ticket de Consumo</small>
+        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
+        <div style="text-align:left; font-size:13px;">
+          <b>Folio:</b> #${o.id.slice(0,6)}<br>
+          <b>Cliente:</b> ${o.customer_name || 'General'}<br>
+          <b>Fecha:</b> ${new Date().toLocaleString()}
+        </div>
+        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
+        <div style="text-align:left;">
+          ${itemsHtml}
+        </div>
+        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
+        <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold;">
+          <span>TOTAL:</span>
+          <span>$${o.total}</span>
+        </div>
+        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
+        <small>¡Gracias por su visita!<br>Rush Club Pádel</small>
+      </div>
+    `;
+    $("ticketModal").classList.remove("hidden");
+  }catch(e){toast("Error al cargar ticket: "+e.message)}
+}
+
+function sendTicketWhatsApp(){
+  if(!currentTicketData) return;
+  const o = currentTicketData;
+  const phone = o.customer_phone;
+  if(!phone || phone.length < 10) return toast("Este cliente no cuenta con un número de WhatsApp registrado en la comanda.");
+
+  let itemsText = "";
+  if(o.items && o.items.length){
+    itemsText = o.items.map(it=>`- ${it.qty}x ${it.name} ($${it.qty * it.unit_price})`).join("\n");
+  }
+
+  const msg = `Hola *${o.customer_name || 'Cliente'}* 👋 Aquí tienes el ticket de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${o.id.slice(0,6)}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${o.total}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
+  window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
 async function payAndClear(id){
-  if(!confirm("¿Confirmar cobro y entrega? La comanda se cerrará y se archivará como soporte.")) return;
+  if(!confirm("¿Deseas finalizar la cuenta? Esto registrará el cobro, liberará la mesa/cancha y guardará el reporte para el administrador.")) return;
   try{
     await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({amount: 99999, method:"cash"})});
-    toast("Cobro registrado y comanda archivada con éxito");
+    toast("¡Cuenta finalizada y archivada con éxito!");
     loadOrders();
   }catch(e){toast(e.message)}
 }
@@ -870,7 +943,7 @@ async function createUser(){
     await api("/users",{method:"POST",body:JSON.stringify({
       name: $("uName").value, username: $("uUsername").value, password: $("uPassword").value, role: $("uRole").value
     })});
-    toast("Usuario creado");
+    toast("Error al crear usuario");
     $("uName").value=""; $("uUsername").value=""; $("uPassword").value="";
     loadUsers();
   }catch(e){toast(e.message)}
