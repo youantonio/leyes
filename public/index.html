@@ -1183,6 +1183,7 @@ async function loadUsers(){
               <th>Usuario</th>
               <th>Rol</th>
               <th>Activo</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -1192,6 +1193,9 @@ async function loadUsers(){
                 <td>${esc(u.username)}</td>
                 <td>${roleName(u.role)}</td>
                 <td>${u.active?"Sí":"No"}</td>
+                <td>
+                  <button class="danger" style="padding: 6px 12px; font-size: 13px;" onclick="deleteUser('${escAttr(u.id)}', '${escAttr(u.name)}')">Eliminar</button>
+                </td>
               </tr>
             `).join("")}
           </tbody>
