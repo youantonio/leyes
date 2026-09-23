@@ -2490,7 +2490,61 @@ async function api(
     }
 
   }
+/* =====================================================
+       ELIMINAR USUARIO
+    ===================================================== */
 
+    if (
+      request.method === "DELETE" &&
+      id
+    ) {
+
+      // Evitar que el admin se borre a sí mismo por accidente
+      if (id === user.id) {
+        return json({
+          error: "No puedes eliminar tu propio usuario en uso."
+        }, 400);
+      }
+
+      const target =
+        await env.DB
+          .prepare(`
+            SELECT id
+            FROM users
+            WHERE id=?
+          `)
+          .bind(id)
+          .first();
+
+      if (!target) {
+        return json({
+          error: "Usuario no encontrado."
+        }, 404);
+      }
+
+      await env.DB
+        .prepare(`
+          DELETE FROM users
+          WHERE id=?
+        `)
+        .bind(id)
+        .run();
+
+      // Borramos también sus sesiones activas por seguridad
+      await env.DB
+        .prepare(`
+          DELETE FROM sessions
+          WHERE user_id=?
+        `)
+        .bind(id)
+        .run();
+
+      return json({
+        ok: true,
+        message: "Usuario eliminado correctamente."
+      });
+
+    }
 
   /* =======================================================
      RUTA NO ENCONTRADA
