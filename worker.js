@@ -1000,21 +1000,23 @@ async function api(
     if (
       !user ||
       !(
-        await verifyPassword(
-          password,
-          user.password_salt,
-          user.password_hash
-        )
-      )
-    ) {
-
+   if (!user) {
       return json({
-        error:
-          "Usuario o contraseña incorrectos."
+        error: `Debug: El usuario '${username}' NO EXISTE en esta base de datos. (Quizás se conectó a una DB vacía).`
       }, 401);
-
     }
 
+    const isValid = await verifyPassword(
+      password,
+      user.password_salt,
+      user.password_hash
+    );
+
+    if (!isValid) {
+      return json({
+        error: `Debug: El usuario existe, pero la contraseña no coincide. Revisa si hay un espacio en blanco al final.`
+      }, 401);
+    }
 
     const token =
       randomHex(32);
