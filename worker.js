@@ -16,9 +16,7 @@ export default {
     try {
       const db = env.DB;
 
-      // ==========================================
-      // 1. AUTENTICACIÓN Y SESIÓN
-      // ==========================================
+      // 1. LOGIN Y SESIÓN
       if (path === "/api/login" && request.method === "POST") {
         let username = "", password = "";
         try {
@@ -35,7 +33,6 @@ export default {
           } catch(e) {}
         }
 
-        // Respaldo de emergencia infalible
         if (!user && username === "admin" && password === "admin") {
           user = { id: "1", name: "Administrador", username: "admin", role: "admin" };
         }
@@ -66,9 +63,7 @@ export default {
         }
       }
 
-      // ==========================================
-      // 2. MENÚ Y PRODUCTOS
-      // ==========================================
+      // 2. MENÚ Y DESTINOS (COCINA / BARRA)
       if (path === "/api/menu" || path.startsWith("/api/menu/")) {
         const menuId = path.split("/")[3];
 
@@ -84,7 +79,7 @@ export default {
             items = [
               { id: "1", name: "Hamburguesa Clásica", category: "Alimentos", price: 120, description: "Con papas", destination: "cocina" },
               { id: "2", name: "Coca-Cola 600ml", category: "Bebidas", price: 35, description: "Fría", destination: "barra" },
-              { id: "3", name: "Café Americano", category: "Bebidas", price: 30, description: "Caliente", destination: "barra" }
+              { id: "3", name: "Café Americano", category: "Cafetería", price: 30, description: "Caliente", destination: "barra" }
             ];
           }
           return new Response(JSON.stringify(items), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -110,9 +105,7 @@ export default {
         }
       }
 
-      // ==========================================
       // 3. MESAS
-      // ==========================================
       if (path === "/api/tables") {
         let tables = [];
         if (db) {
@@ -130,9 +123,7 @@ export default {
         return new Response(JSON.stringify(tables), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      // ==========================================
-      // 4. ÓRDENES Y COMANDAS
-      // ==========================================
+      // 4. ÓRDENES, COMANDAS Y CHAT
       if (path === "/api/orders" || path.startsWith("/api/orders/")) {
         const orderId = path.split("/")[3];
 
@@ -204,7 +195,6 @@ export default {
           return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        // Chat de comandas
         if (orderId && path.includes("comments")) {
           if (request.method === "GET") {
             let comments = [];
@@ -230,9 +220,7 @@ export default {
         }
       }
 
-      // ==========================================
       // 5. CANCHAS Y RESERVAS
-      // ==========================================
       if (path === "/api/courts") {
         let courts = [];
         if (db) {
@@ -286,9 +274,7 @@ export default {
         }
       }
 
-      // ==========================================
       // 6. INVENTARIO Y COMPRAS
-      // ==========================================
       if (path === "/api/inventory" || path.startsWith("/api/inventory/")) {
         const invId = path.split("/")[3];
         if (path === "/api/inventory" && request.method === "GET") {
@@ -323,7 +309,6 @@ export default {
             const pid = crypto.randomUUID();
             await db.prepare("INSERT INTO purchases (id, inventory_id, supplier_name, supplier_rfc, qty, total_cost, purchase_date) VALUES (?, ?, ?, ?, ?, ?, ?)")
               .bind(pid, body.inventory_id, body.supplier_name, body.supplier_rfc, body.qty, body.total_cost, body.purchase_date).run();
-            // Actualizar stock
             const item = await db.prepare("SELECT stock FROM inventory WHERE id = ?").bind(body.inventory_id).first();
             if(item) {
               await db.prepare("UPDATE inventory SET stock = ? WHERE id = ?").bind(Number(item.stock) + Number(body.qty), body.inventory_id).run();
@@ -333,9 +318,7 @@ export default {
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      // ==========================================
       // 7. LEALTAD
-      // ==========================================
       if (path === "/api/loyalty" || path === "/api/loyalty/register") {
         if (request.method === "GET") {
           let loyalty = [];
@@ -365,9 +348,7 @@ export default {
         }
       }
 
-      // ==========================================
       // 8. CAJA, CORTES Y MOVIMIENTOS MANUALES
-      // ==========================================
       if (path === "/api/dashboard" && request.method === "GET") {
         let sales = 0, ordersCount = 0, expenses = 0;
         if (db) {
@@ -418,17 +399,13 @@ export default {
               const id = crypto.randomUUID();
               await db.prepare("INSERT INTO cash_cuts (id, total_sales, total_expenses, net_profit, closed_by) VALUES (?, ?, ?, ?, ?)")
                 .bind(id, total_sales, total_expenses, net_profit, "admin").run();
-              
-              // Opcional: Limpiar o marcar órdenes como procesadas en el corte
             } catch(e) {}
           }
           return new Response(JSON.stringify({ total_sales, total_expenses, net_profit }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
       }
 
-      // ==========================================
       // 9. USUARIOS
-      // ==========================================
       if (path === "/api/users" || path.startsWith("/api/users/")) {
         const userId = path.split("/")[3];
         if (path === "/api/users" && request.method === "GET") {
@@ -468,7 +445,6 @@ export default {
         }
       }
 
-      // Si no coincide ninguna ruta
       return new Response(JSON.stringify({ error: "Ruta no encontrada" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (err) {
@@ -479,27 +455,3 @@ export default {
     }
   }
 };
-// --------------------------------------------------------
-// MODO DIOS: FORZAR ENTRADA DIRECTA (SALTAR LOGIN)
-// --------------------------------------------------------
-setTimeout(() => {
-    // 1. Buscamos y destruimos cualquier variante de la pantalla de Login
-    const posiblesLogins = ['loginScreen', 'login-screen', 'loginContainer', 'login'];
-    posiblesLogins.forEach(id => {
-        let elemento = document.getElementById(id);
-        if (elemento) elemento.style.display = 'none';
-    });
-
-    // 2. Buscamos y forzamos que aparezca tu Aplicación Principal
-    const posiblesApps = ['mainApp', 'appScreen', 'app-container', 'app', 'main-content'];
-    posiblesApps.forEach(id => {
-        let elemento = document.getElementById(id);
-        if (elemento) {
-            elemento.style.display = 'block'; // Fuerza a que se muestre
-            elemento.style.visibility = 'visible';
-            elemento.style.opacity = '1';
-        }
-    });
-
-    console.log("¡Bypass automático ejecutado con éxito!");
-}, 500);
