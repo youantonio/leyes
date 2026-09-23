@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v8</title>
+<title>RUSH POS v9</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -70,7 +70,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v8</div>
+      <div class="brand">RUSH POS v9</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -109,7 +109,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </section>
 
-<!-- CANCHAS Y RESERVAS CON OPCIÓN DE EDITAR Y ELIMINAR -->
+<!-- CANCHAS Y RESERVAS -->
 <section id="canchas" class="view hidden">
   <h1 class="title">🎾 Reservas de Canchas de Pádel</h1>
   <div class="card" style="margin-bottom:15px; background:#f0fdf4; border:1px solid #16a34a;">
@@ -182,7 +182,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <div id="campaignQueue" class="hidden" style="margin-top:15px; padding:15px; background:#fff; border-radius:12px; border:1px solid #16a34a;">
       <h3 id="campProgress" style="margin:0 0 5px;">0 / 0</h3>
       <p id="campCurrentName" style="font-weight:bold; font-size:18px; margin:0 0 10px;"></p>
-      <button class="primary" id="btnSendNext" onclick="sendNextCampaign()">💬 Enviar a este cliente</button>
+      <button class="success" id="btnSendNext" onclick="sendNextCampaign()">💬 Enviar WhatsApp a este cliente</button>
       <button onclick="$('campaignQueue').classList.add('hidden')" style="margin-left:10px;">Detener</button>
     </div>
   </div>
@@ -254,7 +254,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </main>
 </section>
 
-<!-- MODAL DE CHAT -->
+<!-- MODALES -->
 <div id="chatModal" class="modal hidden">
   <div class="modalbox">
     <div class="row between"><h2 style="margin:0" id="chatModalTitle">Chat de Comanda</h2><button onclick="closeChat()">✕</button></div>
@@ -263,7 +263,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </div>
 
-<!-- MODAL DE EDICIÓN DE RESERVA -->
 <div id="editResModal" class="modal hidden">
   <div class="modalbox" style="max-width:500px;">
     <div class="row between"><h2 style="margin:0">Modificar Reserva</h2><button onclick="$('editResModal').classList.add('hidden')">✕</button></div>
@@ -441,7 +440,7 @@ async function sendOrder(){
 }
 
 // -----------------------------------------------------
-// CANCHAS Y RESERVAS (CON EDICIÓN Y ELIMINACIÓN)
+// CANCHAS Y RESERVAS (CON WHATSAPP DIRECTO)
 // -----------------------------------------------------
 let activeReservations = [];
 
@@ -461,6 +460,7 @@ async function loadCanchasData(){
             <td>${r.date} a las ${r.start_time} (${r.hours}h)</td>
             <td>$${r.total_price}</td>             <td>$${r.deposit}</td>
             <td>
+              <button type="button" class="success" onclick="sendReservationWhatsApp('${r.id}')">💬 WhatsApp</button>
               <button type="button" onclick="openEditReservation('${r.id}')">✏️ Editar</button>
               <button type="button" class="danger" onclick="deleteReservation('${r.id}')">🗑️ Eliminar</button>
             </td>
@@ -477,21 +477,40 @@ async function createReservation(){
   const hours = Number($("resHours").value);
   const total = court.hourly_rate * hours;
 
+  const phone = $("resPhone").value.trim();
+  const name = $("resName").value.trim();
+  const date = $("resDate").value;
+  const time = $("resTime").value;
+
   try {
     await api("/reservations", {method:"POST", body:JSON.stringify({
       court_id: courtId,
-      customer_name: $("resName").value,
-      customer_phone: $("resPhone").value,
-      date: $("resDate").value,
-      start_time: $("resTime").value,
+      customer_name: name,
+      customer_phone: phone,
+      date,
+      start_time: time,
       hours,
       total_price: total,
       deposit: Number($("resDeposit").value||0)
     })});
     toast("Reserva agendada y cuenta generada.");
     loadCanchasData();
+    
+    // Lanzar WhatsApp automático opcional si hay número
+    if(phone && phone.length >= 10){
+      const msg = `Hola *${name}* 👋 Te confirmamos tu reserva en *Rush Club Pádel* 🎾:\n\n📅 Fecha: ${date}\n⏰ Hora: ${time}\n⏳ Duración: ${hours} hrs\n💰 Total: $${total}\n\n¡Te esperamos!`;
+      window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
     $("resName").value=""; $("resPhone").value=""; $("resDeposit").value="0";
   } catch(e) { toast(e.message); }
+}
+
+function sendReservationWhatsApp(id){
+  const r = activeReservations.find(x=>x.id===id);
+  if(!r || !r.customer_phone) return toast("Este cliente no tiene número de WhatsApp registrado.");
+  const msg = `Hola *${r.customer_name}* 👋 Te recordamos los datos de tu reserva en *Rush Club Pádel* 🎾:\n\n🏟️ Cancha: ${r.court_name}\n📅 Fecha: ${r.date}\n⏰ Hora: ${r.start_time}\n⏳ Duración: ${r.hours} hrs\n💰 Total: $${r.total_price}\n\n¡Nos vemos en la cancha!`;
+  window.open(`https://wa.me/52${r.customer_phone}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 function openEditReservation(id){
@@ -715,7 +734,7 @@ function exportData(type){
 }
 
 // -----------------------------------------------------
-// INVENTARIO Y LEALTAD
+// INVENTARIO Y LEALTAD (CON WHATSAPP DE DIFUSIÓN)
 // -----------------------------------------------------
 async function loadInventoryData(){
   inventoryItems = await api("/inventory");
@@ -751,15 +770,17 @@ async function startCampaign(){
   cIdx=0; $("campaignQueue").classList.remove("hidden"); updateCamp();
 }
 function updateCamp(){
-  $("campProgress").innerText = `${cIdx} / ${cList.length}`;
-  if(cIdx < cList.length) $("campCurrentName").innerText = `Cliente: ${cList[cIdx].name}`;
+  $("campProgress").innerText = `${cIdx + 1} / ${cList.length}`;
+  if(cIdx < cList.length) $("campCurrentName").innerText = `Cliente: ${cList[cIdx].name} (${cList[cIdx].phone})`;
   else { $("campCurrentName").innerText = "¡Campaña finalizada!"; $("btnSendNext").disabled=true; }
 }
 function sendNextCampaign(){
   if(cIdx>=cList.length) return;
-  const c = cList[cIdx]; const msg = $("bulkMessage").value;
+  const c = cList[cIdx]; 
+  const msg = $("bulkMessage").value;
   window.open(`https://wa.me/52${c.phone}?text=${encodeURIComponent("Hola "+c.name+" 👋\n\n"+msg)}`, '_blank');
-  cIdx++; updateCamp();
+  cIdx++; 
+  updateCamp();
 }
 
 // -----------------------------------------------------
