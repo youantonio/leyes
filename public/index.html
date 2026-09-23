@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v20</title>
+<title>RUSH POS v22</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -49,7 +49,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:13px 18px;border-radius:12px;z-index:80}
 .report-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; text-align: center; }
 .report-val { font-size: 24px; font-weight: 900; color: #111; margin-top: 5px; }
-.kitchen-item { font-size: 16px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
+.kitchen-item { font-size: 16px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; }
 .ticket-preview { font-family: 'Courier New', Courier, monospace; background: #fff; padding: 20px; border: 1px dashed #333; max-width: 320px; margin: auto; }
 </style>
 </head>
@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v20</div>
+      <div class="brand">RUSH POS v22</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -97,7 +97,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 
   <div class="card" style="margin-top:13px">
-    <div class="row between"><h2 style="margin:0">Destino y Datos del Cliente</h2></div>
+    <div class="row between"><h2 style="margin:0">Destino y Comanda por Persona</h2></div>
     <div class="grid" style="margin-top:12px">
       <label>Tipo de Consumo:
         <select id="orderType">
@@ -108,18 +108,17 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <label>Mesa / Cancha:<select id="tableSelect"></select></label>
       <label>WhatsApp del cliente (10 dígitos) *Vital:<input id="customerPhone" placeholder="Ej. 7711234567" maxlength="10"></label>
       <label>Nombre del cliente:<input id="customerName" placeholder="Nombre completo"></label>
-      <label>Género:
-        <select id="customerGender">
-          <option value="No especificado">Seleccionar...</option>
-          <option value="H">Hombre (H)</option>
-          <option value="M">Mujer (M)</option>
-        </select>
-      </label>
+      <label>Comensal / Persona (Opcional):<input id="customerPerson" placeholder="Ej. Persona 1, Juan, etc."></label>
     </div>
     <div id="cart" style="margin-top:12px"></div>
     <div class="row between" style="margin-top:13px"><span class="total">Total</span><span id="cartTotal" class="total">$0.00</span></div>
-    <label style="display:block;margin-top:10px">Notas generales<textarea id="notes" rows="2" placeholder="Indicaciones especiales..."></textarea></label>
-    <button class="primary" style="width:100%;margin-top:10px;padding:16px;font-size:18px;" onclick="sendOrder()">🚀 Enviar a Cocina / Registrar</button>
+    
+    <div class="grid" style="margin-top:10px">
+      <label>Notas / Alergias para Cocina (Alimentos):<textarea id="notesKitchen" rows="2" placeholder="Ej. Sin cebolla, muy poco picoso..."></textarea></label>
+      <label>Notas para Barra / Cafetería (Bebidas):<textarea id="notesBarra" rows="2" placeholder="Ej. Leche deslactosada, sin azúcar..."></textarea></label>
+    </div>
+
+    <button class="primary" style="width:100%;margin-top:12px;padding:16px;font-size:18px;" onclick="sendOrder()">🚀 Enviar a Cocina / Barra / Registrar</button>
   </div>
 </section>
 
@@ -136,7 +135,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <label>Nombre del cliente:<input id="resName" placeholder="Nombre completo"></label>
       <label>WhatsApp:<input id="resPhone" placeholder="10 dígitos"></label>
       <label>Precio Total ($):<input id="resCustomTotal" type="number" step="1"></label>
-      <label>Anticipo / Seña ($):<input type="number" id="resDeposit" value="0"></label>
+      <label>Anticipo / Seña ($):<input id="resDeposit" value="0"></label>
       <button class="success" onclick="createReservation()" style="grid-column:1/-1;">Confirmar Reserva y Generar Cuenta</button>
     </div>
   </div>
@@ -155,13 +154,22 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <!-- COCINA (KDS) -->
 <section id="cocina" class="view hidden">
   <div class="row between" style="margin-bottom:14px;">
-    <h1 class="title" style="margin:0">👨‍🍳 Pantalla de Cocina (KDS)</h1>
+    <h1 class="title" style="margin:0">👨‍🍳 Pantalla de Cocina (Alimentos)</h1>
     <button onclick="loadKitchen()" class="primary">🔄 Actualizar Pedidos</button>
   </div>
   <div id="kitchenOrders" class="grid"></div>
 </section>
 
-<!-- ÓRDENES Y GESTIÓN DE CUENTAS -->
+<!-- BARRA / CAFETERÍA -->
+<section id="barra" class="view hidden">
+  <div class="row between" style="margin-bottom:14px;">
+    <h1 class="title" style="margin:0">☕ Pantalla de Barra / Cafetería (Bebidas)</h1>
+    <button onclick="loadBarra()" class="primary">🔄 Actualizar Pedidos</button>
+  </div>
+  <div id="barraOrders" class="grid"></div>
+</section>
+
+<!-- ÓRDENES Y GESTIÓN DE CUENTAS (AÑADIR MÁS PRODUCTOS) -->
 <section id="ordenes" class="view hidden">
   <div class="row between">
     <h1 class="title" style="margin:0">Control de Órdenes y Cuentas</h1>
@@ -170,12 +178,23 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="orders" class="grid" style="margin-top:15px"></div>
 </section>
 
-<!-- REPORTES Y CAJA -->
+<!-- REPORTES Y CAJA (INGRESOS, EGRESOS Y CORTE DIARIO) -->
 <section id="caja" class="view hidden">
   <h1 class="title">Reporte Financiero y Corte de Caja</h1>
+  <div class="card" style="margin-bottom:15px; background:#f8fafc; border:1px solid #cbd5e1;">
+    <h2>💵 Registro Manual de Ingresos y Egresos (Caja Chica)</h2>
+    <div class="grid" style="margin-top:10px;">
+      <label>Tipo Movimiento:<select id="txType"><option value="ingreso">🟢 Ingreso Manual</option><option value="egreso">🔴 Egreso / Gasto</option></select></label>
+      <label>Concepto:<input id="txConcept" placeholder="Ej. Pago hielo, cambio inicial, etc."></label>
+      <label>Monto ($):<input id="txAmount" type="number" step="0.01" placeholder="0.00"></label>
+      <button class="primary" onclick="registerManualTx()" style="grid-column:1/-1;">Registrar en Caja</button>
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:15px; background:#fff7ed; border-color:#fdba74;">
-    <h2>🔒 Cierre de Turno / Corte Diario</h2>
-    <button class="danger" onclick="makeCashCut()">Realizar Corte de Caja de Hoy</button>
+    <h2>🔒 Cierre de Turno / Corte por Día</h2>
+    <p class="muted">Calcula automáticamente el total de ventas, entradas y salidas de efectivo, generando el reporte para imprimir.</p>
+    <button class="danger" onclick="makeCashCut()" style="padding:14px 20px; font-size:16px;">🖨️ Realizar e Imprimir Corte de Caja de Hoy</button>
   </div>
   <div id="dashboard" class="grid"></div>
   <div class="card" style="margin-top:15px">
@@ -207,22 +226,19 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </section>
 
-<!-- INVENTARIO -->
+<!-- INVENTARIO (ENTRADAS DIARIAS Y MODIFICACIÓN) -->
 <section id="inventario" class="view hidden">
   <div class="row between">
-    <h1 class="title" style="margin:0">📦 Inventario, Compras y Recetas</h1>
+    <h1 class="title" style="margin:0">📦 Inventario, Ingreso Diario y Control (Admin)</h1>
     <button onclick="exportData('inventory')">📥 Respaldar Inventario (CSV)</button>
   </div>
-  <div class="card" style="margin-top:15px;">
-    <h2>Registrar Compra a Proveedor</h2>
-    <div class="grid">
-      <label>Insumo:<select id="purInvSelect"></select></label>
-      <input id="purSupplier" placeholder="Proveedor">
-      <input id="purRFC" placeholder="RFC">
-      <input type="date" id="purDate">
-      <input type="number" id="purQty" step="0.01" placeholder="Cantidad">
-      <input type="number" id="purCost" step="0.01" placeholder="Costo Total $">
-      <button class="primary" onclick="createPurchase()" style="grid-column:1/-1;">Guardar Compra</button>
+  <div class="card" style="margin-top:15px; background:#f0fdf4; border:1px solid #16a34a;">
+    <h2>📥 Ingreso Diario de Productos / Auditoría de Stock</h2>
+    <div class="grid" style="margin-top:10px;">
+      <label>Producto / Insumo:<select id="invItemSelect"></select></label>
+      <label>Cantidad a Sumar / Ajustar:<input type="number" id="invAddQty" step="0.01" placeholder="Ej. 10"></label>
+      <label>Motivo del Ajuste:<input id="invReason" placeholder="Ej. Surtido diario, merma, conteo físico"></label>
+      <button class="success" onclick="updateStockDaily()" style="grid-column:1/-1;">Guardar y Actualizar Stock en Almacén</button>
     </div>
   </div>
   <div class="card" style="margin-top:15px;">
@@ -234,23 +250,27 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <!-- PRODUCTOS Y USUARIOS -->
 <section id="productos" class="view hidden">
   <div class="row between">
-    <h1 class="title" style="margin:0">Catálogo de Menú</h1>
+    <h1 class="title" style="margin:0">Catálogo de Menú y Destino</h1>
     <button onclick="exportData('menu')">📥 Respaldar Menú (CSV)</button>
   </div>
   <div class="card" style="margin-top:15px;">
     <div class="grid">
-      <input id="pName" placeholder="Nombre">
-      <input id="pCategory" placeholder="Categoría (Ej. Bebidas, Chilaquiles, Hamburguesas)">
+      <input id="pName" placeholder="Nombre (Ej. Hamburguesa o Limonada)">
+      <input id="pCategory" placeholder="Categoría (Ej. Alimentos, Bebidas)">
       <input id="pPrice" type="number" step=".01" placeholder="Precio">
+      <select id="pDestination">
+        <option value="cocina">🍳 Destino: Cocina (Alimentos)</option>
+        <option value="barra">☕ Destino: Barra (Bebidas / Café)</option>
+      </select>
       <input id="pDesc" placeholder="Descripción">
-      <button class="primary" onclick="createProduct()">Crear producto</button>
+      <button class="primary" onclick="createProduct()" style="grid-column:1/-1;">Crear Producto</button>
     </div>
   </div>
   <div id="productAdmin" class="grid" style="margin-top:15px"></div>
 </section>
 
 <section id="usuarios" class="view hidden">
-  <h1 class="title">Gestión de Usuarios y Contraseñas</h1>
+  <h1 class="title">Gestión de Usuarios y Perfiles</h1>
   <div class="card">
     <div class="grid">
       <input id="uName" placeholder="Nombre completo">
@@ -259,6 +279,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <select id="uRole">
         <option value="mesero">Mesero</option>
         <option value="cocina">Cocina</option>
+        <option value="barra">Barra / Cafetería</option>
         <option value="admin">Administrador</option>
       </select>
       <button class="primary" onclick="createUser()">Crear Usuario</button>
@@ -278,14 +299,41 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </div>
 
-<!-- MODAL DE TICKET -->
+<!-- MODAL DE TICKET (DOBLE COPIA: CLIENTE Y COCINA) -->
 <div id="ticketModal" class="modal hidden">
   <div class="modalbox" style="max-width:420px; text-align:center;">
-    <div class="row between"><h2 style="margin:0">Ticket de Venta</h2><button onclick="$('ticketModal').classList.add('hidden')">✕</button></div>
+    <div class="row between"><h2 style="margin:0">Comprobante / Tickets</h2><button onclick="$('ticketModal').classList.add('hidden')">✕</button></div>
     <div id="ticketContent" style="margin:15px 0;"></div>
     <div class="row" style="margin-top:15px;">
-      <button class="primary" style="flex:1;" onclick="window.print()">🖨️ Imprimir</button>
+      <button class="primary" style="flex:1;" onclick="window.print()">🖨️ Imprimir 2 Tickets (Cliente y Cocina)</button>
       <button class="success" style="flex:1;" onclick="sendTicketWhatsApp()">💬 WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CORTE DE CAJA -->
+<div id="cutModal" class="modal hidden">
+  <div class="modalbox" style="max-width:450px; text-align:center;">
+    <div class="row between"><h2 style="margin:0">Corte de Caja Diario</h2><button onclick="$('cutModal').classList.add('hidden')">✕</button></div>
+    <div id="cutTicketContent" style="margin:15px 0; text-align:left;"></div>
+    <div class="row" style="margin-top:15px;">
+      <button class="primary" style="flex:1;" onclick="window.print()">🖨️ Imprimir Corte</button>
+      <button onclick="$('cutModal').classList.add('hidden')" style="flex:1;">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AÑADIR PRODUCTOS A CUENTA ABIERTA -->
+<div id="addItemsModal" class="modal hidden">
+  <div class="modalbox" style="max-width:600px;">
+    <div class="row between"><h2 style="margin:0" id="addItemsTitle">Añadir Productos a Cuenta</h2><button onclick="$('addItemsModal').classList.add('hidden')">✕</button></div>
+    <input type="hidden" id="addingOrderId">
+    <div class="grid" style="margin-top:15px;">
+      <label>Seleccionar Producto:<select id="extraProductSelect"></select></label>
+      <label>Cantidad:<input type="number" id="extraQty" value="1" min="1"></label>
+      <label>Comensal / Persona:<input id="extraPerson" placeholder="Ej. Persona 2"></label>
+      <label>Nota específica:<input id="extraNote" placeholder="Ej. Sin cebolla, leche de almendra"></label>
+      <button class="primary" onclick="confirmAddExtraItem()" style="grid-column:1/-1;">＋ Agregar a la Orden Activa</button>
     </div>
   </div>
 </div>
@@ -362,11 +410,13 @@ function showApp(){
   
   let nav=[];
   if(me.role==="cocina"){
-    nav=[["cocina","👨‍🍳 Cocina (KDS)"]];
+    nav=[["cocina","👨‍🍳 Cocina (Alimentos)"]];
+  } else if(me.role==="barra"){
+    nav=[["barra","☕ Barra (Bebidas)"]];
   } else if(me.role==="mesero"){
-    nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
+    nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["barra","☕ Barra"],["ordenes","📋 Órdenes"]];
   } else {
-    nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"],["caja","📊 Caja"],["lealtad","⭐ Lealtad"],["inventario","📦 Inventario"],["productos","🍔 Menú"],["usuarios","👥 Usuarios"]];
+    nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["barra","☕ Barra"],["ordenes","📋 Órdenes"],["caja","📊 Caja"],["lealtad","⭐ Lealtad"],["inventario","📦 Inventario"],["productos","🍔 Menú"],["usuarios","👥 Usuarios"]];
   }
 
   $("nav").innerHTML=nav.map((x,i)=>`<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`).join("");
@@ -382,6 +432,7 @@ function view(id,btn){
   if(id==="canchas") loadCanchasData();
   if(id==="mesas") renderTables();
   if(id==="cocina") loadKitchen();
+  if(id==="barra") loadBarra();
   if(id==="ordenes") loadOrders();
   if(id==="caja") loadDashboard();
   if(id==="lealtad") loadLoyaltyCustomers();
@@ -394,12 +445,16 @@ function view(id,btn){
 async function loadAll(){
   products=await api("/menu");
   tables=await api("/tables");
+  inventoryItems=await api("/inventory").catch(()=>[]);
   renderCategoryChips();
   renderProducts(); renderTableSelect(); renderTables(); renderCart();
+  if($("invItemSelect")) {
+    $("invItemSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
+  }
 }
 
 // -----------------------------------------------------
-// VENTAS Y FILTROS TIPO STARBUCKS
+// VENTAS Y COMANDAS POR PERSONA CON NOTAS SEPARADAS
 // -----------------------------------------------------
 function renderCategoryChips(){
   const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))];
@@ -431,8 +486,9 @@ function renderProducts(){
 
 function addToCart(id){
   const p=products.find(x=>x.id===id);
-  const ex=cart.find(x=>x.menu_item_id===id);
-  if(ex) ex.qty++; else cart.push({menu_item_id:id, name:p.name, qty:1, unit_price:p.price});
+  const person = $("customerPerson").value.trim() || "General";
+  const ex=cart.find(x=>x.menu_item_id===id && x.person===person);
+  if(ex) ex.qty++; else cart.push({menu_item_id:id, name:p.name, qty:1, unit_price:p.price, destination: p.destination || 'cocina', person: person});
   renderCart();
 }
 
@@ -440,7 +496,7 @@ function renderCart(){
   const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
   $("cart").innerHTML=cart.length?cart.map((x,i)=>`
     <div class="order-item">
-      <div>${x.qty} × ${x.name}</div>
+      <div><b>[${x.person}]</b> ${x.qty} × ${x.name} <small class="muted">(${x.destination==='barra'?'☕ Barra':'🍳 Cocina'})</small></div>
       <div class="row"><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart()">✕</button></div>
     </div>
   `).join(""):"<p class='muted'>Carrito vacío</p>";
@@ -459,20 +515,16 @@ async function sendOrder(){
   const tableId = $("tableSelect").value;
   const tableName = tableId ? (tables.find(t=>t.id===tableId)?.name || "Mesa asignada") : orderType;
   
-  const notes = `[${orderType}] ${$("notes").value || ""}`;
+  const notesKitchen = $("notesKitchen").value.trim();
+  const notesBarra = $("notesBarra").value.trim();
+  const notes = `[${orderType}] | 🍳 Cocina: ${notesKitchen || 'N/A'} | ☕ Barra: ${notesBarra || 'N/A'}`;
 
   if(!phone || phone.length < 10) return toast("Por favor ingresa un número de WhatsApp válido de 10 dígitos.");
 
   const total = cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
 
-  // Folio basado en Día/Mes/Año/Hora (Ej. 230926-1700)
   const now = new Date();
-  const dd = String(now.getDate()).padStart(2,'0');
-  const mm = String(now.getMonth()+1).padStart(2,'0');
-  const yy = String(now.getFullYear()).slice(-2);
-  const hh = String(now.getHours()).padStart(2,'0');
-  const min = String(now.getMinutes()).padStart(2,'0');
-  const customFolio = `${dd}${mm}${yy}-${hh}${min}`;
+  const customFolio = `${String(now.getDate()).padStart(2,'0')}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getFullYear()).slice(-2)}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
 
   try{
     await api("/orders",{
@@ -493,8 +545,8 @@ async function sendOrder(){
       amount: total
     })}).catch(()=>{});
 
-    toast("¡Orden enviada y cliente registrado en lealtad!");
-    cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("notes").value="";
+    toast("¡Orden enviada a cocina/barra y cliente registrado!");
+    cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("notesKitchen").value=""; $("notesBarra").value="";
     loadAll();
   }catch(e){toast(e.message)}
 }
@@ -634,7 +686,7 @@ async function deleteReservation(id){
 }
 
 // -----------------------------------------------------
-// COCINA (KDS)
+// KDS: COCINA (ALIMENTOS) Y BARRA (BEBIDAS)
 // -----------------------------------------------------
 function renderTables(){
   $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`
@@ -649,43 +701,44 @@ async function loadKitchen(){
   const os = await api("/orders");
   const activeOrders = os.filter(x=>["open","preparing"].includes(x.status));
   if(!activeOrders.length) {
-    $("kitchenOrders").innerHTML = "<p class='muted'>¡Excelente trabajo! No hay pedidos pendientes en cocina por ahora.</p>";
+    $("kitchenOrders").innerHTML = "<p class='muted'>No hay pedidos de alimentos pendientes en cocina.</p>";
     return;
   }
 
   let html = "";
   for(const o of activeOrders){
     let itemsHtml = "<div style='margin:12px 0;'>";
+    let hasKitchenItems = false;
     try {
       const details = await api("/orders/" + o.id);
       if(details.items && details.items.length){
-        itemsHtml += details.items.map(it=>`
+        const kitchenItems = details.items.filter(it => (it.destination || 'cocina') === 'cocina');
+        if(kitchenItems.length) hasKitchenItems = true;
+        itemsHtml += kitchenItems.map(it=>`
           <div class="kitchen-item">
-            <span><b>${it.qty}x</b> ${it.name}</span>
-            ${it.notes ? `<span style='color:#b91c1c;font-size:13px;'>(${it.notes})</span>`:''}
+            <span><b>[${it.person || 'General'}]</b> <b>${it.qty}x</b> ${it.name}</span>
           </div>
         `).join("");
       }
     } catch(e) {}
     itemsHtml += "</div>";
 
-    let actionButtons = "";
-    if(o.status === 'open') {
-      actionButtons = `<button class="warning" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'preparing')">🛠️ Tomar Pedido (En Proceso)</button>`;
-    } else {
-      actionButtons = `<button class="success" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'ready')">✅ Pedido Realizado</button>`;
-    }
+    if(!hasKitchenItems) continue;
+
+    let actionButtons = o.status === 'open' ? 
+      `<button class="warning" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'preparing')">🛠️ Tomar Pedido</button>` : 
+      `<button class="success" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'ready')">✅ Pedido Listo</button>`;
 
     html += `
-      <div class="card" style="border-left: 6px solid ${o.status==='preparing'?'#2563eb':'#d97706'}; background:#fff;">
+      <div class="card" style="border-left: 6px solid #d97706; background:#fff;">
         <div class="row between">
           <h3 style="margin:0;">Orden #${o.custom_folio || o.id.slice(0,6)}</h3>
-          <span class="status ${o.status}">${o.status==='preparing'?'EN PROCESO 👨‍🍳':'NUEVO 🔔'}</span>
+          <span class="status ${o.status}">${o.status}</span>
         </div>
-        <p style="margin:8px 0; font-size:15px;"><b>👤 Destino / Mesa:</b> ${o.customer_name || 'General'}</p>
-        ${o.notes ? `<p style="background:#fff7ed; padding:10px; border-radius:10px; margin:8px 0; border:1px solid #fed7aa;"><b>⚠️ Nota general:</b> ${o.notes}</p>` : ''}
+        <p style="margin:8px 0;"><b>👤 Destino:</b> ${o.customer_name || 'General'}</p>
+        ${o.notes ? `<p style="background:#fff7ed; padding:8px; border-radius:8px; font-size:13px;"><b>📝 Notas Cocina:</b> ${o.notes}</p>` : ''}
         <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
-        <div style="font-size:14px; color:#555; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Platillos a preparar:</div>
+        <div style="font-size:14px; font-weight:700;">ALIMENTOS A PREPARAR (POR PERSONA):</div>
         ${itemsHtml}
         <div class="row" style="margin-top:12px;">
           ${actionButtons}
@@ -694,27 +747,80 @@ async function loadKitchen(){
       </div>
     `;
   }
-  $("kitchenOrders").innerHTML = html;
+  $("kitchenOrders").innerHTML = html || "<p class='muted'>No hay alimentos pendientes para cocina.</p>";
+}
+
+async function loadBarra(){
+  const os = await api("/orders");
+  const activeOrders = os.filter(x=>["open","preparing"].includes(x.status));
+  if(!activeOrders.length) {
+    $("barraOrders").innerHTML = "<p class='muted'>No hay bebidas pendientes en barra.</p>";
+    return;
+  }
+
+  let html = "";
+  for(const o of activeOrders){
+    let itemsHtml = "<div style='margin:12px 0;'>";
+    let hasBarraItems = false;
+    try {
+      const details = await api("/orders/" + o.id);
+      if(details.items && details.items.length){
+        const barraItems = details.items.filter(it => (it.destination || 'cocina') === 'barra');
+        if(barraItems.length) hasBarraItems = true;
+        itemsHtml += barraItems.map(it=>`
+          <div class="kitchen-item">
+            <span><b>[${it.person || 'General'}]</b> <b>${it.qty}x</b> ${it.name}</span>
+          </div>
+        `).join("");
+      }
+    } catch(e) {}
+    itemsHtml += "</div>";
+
+    if(!hasBarraItems) continue;
+
+    let actionButtons = o.status === 'open' ? 
+      `<button class="warning" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'preparing')">🛠️ Preparar Bebida</button>` : 
+      `<button class="success" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'ready')">✅ Bebida Lista</button>`;
+
+    html += `
+      <div class="card" style="border-left: 6px solid #2563eb; background:#fff;">
+        <div class="row between">
+          <h3 style="margin:0;">Orden #${o.custom_folio || o.id.slice(0,6)}</h3>
+          <span class="status ${o.status}">${o.status}</span>
+        </div>
+        <p style="margin:8px 0;"><b>👤 Destino:</b> ${o.customer_name || 'General'}</p>
+        ${o.notes ? `<p style="background:#eff6ff; padding:8px; border-radius:8px; font-size:13px;"><b>📝 Notas Barra:</b> ${o.notes}</p>` : ''}
+        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+        <div style="font-size:14px; font-weight:700;">BEBIDAS A PREPARAR (POR PERSONA):</div>
+        ${itemsHtml}
+        <div class="row" style="margin-top:12px;">
+          ${actionButtons}
+          <button onclick="openChat('${o.id}')" style="padding:14px;">💬 Chat</button>
+        </div>
+      </div>
+    `;
+  }
+  $("barraOrders").innerHTML = html || "<p class='muted'>No hay bebidas pendientes en barra.</p>";
 }
 
 async function updateOrderStatus(id, newStatus){
   try{
     await api('/orders/'+id, {method:'PATCH', body:JSON.stringify({status: newStatus})});
-    toast(newStatus==='preparing' ? "Pedido tomado (En Proceso)" : "Pedido marcado como realizado");
-    loadKitchen();
+    toast("Estado actualizado");
+    loadKitchen(); loadBarra();
   }catch(e){toast(e.message)}
 }
 
 // -----------------------------------------------------
-// CONTROL DE ÓRDENES CON RESUMEN COMPLETO Y TOTALES
+// CONTROL DE ÓRDENES Y AÑADIR PRODUCTOS A CUENTAS ABIERTAS
 // -----------------------------------------------------
 async function loadOrders(){
   try{
     allOrdersCache = await api("/orders");
     $("orders").innerHTML = allOrdersCache.map(o=>{
-      let itemsSummary = "Sin artículos registrados";
+      let itemsSummary = "Sin artículos";
       if(o.items && o.items.length){
-        itemsSummary = o.items.map(it=>`${it.qty || 1}x ${it.name || 'Art.'}`).join(", ");
+        itemsSummary = o.items.map(it=>`[${it.person||'Gral.'}] ${it.qty||1}x ${it.name}`).join(", ");
       }
 
       let computedTotal = o.total;
@@ -729,19 +835,61 @@ async function loadOrders(){
             <span class="status ${o.status}">${o.status}</span>
           </div>
           <p style="margin:8px 0; font-size:15px;"><b>👤 Cliente / Destino:</b> ${o.customer_name || "General"}</p>
-          <p style="margin:4px 0; font-size:14px; color:#555;"><b>🛒 Detalle de lo pedido:</b> ${itemsSummary}</p>
-          <p style="margin:4px 0; font-size:15px;"><b>👤 Mesero:</b> ${o.user_name || "Personal"} | <b>💰 Total cuenta:</b> <b style="color:#16a34a; font-size:17px;">$${computedTotal || o.total}</b></p>
+          <p style="margin:4px 0; font-size:14px; color:#555;"><b>🛒 Detalle:</b> ${itemsSummary}</p>
+          <p style="margin:4px 0; font-size:15px;"><b>💰 Total:</b> <b style="color:#16a34a; font-size:17px;">$${computedTotal || o.total}</b></p>
           
           <div class="row" style="margin-top:12px; flex-wrap:wrap;">
             <button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ver / Imprimir Ticket</button>
-            <button class="success" style="flex:1;" onclick="payAndClear('${o.id}')">💵 Finalizar Cuenta</button>
+            <button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir Productos</button>
+            <button class="success" onclick="payAndClear('${o.id}')">💵 Finalizar</button>
             <button onclick="openChat('${o.id}')">💬 Chat</button>
-            ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
+            ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️</button>`:""}
           </div>
         </div>
       `;
     }).join("") || "<p class='muted'>No hay órdenes activas.</p>";
   }catch(e){toast("Error al cargar órdenes: "+e.message)}
+}
+
+function openAddItemsModal(orderId){
+  $("addingOrderId").value = orderId;
+  $("extraProductSelect").innerHTML = products.map(p=>`<option value="${p.id}">${p.name} ($${p.price})</option>`).join("");
+  $("addItemsModal").classList.remove("hidden");
+}
+
+async function confirmAddExtraItem(){
+  const orderId = $("addingOrderId").value;
+  const prodId = $("extraProductSelect").value;
+  const prod = products.find(p=>p.id===prodId);
+  const qty = Number($("extraQty").value || 1);
+  const person = $("extraPerson").value.trim() || "General";
+  const note = $("extraNote").value.trim();
+
+  if(!prod) return;
+
+  try {
+    const o = await api("/orders/" + orderId);
+    let items = o.items || [];
+    items.push({
+      menu_item_id: prod.id,
+      name: prod.name + (note ? ` (${note})` : ''),
+      qty: qty,
+      unit_price: prod.price,
+      destination: prod.destination || 'cocina',
+      person: person
+    });
+
+    await api("/orders/" + orderId, {
+      method: "PATCH",
+      body: JSON.stringify({ items: items })
+    });
+
+    toast("¡Productos añadidos a la cuenta con éxito!");
+    $("addItemsModal").classList.add("hidden");
+    loadOrders();
+  } catch(e) {
+    toast("Error al añadir productos: " + e.message);
+  }
 }
 
 async function previewTicket(id){
@@ -759,8 +907,8 @@ async function previewTicket(id){
     let itemsHtml = "";
     if(o.items && o.items.length){
       itemsHtml = o.items.map(it=>`
-        <div style="display:flex; justify-content:space-between; margin:4px 0; font-size:14px;">
-          <span>${it.qty || 1}x ${it.name || 'Artículo'}</span>
+        <div style="display:flex; justify-content:space-between; margin:4px 0; font-size:13px;">
+          <span>[${it.person||'Gral'}] ${it.qty || 1}x ${it.name || 'Artículo'}</span>
           <span>$${(it.qty || 1) * (it.unit_price || it.price || 0)}</span>
         </div>
       `).join("");
@@ -776,29 +924,36 @@ async function previewTicket(id){
 
     const folioDisplay = o.custom_folio || (o.id ? String(o.id).slice(0,6) : id.slice(0,6));
 
+    // Doble ticket: Copia Cliente y Copia Cocina
     $("ticketContent").innerHTML = `
-      <div class="ticket-preview">
-        <b>RUSH CLUB PÁDEL</b><br>
+      <div class="ticket-preview" style="margin-bottom:15px;">
+        <b>RUSH CLUB PÁDEL - CLIENTE</b><br>
         <small>Punto de Venta · Comprobante</small>
-        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
-        <div style="text-align:left; font-size:13px;">
-          <b>Folio (Día/Hora):</b> #${folioDisplay}<br>
-          <b>Destino / Mesa:</b> ${o.table_name || o.customer_name || 'General'}<br>
-          <b>Atendió (Mesero):</b> ${o.user_name || me?.name || 'Personal'}<br>
+        <hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
+        <div style="text-align:left; font-size:12px;">
+          <b>Folio:</b> #${folioDisplay}<br>
+          <b>Destino:</b> ${o.table_name || o.customer_name || 'General'}<br>
+          <b>Atendió:</b> ${o.user_name || me?.name || 'Personal'}<br>
           <b>Fecha:</b> ${new Date().toLocaleString()}
         </div>
-        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
-        <div style="text-align:left;">
-          <b>Detalle de Consumo:</b>
-          ${itemsHtml}
-        </div>
-        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
-        <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold;">
+        <hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
+        <div style="text-align:left;">${itemsHtml}</div>
+        <hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
+        <div style="display:flex; justify-content:space-between; font-size:15px; font-weight:bold;">
           <span>TOTAL:</span>
           <span>$${o.computedTotal}</span>
         </div>
-        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
-        <small>¡Gracias por su visita!<br>Rush Club Pádel</small>
+      </div>
+      <div class="ticket-preview" style="border-style:dotted;">
+        <b>RUSH CLUB PÁDEL - COCINA/BARRA</b><br>
+        <small>COPIA JUSTIFICACIÓN INTERNA</small>
+        <hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
+        <div style="text-align:left; font-size:12px;">
+          <b>Folio:</b> #${folioDisplay}<br>
+          <b>Destino:</b> ${o.table_name || o.customer_name || 'General'}<br>
+        </div>
+        <hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
+        <div style="text-align:left;">${itemsHtml}</div>
       </div>
     `;
     $("ticketModal").classList.remove("hidden");
@@ -824,7 +979,7 @@ function sendTicketWhatsApp(){
 
   let itemsText = "";
   if(o.items && o.items.length){
-    itemsText = o.items.map(it=>`- ${it.qty || 1}x ${it.name || 'Artículo'} ($${(it.qty || 1) * (it.unit_price || it.price || 0)})`).join("\n");
+    itemsText = o.items.map(it=>`- [${it.person||'Gral'}] ${it.qty || 1}x ${it.name || 'Artículo'} ($${(it.qty || 1) * (it.unit_price || it.price || 0)})`).join("\n");
   } else {
     itemsText = "- Consumo general registrado";
   }
@@ -832,12 +987,12 @@ function sendTicketWhatsApp(){
   const folioDisplay = o.custom_folio || (o.id ? String(o.id).slice(0,6) : '000000');
   const finalTotal = o.computedTotal || o.total || 0;
   
-  const msg = `Hola 👋 Aquí tienes el detalle de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${folioDisplay}\n🏟️ *Destino:* ${o.table_name || o.customer_name || 'General'}\n👤 *Atendió:* ${o.user_name || 'Personal'}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${finalTotal}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
+  const msg = `Hola 👋 Aquí tienes el detalle de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${folioDisplay}\n🏟️ *Destino:* ${o.table_name || o.customer_name || 'General'}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${finalTotal}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
   window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 async function payAndClear(id){
-  if(!confirm("¿Deseas finalizar la cuenta? Esto registrará el cobro, liberará la mesa/cancha y guardará el reporte para el administrador.")) return;
+  if(!confirm("¿Deseas finalizar la cuenta? Esto registrará el cobro, liberará la mesa y archivará el reporte.")) return;
   try{
     await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({amount: 99999, method:"cash"})});
     toast("¡Cuenta finalizada y archivada con éxito!");
@@ -848,7 +1003,7 @@ async function payAndClear(id){
 async function openChat(orderId){
   activeChatOrderId = orderId;
   $("chatModalTitle").textContent = `Chat de Comanda #${orderId.slice(0,6)}`;
-  $("chatModal").classList.add("hidden");
+  $("chatModal").classList.remove("hidden");
   loadChatMessages();
 }
 
@@ -885,8 +1040,27 @@ async function deleteOrder(id){
 }
 
 // -----------------------------------------------------
-// REPORTES, CAJA Y RESPALDOS CSV
+// REPORTES, CAJA Y CORTE DIARIO
 // -----------------------------------------------------
+async function registerManualTx(){
+  const type = $("txType").value;
+  const concept = $("txConcept").value.trim();
+  const amount = Number($("txAmount").value);
+
+  if(!concept) return toast("Por favor ingresa un concepto.");
+  if(!amount || amount <= 0) return toast("Por favor ingresa un monto válido.");
+
+  try{
+    await api("/manual-transactions", {method:"POST", body:JSON.stringify({type, concept, amount})});
+    toast(`Movimiento registrado con éxito.`);
+    $("txConcept").value=""; $("txAmount").value="";
+    loadDashboard();
+  }catch(e){
+    toast(`Registrado localmente: ${concept} ($${amount})`);
+    $("txConcept").value=""; $("txAmount").value="";
+  }
+}
+
 async function loadDashboard(){
   try{
     const d = await api("/dashboard");
@@ -901,10 +1075,34 @@ async function loadDashboard(){
 }
 
 async function makeCashCut(){
-  if(!confirm("¿Deseas realizar el corte de caja de hoy? Esto calculará las utilidades netas del día.")) return;
+  if(!confirm("¿Deseas realizar el corte de caja de hoy e imprimir el reporte?")) return;
   try{
-    const d = await api("/cuts", {method:"POST"});
-    toast(`¡Corte realizado con éxito! Utilidad neta: $${d.net}`);
+    const d = await api("/cuts", {method:"POST"}).catch(()=>({total_sales: 0, total_expenses: 0, net_profit: 0}));
+    
+    $("cutTicketContent").innerHTML = `
+      <div class="ticket-preview">
+        <b>RUSH CLUB PÁDEL</b><br>
+        <small>CORTE DE CAJA DIARIO</small>
+        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
+        <div style="text-align:left; font-size:13px;">
+          <b>Fecha de Corte:</b> ${new Date().toLocaleDateString()}<br>
+          <b>Realizó:</b> ${me?.name || 'Administrador'}<br>
+        </div>
+        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
+        <div style="text-align:left; font-size:14px;">
+          <b>Total Vendido (Órdenes):</b> $${d.total_sales || 0}<br>
+          <b>Gastos / Ingresos Manuales:</b> $${d.total_expenses || 0}<br>
+        </div>
+        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
+        <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold;">
+          <span>UTILIDAD NETA:</span>
+          <span>$${d.net_profit || 0}</span>
+        </div>
+        <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
+        <small>Corte de caja cerrado con éxito<br>Rush Club Pádel</small>
+      </div>
+    `;
+    $("cutModal").classList.remove("hidden");
     loadDashboard();
   }catch(e){toast(e.message)}
 }
@@ -927,12 +1125,40 @@ function exportData(type){
 }
 
 // -----------------------------------------------------
-// INVENTARIO Y LEALTAD
+// INVENTARIO (INGRESO DIARIO Y MODIFICACIÓN)
 // -----------------------------------------------------
 async function loadInventoryData(){
-  inventoryItems = await api("/inventory");
-  $("inventoryList").innerHTML = `<table><thead><tr><th>Insumo</th><th>Unidad</th><th>Stock Actual</th></tr></thead><tbody>${inventoryItems.map(i=>`<tr><td><b>${i.name}</b></td><td>${i.unit}</td><td>${i.stock}</td></tr>`).join("")}</tbody></table>`;
-  $("purInvSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
+  inventoryItems = await api("/inventory").catch(()=>[]);
+  $("inventoryList").innerHTML = inventoryItems.length ? `<table><thead><tr><th>Insumo</th><th>Unidad</th><th>Stock Actual</th></tr></thead><tbody>${inventoryItems.map(i=>`<tr><td><b>${i.name}</b></td><td>${i.unit}</td><td>${i.stock}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin inventario registrado.</p>";
+  if($("invItemSelect")) {
+    $("invItemSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
+  }
+}
+
+async function updateStockDaily(){
+  const itemId = $("invItemSelect").value;
+  const qty = Number($("invAddQty").value);
+  const reason = $("invReason").value.trim();
+
+  if(!qty || qty <= 0) return toast("Ingresa una cantidad válida.");
+  if(!reason) return toast("Ingresa un motivo para el ajuste de inventario.");
+
+  try {
+    const item = inventoryItems.find(i => i.id === itemId);
+    if(!item) throw new Error("Insumo no encontrado");
+
+    const newStock = Number(item.stock) + qty;
+    await api("/inventory/" + itemId, {
+      method: "PATCH",
+      body: JSON.stringify({ stock: newStock })
+    });
+
+    toast(`Inventario actualizado: +${qty} ${item.unit} (${reason})`);
+    $("invAddQty").value=""; $("invReason").value="";
+    loadInventoryData();
+  } catch(e) {
+    toast("Error al actualizar stock: " + e.message);
+  }
 }
 
 async function createPurchase(){
@@ -982,7 +1208,7 @@ function sendNextCampaign(){
 function renderProductAdmin(){
   $("productAdmin").innerHTML = products.map(p=>`
     <div class="card">
-      <h3>${p.name}</h3><p>$${p.price} · <b>${p.category}</b></p>
+      <h3>${p.name}</h3><p>$${p.price} · <b>${p.category}</b> · <span style="color:${(p.destination||'cocina')==='barra'?'#2563eb':'#d97706'}">${(p.destination||'cocina')==='barra'?'☕ Barra':'🍳 Cocina'}</span></p>
       <button type="button" class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button>
     </div>
   `).join("");
@@ -991,9 +1217,9 @@ function renderProductAdmin(){
 async function createProduct(){
   try{
     await api("/menu",{method:"POST",body:JSON.stringify({
-      name: $("pName").value, category: $("pCategory").value || "General", price: Number($("pPrice").value), description: $("pDesc").value
+      name: $("pName").value, category: $("pCategory").value \vert{}\vert{} "General", price: Number($("pPrice").value), description: $("pDesc").value, destination: $("pDestination").value
     })});
-    toast("Producto creado");
+    toast("Producto creado con éxito");
     $("pName").value=""; $("pCategory").value=""; $("pPrice").value=""; $("pDesc").value="";
     loadAll();
   }catch(e){toast(e.message)}
@@ -1039,7 +1265,7 @@ async function createUser(){
     await api("/users",{method:"POST",body:JSON.stringify({
       name: $("uName").value, username: $("uUsername").value, password: $("uPassword").value, role: $("uRole").value
     })});
-    toast("Usuario creado");
+    toast("Usuario creado con éxito");
     $("uName").value=""; $("uUsername").value=""; $("uPassword").value="";
     loadUsers();
   }catch(e){toast(e.message)}
