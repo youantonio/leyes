@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v24</title>
+<title>RUSH POS v24 Completado</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -298,7 +298,7 @@ function toast(msg){
   setTimeout(()=>$("toast").classList.add("hidden"),3000);
 }
 
-// API WRAPPER CON MANEJO DE ERRORES ROBUSTO
+// API WRAPPER ROBUSTO
 async function api(path,opts={}){
   opts.headers={...(opts.headers||{}),"Content-Type":"application/json"};
   if(token && token !== "bypass") opts.headers.Authorization="Bearer "+token;
@@ -311,23 +311,24 @@ async function api(path,opts={}){
   }
 
   let data = {};
-  try { data = await r.json(); } catch(e) { /* En caso de respuesta HTML (Error 500 Cloudflare) */ }
+  try { data = await r.json(); } catch(e) { /* Error parsing JSON (HTML response) */ }
 
   if(r.status===401){ logout(false); throw new Error("Sesión expirada o credenciales incorrectas."); }
   if(!r.ok) throw new Error(data.error || "Error interno del servidor.");
   return data;
 }
 
+// LOGIN SEGURO CON BYPASS
 async function login(){
   try{
     const u = $("loginUser").value.trim();
     const p = $("loginPass").value.trim();
     if(!u || !p) return toast("Ingresa usuario y contraseña.");
 
-    // BYPASS DE EMERGENCIA INFALIBLE PARA QUE NUNCA TE QUEDES AFUERA
+    // BYPASS DE EMERGENCIA DIRECTO
     if(u === "admin" && p === "admin") {
       token = "bypass"; localStorage.setItem("rush_token", token);
-      me = { id: "1", name: "Administrador (Bypass)", username: "admin", role: "admin" };
+      me = { id: "1", name: "Administrador (Local)", username: "admin", role: "admin" };
       showApp(); loadAll(); toast("Acceso de emergencia concedido.");
       return;
     }
@@ -351,7 +352,7 @@ function logout(show=true){
 async function boot(){
   if(!token)return;
   if(token === "bypass"){
-     me = { id: "1", name: "Administrador (Bypass)", username: "admin", role: "admin" };
+     me = { id: "1", name: "Administrador (Local)", username: "admin", role: "admin" };
      showApp(); loadAll(); return;
   }
   try{ const d=await api("/me"); me=d.user; showApp(); loadAll(); }catch{ logout(false); }
@@ -400,12 +401,15 @@ async function loadAll(){
   if($("invItemSelect")) $("invItemSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
 }
 
+// -----------------------------------------------------
 // LÓGICA DE VENTAS
+// -----------------------------------------------------
 function renderCategoryChips(){
   const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))];
   $("categoryChips").innerHTML = cats.map(c=>`<button type="button" class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join("");
 }
 function filterCategory(cat){ currentCategory=cat; renderCategoryChips(); renderProducts(); }
+
 function renderProducts(){
   const search = ($("productSearch")?.value || "").toLowerCase();
   const filtered = products.filter(p=>{
@@ -415,6 +419,7 @@ function renderProducts(){
   });
   $("products").innerHTML=`<div class="product-grid">`+filtered.map(p=>`<button type="button" class="product" onclick="addToCart('${p.id}')"><div><b>${p.name}</b><div class="desc">${p.description||""}</div></div><div><div class="price">$${p.price}</div><div class="add">＋ Agregar</div></div></button>`).join("")+`</div>`;
 }
+
 function addToCart(id){
   const p=products.find(x=>x.id===id);
   const person = $("customerPerson").value.trim() || "General";
@@ -422,11 +427,13 @@ function addToCart(id){
   if(ex) ex.qty++; else cart.push({menu_item_id:id, name:p.name, qty:1, unit_price:p.price, destination: p.destination || 'cocina', person: person});
   renderCart();
 }
+
 function renderCart(){
   const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
   $("cart").innerHTML=cart.length?cart.map((x,i)=>`<div class="order-item"><div><b>[${x.person}]</b> ${x.qty} × ${x.name} <small class="muted">(${x.destination==='barra'?'☕ Barra':'🍳 Cocina'})</small></div><div class="row"><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart()">✕</button></div></div>`).join(""):"<p class='muted'>Carrito vacío</p>";
   $("cartTotal").textContent="$"+total;
 }
+
 function renderTableSelect(){ $("tableSelect").innerHTML="<option value=''>Mostrador / General</option>" + tables.map(t=>`<option value="${t.id}">${t.name||"Mesa "+t.number}</option>`).join(""); }
 
 async function sendOrder(){
@@ -454,7 +461,9 @@ async function sendOrder(){
   }catch(e){toast(e.message)}
 }
 
-// RESERVAS Y CANCHAS
+// -----------------------------------------------------
+// CANCHAS Y RESERVAS
+// -----------------------------------------------------
 async function loadCanchasData(){
   try{
     courtsList = await api("/courts").catch(()=>[]);
@@ -486,8 +495,11 @@ function sendReservationWhatsApp(id){
   if(r) window.open(`https://wa.me/52${r.customer_phone}?text=${encodeURIComponent(`Recordatorio: Reserva cancha el ${r.date} a las${r.start_time}`)}`, '_blank');
 }
 
-// COCINA Y BARRA (KDS)
+// -----------------------------------------------------
+// KDS COCINA Y BARRA
+// -----------------------------------------------------
 function renderTables(){ $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`<div class="card"><div class="row between"><h3>${t.name}</h3><span class="status ${t.status}">${t.status}</span></div></div>`).join(""); }
+
 async function loadKitchen(){
   const os = await api("/orders").catch(()=>[]);
   const active = os.filter(x=>["open","preparing"].includes(x.status));
@@ -505,6 +517,7 @@ async function loadKitchen(){
   }
   $("kitchenOrders").innerHTML = html || "<p class='muted'>Sin alimentos pendientes.</p>";
 }
+
 async function loadBarra(){
   const os = await api("/orders").catch(()=>[]);
   const active = os.filter(x=>["open","preparing"].includes(x.status));
@@ -523,7 +536,9 @@ async function loadBarra(){
   $("barraOrders").innerHTML = html || "<p class='muted'>Sin bebidas pendientes.</p>";
 }
 
+// -----------------------------------------------------
 // CONTROL DE ÓRDENES
+// -----------------------------------------------------
 async function loadOrders(){
   try{
     allOrdersCache = await api("/orders").catch(()=>[]);
@@ -542,7 +557,7 @@ async function loadOrders(){
           <button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>
           ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️</button>`:""}
         </div></div>`;
-    }).join("") || "<p class='muted'>Sin órdenes.</p>";
+    }).join("") || "<p class='muted'>Sin órdenes activas.</p>";
   }catch(e){}
 }
 function openAddItemsModal(orderId){
@@ -568,7 +583,9 @@ async function payAndClear(id){
   try{ await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({amount:99999, method:"cash"})}); toast("Cuenta finalizada"); loadOrders(); }catch(e){}
 }
 
-// DOBLE TICKET (CLIENTE Y COCINA) Y WHATSAPP BLINDADO
+// -----------------------------------------------------
+// DOBLE TICKET Y WHATSAPP
+// -----------------------------------------------------
 async function previewTicket(id){
   try{
     let o = await api("/orders/" + id).catch(()=>allOrdersCache.find(x => x.id === id));
@@ -604,7 +621,9 @@ function sendTicketWhatsApp(){
   window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(`Hola 👋 Detalle de consumo en *Rush Club Pádel*:\n📋 Folio: #${o.custom_folio\vert{}\vert{}o.id.slice(0,6)}\n🏟️ Destino: ${o.table_name||o.customer_name}\n\n${itemsText}\n\n💰 TOTAL: $${total}\n¡Gracias por tu visita!`)}`, '_blank');
 }
 
+// -----------------------------------------------------
 // CAJA, INGRESOS Y CORTES
+// -----------------------------------------------------
 async function registerManualTx(){
   const type = $("txType").value, concept = $("txConcept").value.trim(), amount = Number($("txAmount").value);
   if(!concept || !amount) return toast("Ingresa concepto y monto.");
@@ -628,7 +647,9 @@ async function makeCashCut(){
   }catch(e){}
 }
 
+// -----------------------------------------------------
 // INVENTARIO
+// -----------------------------------------------------
 async function loadInventoryData(){
   inventoryItems = await api("/inventory").catch(()=>[]);
   $("inventoryList").innerHTML = inventoryItems.length ? `<table><thead><tr><th>Insumo</th><th>Stock</th></tr></thead><tbody>${inventoryItems.map(i=>`<tr><td><b>${i.name}</b></td><td>${i.stock}${i.unit}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin inventario.</p>";
@@ -643,7 +664,9 @@ async function updateStockDaily(){
   } catch(e) {}
 }
 
-// MENÚ Y USUARIOS
+// -----------------------------------------------------
+// MENÚ, USUARIOS Y CHAT
+// -----------------------------------------------------
 async function createProduct(){
   try{
     await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value, category:$("pCategory").value, price:Number($("pPrice").value), description:$("pDesc").value, destination:$("pDestination").value})});
@@ -664,7 +687,6 @@ async function loadUsers(){
   $("users").innerHTML = `<table><thead><tr><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`<tr><td>${u.username}</td><td>${u.role}</td><td><button class="danger" onclick="api('/users/${u.id}',{method:'DELETE'}).then(loadUsers)">🗑️</button></td></tr>`).join("")}</tbody></table>`;
 }
 
-// CHAT
 async function openChat(orderId){ activeChatOrderId = orderId; $("chatModalTitle").textContent = `Chat #${orderId.slice(0,6)}`; $("chatModal").classList.remove("hidden"); }
 function closeChat(){ $("chatModal").classList.add("hidden"); activeChatOrderId=null; }
 
