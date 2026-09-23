@@ -76,6 +76,7 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:13px 18px;border-radius:12px;z-index:80}
 .empty{padding:25px;text-align:center;color:#777}
 .section-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#777;font-weight:800;margin:16px 2px 8px}
+
 @media(min-width:800px){
   .product-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
@@ -88,6 +89,17 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
   nav{top:62px}
   .brand{font-size:21px}
   .pill{font-size:11px}
+}
+
+@media print {
+  body * { display: none !important; }
+  #printArea, #printArea * { display: block !important; }
+  #printArea { position: absolute; left: 0; top: 0; width: 300px; padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff;}
+  .t-center { text-align: center; }
+  .t-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .t-table th, .t-table td { text-align: left; padding: 4px 0; border-bottom: 1px dashed #ccc; font-size:12px;}
+  .t-table .right { text-align: right; }
+  .t-total { font-size: 16px; font-weight: bold; text-align: right; margin-top: 10px; }
 }
 </style>
 </head>
@@ -102,7 +114,6 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
       <label>Contraseña<input id="loginPass" type="password" autocomplete="current-password" placeholder="Contraseña"></label>
       <button class="primary" onclick="login()">Iniciar sesión</button>
     </div>
-    <p class="muted" style="font-size:13px;margin-top:18px">Acceso por perfiles: Administrador, Mesero, Cocina y Caja.</p>
   </div>
 </section>
 
@@ -139,12 +150,21 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
 
   <div class="card" style="margin-top:13px">
     <div class="row between">
-      <h2 style="margin:0">Pedido</h2>
+      <h2 style="margin:0">Pedido y Lealtad</h2>
       <span id="waiterLabel" class="muted"></span>
     </div>
     <div class="grid" style="margin-top:12px">
       <label>Mesa<select id="tableSelect"></select></label>
-      <label>Cliente / grupo<input id="customer" placeholder="Nombre o referencia"></label>
+      <label>WhatsApp del cliente<input id="customerPhone" placeholder="10 dígitos (Ej. 5512345678)" onblur="checkLoyaltyClient()"></label>
+      <label>Nombre del cliente<input id="customerName" placeholder="Nombre o referencia"></label>
+      <label>Género
+        <select id="customerGender">
+          <option value="No especificado">No especificado</option>
+          <option value="Masculino">Masculino</option>
+          <option value="Femenino">Femenino</option>
+        </select>
+      </label>
+      <label>Cumpleaños (Día y Mes)<input id="customerBirthday" placeholder="Ej. 22 de Junio"></label>
     </div>
     <div id="cart" style="margin-top:12px"></div>
     <div class="row between" style="margin-top:13px">
@@ -192,6 +212,20 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
   </div>
 </section>
 
+<section id="lealtad" class="view hidden">
+  <h1 class="title">⭐ Programa de Lealtad y Clientes</h1>
+  <div class="card" style="background:#f0fdf4; border:1px solid #16a34a; margin-bottom:15px;">
+    <h2>📢 Campaña Masiva de WhatsApp</h2>
+    <p class="muted">Envía una promoción o mensaje a toda tu base de clientes registrados con un solo clic.</p>
+    <textarea id="bulkMessage" rows="3" placeholder="Hola! Te invitamos este martes a las canchas con 20% de descuento en alimentos..."></textarea>
+    <button class="primary" style="margin-top:10px;" onclick="sendBulkWhatsApp()">🚀 Enviar WhatsApp Masivo a Todos</button>
+  </div>
+  <div class="card">
+    <h2>Base de Datos de Clientes</h2>
+    <div id="loyaltyList"></div>
+  </div>
+</section>
+
 <section id="productos" class="view hidden">
   <h1 class="title">Productos</h1>
   <div class="card">
@@ -231,16 +265,11 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
 <div id="productModal" class="modal hidden">
   <div class="modalbox">
     <div class="row between">
-      <div>
-        <h2 id="productModalTitle" style="margin:0"></h2>
-        <p id="productModalDesc" class="muted"></p>
-      </div>
+      <div><h2 id="productModalTitle" style="margin:0"></h2><p id="productModalDesc" class="muted"></p></div>
       <button onclick="closeProductModal()">✕</button>
     </div>
     <div class="card" style="margin-top:12px">
-      <label>Indicaciones / personalización
-        <textarea id="productModalNotes" rows="3" placeholder="Ej. sin azúcar, extra queso, sin cebolla..."></textarea>
-      </label>
+      <label>Indicaciones / personalización<textarea id="productModalNotes" rows="3" placeholder="Ej. sin azúcar..."></textarea></label>
       <div class="row between" style="margin-top:12px">
         <b id="productModalPrice"></b>
         <button class="primary" onclick="confirmAddProduct()">Agregar al pedido</button>
@@ -265,8 +294,7 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
       <h2 style="margin:0">Chat de la Orden</h2>
       <button onclick="closeChat()">✕</button>
     </div>
-    <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow-y:auto; padding:12px; background:#f5f5f5; border-radius:12px; border:1px solid #ddd;">
-    </div>
+    <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow-y:auto; padding:12px; background:#f5f5f5; border-radius:12px; border:1px solid #ddd;"></div>
     <div class="row">
       <input id="chatInput" placeholder="Escribe duda o nota..." onkeydown="if(event.key==='Enter')sendChat()">
       <button class="primary" onclick="sendChat()">Enviar</button>
@@ -274,6 +302,7 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
   </div>
 </div>
 
+<div id="printArea"></div>
 <div id="toast" class="toast hidden"></div>
 
 <script>
@@ -306,10 +335,7 @@ async function login(){
   try{
     const data=await api("/login",{
       method:"POST",
-      body:JSON.stringify({
-        username:$("loginUser").value,
-        password:$("loginPass").value
-      })
+      body:JSON.stringify({username:$("loginUser").value, password:$("loginPass").value})
     });
     token=data.token;
     localStorage.setItem("rush_token",token);
@@ -341,21 +367,10 @@ async function boot(){
   }catch{}
 }
 
-function isWaiter(){
-  return ["waiter","mesero"].includes(me?.role);
-}
-function isKitchen(){
-  return ["kitchen","cocina"].includes(me?.role);
-}
-function isAdmin(){
-  return me?.role==="admin";
-}
-function roleName(r){
-  return r==="admin"?"Administrador":
-         isWaiterRole(r)?"Mesero":
-         isKitchenRole(r)?"Cocina":
-         r==="cashier"?"Caja":r;
-}
+function isWaiter(){ return ["waiter","mesero"].includes(me?.role); }
+function isKitchen(){ return ["kitchen","cocina"].includes(me?.role); }
+function isAdmin(){ return me?.role==="admin"; }
+function roleName(r){ return r==="admin"?"Administrador":isWaiterRole(r)?"Mesero":isKitchenRole(r)?"Cocina":r; }
 function isWaiterRole(r){return ["waiter","mesero"].includes(r)}
 function isKitchenRole(r){return ["kitchen","cocina"].includes(r)}
 
@@ -370,7 +385,7 @@ function showApp(){
   if(isAdmin()||isWaiter())nav.push(["mesas","🪑 Mesas"]);
   if(isAdmin()||isKitchen())nav.push(["cocina","👨‍🍳 Cocina"]);
   if(isAdmin()||isWaiter())nav.push(["ordenes","📋 Órdenes"]);
-  if(isAdmin())nav.push(["caja","💰 Caja"],["productos","📦 Productos"],["usuarios","👥 Usuarios"]);
+  if(isAdmin())nav.push(["lealtad","⭐ Lealtad"],["caja","💰 Caja"],["productos","📦 Productos"],["usuarios","👥 Usuarios"]);
 
   $("nav").innerHTML=nav.map((x,i)=>
     `<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`
@@ -388,6 +403,7 @@ function view(id,btn){
   if(id==="cocina")loadKitchen();
   if(id==="ordenes")loadOrders();
   if(id==="caja")loadDashboard();
+  if(id==="lealtad")loadLoyaltyCustomers();
   if(id==="productos")renderProductAdmin();
   if(id==="usuarios")loadUsers();
   if(id==="venta"){renderCategoryChips();renderProducts()}
@@ -406,6 +422,20 @@ async function loadAll(){
   }catch(e){toast(e.message)}
 }
 
+async function checkLoyaltyClient(){
+  const phone = $("customerPhone").value.trim();
+  if(!phone || phone.length < 8) return;
+  try {
+    const c = await api("/loyalty/"+phone);
+    if(c && c.name) {
+      $("customerName").value = c.name;
+      if(c.gender) $("customerGender").value = c.gender;
+      if(c.birthday) $("customerBirthday").value = c.birthday;
+      toast(`⭐ ¡Cliente frecuente: ${c.name} (${c.visits} visitas)!`);
+    }
+  } catch(e) {}
+}
+
 function categoryFor(p){
   const c=String(p.category||"").trim().toLowerCase();
   const n=String(p.name||"").toLowerCase();
@@ -421,33 +451,17 @@ function categoryFor(p){
   return "Otros";
 }
 
-function categories(){
-  const arr=products.map(categoryFor);
-  return ["Todos",...new Set(arr)];
-}
-
+function categories(){ const arr=products.map(categoryFor); return ["Todos",...new Set(arr)]; }
 function renderCategoryChips(){
   $("categoryChips").innerHTML=categories().map(c=>
     `<button class="chip ${selectedCategory===c?"active":""}" onclick="selectCategory('${escAttr(c)}')">${categoryIcon(c)} ${esc(c)}</button>`
   ).join("");
 }
-
-function selectCategory(c){
-  selectedCategory=c;
-  renderCategoryChips();
-  renderProducts();
-}
-
-function categoryIcon(c){
-  return ({
-    "Todos":"✨","Bebidas":"☕","Desayunos":"🍳","Comida":"🥪",
-    "Hamburguesas":"🍔","Ensaladas":"🥗","Postres":"🍰","Extras":"➕"
-  })[c]||"•";
-}
+function selectCategory(c){ selectedCategory=c; renderCategoryChips(); renderProducts(); }
+function categoryIcon(c){ return ({"Todos":"✨","Bebidas":"☕","Desayunos":"🍳","Comida":"🥪","Hamburguesas":"🍔","Ensaladas":"🥗","Postres":"🍰","Extras":"➕"})[c]||"•"; }
 
 function renderProducts(){
   const q=($("productSearch")?.value||"").trim().toLowerCase();
-
   let list=products.filter(p=>{
     const cat=categoryFor(p);
     const matchCat=selectedCategory==="Todos"||cat===selectedCategory||String(p.category||"")===selectedCategory;
@@ -456,37 +470,22 @@ function renderProducts(){
   });
 
   const grouped={};
-  list.forEach(p=>{
-    const cat=categoryFor(p);
-    (grouped[cat] ||= []).push(p);
-  });
+  list.forEach(p=>{ const cat=categoryFor(p); (grouped[cat] ||= []).push(p); });
 
-  if(!list.length){
-    $("products").innerHTML=`<div class="empty">No encontramos productos con esa búsqueda.</div>`;
-    return;
-  }
+  if(!list.length){ $("products").innerHTML=`<div class="empty">No encontramos productos.</div>`; return; }
 
   let html="";
   Object.keys(grouped).forEach(cat=>{
-    if(selectedCategory==="Todos"){
-      html+=`<div class="section-label">${categoryIcon(cat)} ${esc(cat)}</div>`;
-    }
+    if(selectedCategory==="Todos") html+=`<div class="section-label">${categoryIcon(cat)} ${esc(cat)}</div>`;
     html+=`<div class="product-grid">`;
     html+=grouped[cat].map(p=>`
       <button class="product" onclick="openProduct('${p.id}')">
-        <div>
-          <b>${esc(p.name)}</b>
-          <div class="desc">${esc(p.description||"")}</div>
-        </div>
-        <div>
-          <div class="price">$${money(p.price)}</div>
-          <div class="add">＋ Agregar</div>
-        </div>
+        <div><b>${esc(p.name)}</b><div class="desc">${esc(p.description||"")}</div></div>
+        <div><div class="price">$${money(p.price)}</div><div class="add">＋ Agregar</div></div>
       </button>
     `).join("");
     html+=`</div>`;
   });
-
   $("products").innerHTML=html;
 }
 
@@ -500,950 +499,415 @@ function openProduct(id){
   $("productModalNotes").value="";
   $("productModal").classList.remove("hidden");
 }
-
-function closeProductModal(){
-  pendingProduct=null;
-  $("productModal").classList.add("hidden");
-}
+function closeProductModal(){ pendingProduct=null; $("productModal").classList.add("hidden"); }
 
 function confirmAddProduct(){
   if(!pendingProduct)return;
   const p=pendingProduct;
   const notes=$("productModalNotes").value.trim();
   const existing=cart.find(x=>x.menu_item_id===p.id&&x.notes===notes);
-
-  if(existing)existing.qty++;
-  else cart.push({
-    menu_item_id:p.id,
-    name:p.name,
-    qty:1,
-    unit_price:Number(p.price),
-    modifiers:[],
-    notes
-  });
-
+  if(existing) existing.qty++;
+  else cart.push({menu_item_id:p.id, name:p.name, qty:1, unit_price:Number(p.price), modifiers:[], notes});
   closeProductModal();
   renderCart();
   toast(`${p.name} agregado`);
 }
 
 function renderTableSelect(){
-  $("tableSelect").innerHTML=
-    "<option value=''>Sin mesa</option>"+
-    tables.map(t=>
-      `<option value="${escAttr(t.id)}">${esc(t.name||"Mesa "+t.number)}</option>`
-    ).join("");
+  $("tableSelect").innerHTML="<option value=''>Sin mesa</option>"+tables.map(t=>`<option value="${escAttr(t.id)}">${esc(t.name||"Mesa "+t.number)}</option>`).join("");
 }
 
 function renderTables(){
   $("tables").innerHTML=tables.map(t=>`
     <div class="card">
-      <div class="row between">
-        <h2>${esc(t.name||"Mesa "+t.number)}</h2>
-        <span class="status">${esc(t.status)}</span>
-      </div>
+      <div class="row between"><h2>${esc(t.name||"Mesa "+t.number)}</h2><span class="status">${esc(t.status)}</span></div>
       <p>Capacidad: ${t.capacity||"-"}</p>
-      ${isAdmin()||isWaiter()?`
-        <button onclick="setTable('${escAttr(t.id)}','available')">Disponible</button>
-        <button onclick="setTable('${escAttr(t.id)}','reserved')">Reservar</button>
-      `:""}
+      ${isAdmin()||isWaiter()?`<button onclick="setTable('${escAttr(t.id)}','available')">Disponible</button><button onclick="setTable('${escAttr(t.id)}','reserved')">Reservar</button>`:""}
     </div>
   `).join("");
 }
 
 async function setTable(id,status){
-  try{
-    await api("/tables/"+id,{method:"PATCH",body:JSON.stringify({status})});
-    tables=await api("/tables");
-    renderTables();
-    renderTableSelect();
-  }catch(e){toast(e.message)}
-}
-
-function addCartSimple(id){
-  const p=products.find(x=>x.id===id);
-  if(!p)return;
-  const x=cart.find(x=>x.menu_item_id===id&&!x.notes);
-  if(x)x.qty++;
-  else cart.push({menu_item_id:id,name:p.name,qty:1,unit_price:Number(p.price),modifiers:[],notes:""});
-  renderCart();
+  try{ await api("/tables/"+id,{method:"PATCH",body:JSON.stringify({status})}); tables=await api("/tables"); renderTables(); renderTableSelect(); }catch(e){toast(e.message)}
 }
 
 function renderCart(){
   const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
   const count=cart.reduce((s,x)=>s+x.qty,0);
-
-  $("cart").innerHTML=cart.length?
-    cart.map((x,i)=>`
-      <div class="order-item">
-        <div>
-          <b>${x.qty} × ${esc(x.name)}</b>
-          ${x.notes?`<div class="muted" style="font-size:12px">📝 ${esc(x.notes)}</div>`:""}
-          <div class="muted">$${money(x.unit_price)} c/u</div>
-        </div>
-        <div style="text-align:right">
-          <b>$${money(x.qty*x.unit_price)}</b>
-          <div class="qty-controls">
-            <button onclick="changeQty(${i},-1)">−</button>
-            <span>${x.qty}</span>
-            <button onclick="changeQty(${i},1)">＋</button>
-          </div>
-        </div>
-      </div>
-    `).join("")
-    :"<p class='muted'>Agrega productos desde las categorías de arriba.</p>";
-
+  $("cart").innerHTML=cart.length?cart.map((x,i)=>`
+    <div class="order-item">
+      <div><b>${x.qty} × ${esc(x.name)}</b>${x.notes?`<div class="muted" style="font-size:12px">📝 ${esc(x.notes)}</div>`:""}<div class="muted">$${money(x.unit_price)} c/u</div></div>
+      <div style="text-align:right"><b>$${money(x.qty*x.unit_price)}</b><div class="qty-controls"><button onclick="changeQty(${i},-1)">−</button><span>${x.qty}</span><button onclick="changeQty(${i},1)">＋</button></div></div>
+    </div>
+  `).join(""):"<p class='muted'>Agrega productos arriba.</p>";
   $("cartTotal").textContent="$"+money(total);
-
-  if(count){
-    $("stickyCart").classList.remove("hidden");
-    $("stickyCount").textContent=`${count} ${count===1?"producto":"productos"}`;
-    $("stickyTotal").textContent="$"+money(total);
-  }else{
-    $("stickyCart").classList.add("hidden");
-  }
+  if(count){ $("stickyCart").classList.remove("hidden"); $("stickyCount").textContent=`${count} productos`; $("stickyTotal").textContent="$"+money(total); }
+  else { $("stickyCart").classList.add("hidden"); }
 }
 
-function changeQty(i,d){
-  if(!cart[i])return;
-  cart[i].qty+=d;
-  if(cart[i].qty<=0)cart.splice(i,1);
-  renderCart();
-}
+function changeQty(i,d){ if(!cart[i])return; cart[i].qty+=d; if(cart[i].qty<=0)cart.splice(i,1); renderCart(); }
 
 async function sendOrder(){
   if(!cart.length)return toast("Agrega al menos un producto.");
+  const phone = $("customerPhone").value.trim();
+  const cName = $("customerName").value.trim();
+  const gender = $("customerGender").value;
+  const bday = $("customerBirthday").value.trim();
 
   try{
-    const d=await api("/orders",{
+    // Si puso teléfono, guardamos o actualizamos los datos de lealtad (género y cumpleaños)
+    if(phone && cName) {
+      await api("/loyalty", {
+        method: "POST",
+        body: JSON.stringify({ phone, name: cName, gender, birthday: bday })
+      });
+    }
+
+    await api("/orders",{
       method:"POST",
       body:JSON.stringify({
         table_id:$("tableSelect").value||null,
-        customer_name:$("customer").value,
+        customer_name:cName,
+        customer_phone:phone,
         notes:$("notes").value,
         items:cart
       })
     });
-
     toast(`Orden enviada a cocina · ${me.name}`);
-    cart=[];
-    renderCart();
-    $("customer").value="";
-    $("notes").value="";
-    tables=await api("/tables");
-    renderTableSelect();
-    
+    cart=[]; renderCart();
+    $("customerName").value=""; $("customerPhone").value=""; $("customerBirthday").value=""; $("notes").value="";
+    tables=await api("/tables"); renderTableSelect();
     pollNotifications();
-
   }catch(e){toast(e.message)}
 }
 
-// -------------------------------------------------------------------
-// COCINA (Actualizado con Menú Desplegable)
-// -------------------------------------------------------------------
 async function loadKitchen(){
   try{
     const os=await api("/orders");
     const open=os.filter(x=>["open","preparing","ready"].includes(x.status));
-
     $("kitchenOrders").innerHTML=open.map(o=>`
       <div class="card">
-        <div class="row between">
-          <h2>Mesa ${tableName(o.table_id)}</h2>
-          <span class="status ${o.status}">${esc(o.status)}</span>
-        </div>
+        <div class="row between"><h2>Mesa ${tableName(o.table_id)}</h2><span class="status ${o.status}">${esc(o.status)}</span></div>
         <p><b>Mesero:</b> ${esc(o.waiter_name||"No asignado")}</p>
-        <p>${esc(o.customer_name||"Sin cliente")}</p>
+        <p>${esc(o.customer_name||"Sin cliente")} ${o.customer_phone?`(${o.customer_phone})`:""}</p>
         ${o.estimated_time ? `<p class="muted">⏳ Estimado: <b>${o.estimated_time} min</b></p>` : ''}
-        
         <label style="display:block; margin-top:15px;">
-          <b style="font-size:13px; color:#555;">Estado del pedido:</b><br>
+          <b style="font-size:13px;">Estado del pedido:</b><br>
           <select onchange="handleKitchenStatus('${escAttr(o.id)}', this.value)" style="margin-top:5px; background: #f0fdf4; border: 1px solid #16a34a; font-weight: bold; width: 100%;">
-            <option value="open" ${o.status==='open'?'selected':''}>📝 NUEVO (En espera)</option>
+            <option value="open" ${o.status==='open'?'selected':''}>📝 NUEVO</option>
             <option value="preparing" ${o.status==='preparing'?'selected':''}>👨‍🍳 Preparando...</option>
-            <option value="ready" ${o.status==='ready'?'selected':''}>✅ ¡Listo para entregar!</option>
+            <option value="ready" ${o.status==='ready'?'selected':''}>✅ ¡Listo!</option>
           </select>
         </label>
-
-        <div class="row" style="margin-top:15px; gap:8px;">
-          <button style="width: 100%;" onclick="openChat('${escAttr(o.id)}')">💬 Chat / Dudas con Mesero</button>
-        </div>
+        <button style="width: 100%; margin-top:12px;" onclick="openChat('${escAttr(o.id)}')">💬 Chat con Mesero</button>
       </div>
     `).join("")||"<p class='muted'>No hay pedidos pendientes.</p>";
-
   }catch(e){toast(e.message)}
 }
 
 async function handleKitchenStatus(id, newStatus) {
   if (newStatus === 'preparing') {
-    const mins = prompt("¿En cuántos minutos aprox. estará listo? (Ingresa solo el número o deja vacío)");
+    const mins = prompt("¿En cuántos minutos aprox. estará listo?");
     const bodyData = { status: "preparing" };
-    if (mins !== null && mins.trim() !== "") {
-       bodyData.estimated_time = Number(mins) || 0;
-    }
-    try {
-      await api("/orders/"+id, { method: "PATCH", body: JSON.stringify(bodyData) });
-      loadKitchen();
-      pollNotifications();
-      toast("Pedido en preparación.");
-    } catch(e) { toast(e.message) }
-    
+    if (mins !== null && mins.trim() !== "") bodyData.estimated_time = Number(mins) || 0;
+    try { await api("/orders/"+id, { method: "PATCH", body: JSON.stringify(bodyData) }); loadKitchen(); pollNotifications(); } catch(e) { toast(e.message) }
   } else {
-    try {
-      await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({status: newStatus}) });
-      loadKitchen();
-      pollNotifications();
-      if (newStatus === 'ready') toast("¡Avisando al mesero que está listo!");
-    } catch(e) { toast(e.message) }
+    try { await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({status: newStatus}) }); loadKitchen(); pollNotifications(); } catch(e) { toast(e.message) }
   }
 }
-// -------------------------------------------------------------------
 
+// PROGRAMA DE LEALTAD VISTA ADMIN
+async function loadLoyaltyCustomers() {
+  try {
+    const list = await api("/loyalty");
+    $("loyaltyList").innerHTML = list.length ? `
+      <table>
+        <thead><tr><th>Cliente</th><th>WhatsApp</th><th>Género</th><th>Cumpleaños</th><th>Visitas</th><th>Total Consumido</th><th>Acción</th></tr></thead>
+        <tbody>
+          ${list.map(c=>`
+            <tr>
+              <td><b>${esc(c.name)}</b></td>
+              <td>${esc(c.phone)}</td>
+              <td>${esc(c.gender)}</td>
+              <td>${esc(c.birthday || 'No reg.')}</td>
+              <td>${c.visits} visitas</td>               <td>$${money(c.total_spent)}</td>
+              <td>
+                <a href="https://wa.me/52${c.phone}?text=Hola\%20${encodeURIComponent(c.name)},%20tenemos%20una%20promoción%20especial%20para%20ti%20en%20Rush%20Club%20Pádel!" target="_blank">
+                  <button style="background:#16a34a; color:#fff; padding:6px 12px; font-size:12px;">💬 WhatsApp</button>
+                </a>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    ` : "<p class='muted'>Aún no hay clientes leales registrados.</p>";
+  } catch(e) { toast(e.message); }
+}
+
+function sendBulkWhatsApp() {
+  const msg = $("bulkMessage").value.trim();
+  if(!msg) return toast("Escribe el mensaje de promoción.");
+  api("/loyalty").then(list => {
+    if(!list.length) return toast("No hay clientes registrados.");
+    let url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+    toast("Abriendo difusor de WhatsApp...");
+  }).catch(e=>toast(e.message));
+}
+
+async function requestPrint(id) {
+  try { await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({print_requested: 1}) }); toast("Solicitud enviada a Caja."); loadOrders(); pollNotifications(); } catch(e) { toast(e.message); }
+}
+
+async function printTicket(id) {
+  try {
+    const d = await api("/orders/"+id);
+    const o = d.order;
+    const items = d.items;
+    let html = `
+        <div class="t-center"><h2 style="margin:0">RUSH CLUB PÁDEL</h2><p style="margin:0">Ticket de Venta</p><p style="margin:0; font-size:12px;">Orden: ${o.id.slice(0,8)}</p><p style="margin:0; font-size:12px;">Mesa: ${tableName(o.table_id)}</p>${o.customer_name?`<p style="margin:0; font-size:12px;">Cliente: ${o.customer_name}</p>`:""}</div>
+        <hr style="border:1px dashed #000; margin:10px 0;">
+        <table class="t-table"><thead><tr><th>Cant</th><th>Desc</th><th class="right">Imp</th></tr></thead><tbody>
+        ${items.map(it => `<tr><td>${it.qty}</td><td>${esc(it.name)}</td><td class="right">$${money(it.qty * it.unit_price)}</td></tr>`).join('')}
+        </tbody></table>
+        <hr style="border:1px dashed #000; margin:10px 0;">
+        <div class="t-total">Total: $${money(o.total)}</div>
+        ${o.customer_phone ? `<div class="t-center" style="margin-top:10px; font-size:11px;">Cliente Leal WhatsApp: ${o.customer_phone}</div>`:""}
+        <div class="t-center" style="margin-top:15px;"><p>¡Gracias por tu visita!</p></div>
+    `;
+    $("printArea").innerHTML = html;
+    window.print();
+    if(o.print_requested) { await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({print_requested: 0}) }); loadOrders(); }
+  } catch(e) { toast(e.message); }
+}
+
+async function sendReceiptWhatsApp(id) {
+  try {
+    const d = await api("/orders/"+id);
+    const o = d.order;
+    if(!o.customer_phone) return toast("Esta orden no tiene número de WhatsApp registrado.");
+    let text = `*RUSH CLUB PÁDEL - RECIBO DE CONSUMO*\nOrden: ${o.id.slice(0,8)}\nMesa: ${tableName(o.table_id)}\nTotal pagado: $${money(o.total)}\n¡Gracias por tu visita ${o.customer_name || ""}! Te esperamos pronto.`;
+    let url = `https://wa.me/52${o.customer_phone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  } catch(e) { toast(e.message); }
+}
 
 async function loadOrders(){
   try{
     const os=await api("/orders");
+    $("orders").innerHTML=os.map(o=>{
+      let printButtons = "";
+      if (isAdmin()) {
+          printButtons = `<button style="background:#eee; border-color:#ccc;" onclick="printTicket('${escAttr(o.id)}')">🖨️ Imprimir</button>`;
+          if(o.customer_phone) printButtons += ` <button style="background:#dcfce7; color:#16a34a;" onclick="sendReceiptWhatsApp('${escAttr(o.id)}')">💬 WhatsApp Recibo</button>`;
+          if (o.print_requested) printButtons += ` <span style="color:#b91c1c; font-weight:bold;">⚠️ ¡Impresión solicitada!</span>`;
+      } else if (isWaiterRole(me.role)) {
+          printButtons = `<button style="background:#eee; border-color:#ccc;" onclick="requestPrint('${escAttr(o.id)}')">🛎️ Solicitar Ticket</button>`;
+      }
 
-    $("orders").innerHTML=os.map(o=>`
-      <div class="card">
-        <div class="row between">
-          <h3>Orden ${esc(o.id.slice(0,8))}</h3>
-          <span class="status ${o.status}">${esc(o.status)}</span>
-        </div>
+      return `
+      <div class="card" style="${o.print_requested && isAdmin() ? 'border: 2px solid #b91c1c;' : ''}">
+        <div class="row between"><h3>Orden ${esc(o.id.slice(0,8))}</h3><span class="status ${o.status}">${esc(o.status)}</span></div>
         <p>Mesa: ${esc(tableName(o.table_id))}</p>
         <p>Mesero: <b>${esc(o.waiter_name||"No asignado")}</b></p>
-        <p>${esc(o.customer_name||"Sin cliente")}</p>
+        <p>${esc(o.customer_name||"Sin cliente")} ${o.customer_phone?`(${o.customer_phone})`:""}</p>
         <b>$${money(o.total)}</b>
-        
-        ${o.estimated_time ? `<p style="color:#b91c1c; font-weight:bold;">⏳ Cocina estima: ${o.estimated_time} min</p>` : ''}
-
-        ${Number(o.paid_amount||0)>0?
-          `<div class="payment-summary" style="margin-top:10px">
-            <b>Cobrado: $${money(o.paid_amount)}</b><br>             <small>Efectivo $${money(o.paid_cash)} · Tarjeta $${money(o.paid_card)} · Terminal $${money(o.terminal_amount)}</small>${o.paid_amount<o.total?`<br><small class="muted">Pendiente $${money(o.total-o.paid_amount)}</small>`:""}
-          </div>`:""}
-
+        ${o.estimated_time ? `<p style="color:#b91c1c; font-weight:bold;">⏳ Cocina: ${o.estimated_time} min</p>` : ''}
         <div class="row" style="margin-top:10px; gap:8px; flex-wrap:wrap;">
-          ${["waiter","mesero","admin"].includes(me.role)&&["ready","partial"].includes(o.status)?
+          ${["waiter","mesero","admin"].includes(me.role)&&["ready","partial","open","preparing"].includes(o.status)?
             `<button class="primary" onclick="pay('${escAttr(o.id)}')">Cobrar / dividir</button>`:""}
-
-          ${["waiter","mesero","admin"].includes(me.role)&&o.status==="ready"?
-            `<button class="primary" onclick="pay('${escAttr(o.id)}')">Cobrar / dividir</button>`:""}
-
-          <button onclick="openChat('${escAttr(o.id)}')">💬 Chat con Cocina</button>
+          <button onclick="openChat('${escAttr(o.id)}')">💬 Chat</button>
+          ${printButtons}
         </div>
       </div>
-    `).join("");
-
+      `;
+    }).join("");
   }catch(e){toast(e.message)}
 }
 
 async function pay(id){
   try{
     const d=await api("/orders/"+id);
-
-    const paid=Number(d.order?.paid_amount||d.order?.paid||0);
-
-    paymentState={
-      ...d,
-      paid,
-      payers:[{
-        name:"Cliente 1",
-        alloc:{},
-        method:"cash",
-        cash:0,
-        card:0,
-        terminal:0,
-        ref:""
-      }]
-    };
-
+    paymentState={ ...d, paid:Number(d.order?.paid_amount||0), payers:[{name:"Cliente 1", alloc:{}, method:"cash", cash:0, card:0, terminal:0, ref:"", tendered:""}] };
     $("paymentModal").classList.remove("hidden");
     renderPaymentModal();
-
   }catch(e){toast(e.message)}
 }
-
-function closePayment(){
-  paymentState=null;
-  $("paymentModal").classList.add("hidden");
-}
-
-function addPayer(){
-  const n=paymentState.payers.length+1;
-  paymentState.payers.push({
-    name:"Cliente "+n,
-    alloc:{},
-    method:"cash",
-    cash:0,
-    card:0,
-    terminal:0,
-    ref:""
-  });
-  renderPaymentModal();
-}
-
-function removePayer(i){
-  if(paymentState.payers.length<=1)return;
-  paymentState.payers.splice(i,1);
-  renderPaymentModal();
-}
-
-function assignedQty(itemId){
-  return paymentState.payers.reduce(
-    (s,p)=>s+Number(p.alloc[itemId]||0),0
-  );
-}
-
-function payerTotal(p){
-  return paymentState.items.reduce(
-    (s,it)=>s+
-      Number(p.alloc[it.id]||0)*
-      Number(it.unit_price||0),
-    0
-  );
-}
+function closePayment(){ paymentState=null; $("paymentModal").classList.add("hidden"); }
+function addPayer(){ paymentState.payers.push({name:"Cliente "+(paymentState.payers.length+1), alloc:{}, method:"cash", cash:0, card:0, terminal:0, ref:"", tendered:""}); renderPaymentModal(); }
+function removePayer(i){ if(paymentState.payers.length<=1)return; paymentState.payers.splice(i,1); renderPaymentModal(); }
+function assignedQty(itemId){ return paymentState.payers.reduce((s,p)=>s+Number(p.alloc[itemId]||0),0); }
+function payerTotal(p){ return paymentState.items.reduce((s,it)=>s+Number(p.alloc[it.id]||0)*Number(it.unit_price||0),0); }
 
 function renderPaymentModal(){
   const d=paymentState;
-  const paid=Number(d.paid||0);
-  const remaining=Math.max(
-    0,
-    Number(d.order.total||0)-paid
-  );
-
-  $("payOrderInfo").textContent=
-    `Orden ${d.order.id.slice(0,8)} · Total $${money(d.order.total)} · Pendiente $${money(remaining)}`;
-
+  const remaining=Math.max(0,Number(d.order.total||0)-Number(d.paid||0));
+  $("payOrderInfo").textContent=`Orden ${d.order.id.slice(0,8)} · Total $${money(d.order.total)} · Pendiente $${money(remaining)}`;
   $("paymentBody").innerHTML=`
-    <div class="payment-summary">
-      <b>¿Cómo dividir la cuenta?</b>
-      <p class="muted">
-        Puedes cobrar toda la cuenta a una persona o repartir productos entre varios invitados.
-        Cada persona puede pagar en efectivo, tarjeta o combinar ambos.
-      </p>
-    </div>
-
-    <div class="row" style="margin:12px 0;flex-wrap:wrap">
-      <button class="primary" onclick="addPayer()">＋ Agregar persona</button>
-      <button onclick="assignAllToFirst()">Asignar todo al primero</button>
-    </div>
-
-    <div class="split-grid">
-      ${d.payers.map((p,i)=>payerCard(p,i)).join("")}
-    </div>
-
-    <div class="payment-summary" style="margin-top:14px">
-      <div class="row between">
-        <span>Asignado entre invitados</span>
-        <b>$${money(d.payers.reduce((s,p)=>s+payerTotal(p),0))}</b>
-      </div>
-      <div class="row between">
-        <span>Saldo pendiente</span>
-        <b>$${money(remaining)}</b>
-      </div>
-    </div>
-
-    <div class="row" style="justify-content:flex-end;margin-top:14px">
-      <button onclick="closePayment()">Cancelar</button>
-      <button class="primary" onclick="submitPayments()">Registrar cobros</button>
-    </div>
+    <div class="row" style="margin:12px 0;flex-wrap:wrap"><button class="primary" onclick="addPayer()">＋ Agregar persona</button></div>
+    <div class="split-grid">${d.payers.map((p,i)=>payerCard(p,i)).join("")}</div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px"><button onclick="closePayment()">Cancelar</button><button class="primary" onclick="submitPayments()">Registrar cobros</button></div>
   `;
 }
 
 function payerCard(p,i){
   const total=payerTotal(p);
   const method=p.method;
-
   return `
     <div class="payer">
-      <div class="row between">
-        <h3>${esc(p.name)}</h3>
-        ${paymentState.payers.length>1?
-          `<button onclick="removePayer(${i})">Eliminar</button>`:""}
-      </div>
-
-      <input
-        value="${escAttr(p.name)}"
-        onchange="paymentState.payers[${i}].name=this.value"
-        placeholder="Nombre del invitado">
-
-      <div style="margin-top:10px"><b>Productos de esta persona</b></div>
-
+      <div class="row between"><h3>${esc(p.name)}</h3>${paymentState.payers.length>1?`<button onclick="removePayer(${i})">Eliminar</button>`:""}</div>
+      <input value="${escAttr(p.name)}" onchange="paymentState.payers[${i}].name=this.value" placeholder="Nombre">
+      <div style="margin-top:10px"><b>Productos</b></div>
       ${paymentState.items.map(it=>{
-        const max=Math.max(
-          0,
-          Number(it.qty)-
-          assignedQty(it.id)+
-          Number(p.alloc[it.id]||0)
-        );
-
+        const max=Math.max(0,Number(it.qty)-assignedQty(it.id)+Number(p.alloc[it.id]||0));
         const q=Number(p.alloc[it.id]||0);
-
         return `
           <div class="alloc">
-            <span>
-              ${q?`${q} × `:""}${esc(it.name)}               <br>               <small class="muted">$${money(it.unit_price)} c/u · disponibles ${max}</small>
-            </span>
-
-            <select onchange="setAlloc(${i},${it.id},this.value)">
-              <option value="0">0</option>
-              ${Array.from(
-                {length:Math.floor(max)},
-                (_,k)=>
-                  `<option value="${k+1}" ${q===k+1?"selected":""}>${k+1}</option>`
-              ).join("")}
-            </select>
-
+            <span>${q?`${q} × `:""}${esc(it.name)}<br><small class="muted">$${money(it.unit_price)} c/u</small></span>
+            <select onchange="setAlloc(${i},${it.id},this.value)"><option value="0">0</option>${Array.from({length:Math.floor(max)},(_,k)=>`<option value="${k+1}" ${q===k+1?"selected":""}>${k+1}</option>`).join("")}</select>
             <b>$${money(q*Number(it.unit_price||0))}</b>
           </div>
         `;
       }).join("")}
-
-      <div class="big-pay" style="margin-top:10px">
-        Total: $${money(total)}
-      </div>
-
-      <label style="display:block;margin-top:10px">
-        Forma de pago
-        <select onchange="setMethod(${i},this.value)">
-          <option value="cash" ${method==="cash"?"selected":""}>💵 Todo efectivo</option>
-          <option value="card" ${method==="card"?"selected":""}>💳 Todo tarjeta</option>
-          <option value="mixed" ${method==="mixed"?"selected":""}>💳＋💵 Efectivo + tarjeta</option>
-        </select>
-      </label>
-
+      <div class="big-pay" style="margin-top:10px">Total: $${money(total)}</div>
+      <label style="display:block;margin-top:10px">Forma de pago<select onchange="setMethod(${i},this.value)"><option value="cash" ${method==="cash"?"selected":""}>💵 Efectivo</option><option value="card" ${method==="card"?"selected":""}>💳 Tarjeta</option></select></label>
       ${methodFields(p,i,total)}
     </div>
   `;
 }
 
 function methodFields(p,i,total){
-  if(!total)
-    return `<p class="muted">Selecciona productos para esta persona.</p>`;
-
-  if(p.method==="cash")
-    return `
-      <label style="display:block;margin-top:10px">
-        Efectivo recibido
-        <input
-          type="number"
-          step=".01"
-          value="${p.cash||total}"
-          onchange="paymentState.payers[${i}].cash=Number(this.value)">
+  if(!total) return `<p class="muted">Selecciona productos.</p>`;
+  if(p.method==="cash") return `
+    <div style="margin-top:10px; padding:12px; background:#f0fdf4; border:1px solid #16a34a; border-radius:12px;">
+      <label>Efectivo a cobrar<input type="number" step=".01" value="${p.cash||total}" onchange="paymentState.payers[${i}].cash=Number(this.value)"></label>
+      <label style="margin-top:8px; display:block;"><b style="color:#16a34a;">💵 Recibo del cliente (Billete)</b>
+        <input type="number" step=".01" value="${p.tendered||''}" placeholder="Ej. 500" oninput="paymentState.payers[${i}].tendered=this.value; let c=Number(this.value)-(paymentState.payers[${i}].cash||${total}); document.getElementById('change_${i}').innerText=c>=0?'$'+c.toLocaleString('es-MX',{minimumFractionDigits:2}):'---';">
       </label>
-      <p class="muted">Se registrarán $${money(total)} en efectivo.</p>
-    `;
-
-  if(p.method==="card")
-    return `
-      <div class="terminal" style="margin-top:10px">
-        <b>💳 Llevar terminal</b>
-        <p style="margin:6px 0">
-          Cargar exactamente <strong>$${money(total)}</strong>.
-        </p>
-        <label>
-          Monto cargado en terminal
-          <input
-            type="number"
-            step=".01"
-            value="${p.terminal||total}"
-            onchange="paymentState.payers[${i}].terminal=Number(this.value)">
-        </label>
-        <label style="display:block;margin-top:8px">
-          Referencia / últimos 4 (opcional)
-          <input
-            value="${escAttr(p.ref||"")}"
-            onchange="paymentState.payers[${i}].ref=this.value"
-            placeholder="Ej. últimos 4 dígitos">
-        </label>
-      </div>
-    `;
-
-  const card=Number(p.card||0);
-  const cash=Math.max(0,total-card);
-
-  return `
-    <label style="display:block;margin-top:10px">
-      Efectivo
-      <input
-        type="number"
-        step=".01"
-        value="${cash}"
-        onchange="
-          paymentState.payers[${i}].cash=Number(this.value);
-          paymentState.payers[${i}].card=Math.max(0,${total}-Number(this.value));
-          paymentState.payers[${i}].terminal=paymentState.payers[${i}].card;
-          renderPaymentModal()
-        ">
-    </label>
-
-    <div class="terminal" style="margin-top:8px">
-      <b>💳 Terminal</b>
-      <p style="margin:6px 0">
-        Cargar <strong>$${money(card)}</strong> a la tarjeta.
-      </p>
-
-      <input
-        type="number"
-        step=".01"
-        value="${card}"
-        onchange="
-          paymentState.payers[${i}].card=Number(this.value);
-          paymentState.payers[${i}].cash=Math.max(0,${total}-Number(this.value));
-          paymentState.payers[${i}].terminal=Number(this.value);
-          renderPaymentModal()
-        ">
-
-      <small class="muted">
-        Tarjeta + efectivo deben sumar $${money(total)}.
-      </small>
+      <div style="margin-top:8px; font-size:18px; font-weight:900; color:#b91c1c;">Cambio: <span id="change_${i}">${p.tendered && Number(p.tendered) >= (p.cash||total) ? '$' + (Number(p.tendered) - (p.cash||total)).toLocaleString('es-MX',{minimumFractionDigits:2}) : '---'}</span></div>
     </div>
   `;
+  return `<div class="terminal" style="margin-top:10px"><b>💳 Tarjeta</b><p>Cargar $${money(total)}</p></div>`;
 }
 
-function setAlloc(i,itemId,value){
-  const q=Number(value||0);
-  if(q)paymentState.payers[i].alloc[itemId]=q;
-  else delete paymentState.payers[i].alloc[itemId];
-  renderPaymentModal();
-}
-
-function setMethod(i,m){
-  paymentState.payers[i].method=m;
-  const total=payerTotal(paymentState.payers[i]);
-
-  if(m==="cash"){
-    paymentState.payers[i].cash=total;
-    paymentState.payers[i].card=0;
-    paymentState.payers[i].terminal=0;
-  }else if(m==="card"){
-    paymentState.payers[i].cash=0;
-    paymentState.payers[i].card=total;
-    paymentState.payers[i].terminal=total;
-  }else{
-    paymentState.payers[i].card=0;
-    paymentState.payers[i].cash=total;
-    paymentState.payers[i].terminal=0;
-  }
-
-  renderPaymentModal();
-}
-
-function assignAllToFirst(){
-  paymentState.payers.forEach(p=>p.alloc={});
-
-  paymentState.items.forEach(it=>{
-    paymentState.payers[0].alloc[it.id]=Number(it.qty);
-  });
-
-  paymentState.payers[0].method="cash";
-  paymentState.payers[0].cash=Number(paymentState.order.total);
-
-  renderPaymentModal();
-}
+function setAlloc(i,itemId,value){ const q=Number(value||0); if(q)paymentState.payers[i].alloc[itemId]=q; else delete paymentState.payers[i].alloc[itemId]; renderPaymentModal(); }
+function setMethod(i,m){ paymentState.payers[i].method=m; paymentState.payers[i].cash=payerTotal(paymentState.payers[i]); renderPaymentModal(); }
 
 async function submitPayments(){
   const d=paymentState;
-
-  const remaining=Math.max(
-    0,
-    Number(d.order.total)-
-    Number(d.paid||0)
-  );
-
-  const totalAssigned=d.payers.reduce(
-    (s,p)=>s+payerTotal(p),
-    0
-  );
-
-  if(Math.abs(totalAssigned-remaining)>0.01)
-    return toast(
-      `Faltan asignar $${money(remaining-totalAssigned)} de la cuenta.`
-    );
+  const remaining=Math.max(0,Number(d.order.total)-Number(d.paid||0));
+  const totalAssigned=d.payers.reduce((s,p)=>s+payerTotal(p),0);
+  if(Math.abs(totalAssigned-remaining)>0.01) return toast(`Faltan asignar $${money(remaining-totalAssigned)}.`);
 
   for(const p of d.payers){
-
     const amount=payerTotal(p);
-
     if(!amount)continue;
-
-    let cash=0,card=0,terminal=0;
-
-    if(p.method==="cash"){
-      cash=amount;
-
-      if(
-        Math.abs(
-          Number(p.cash||amount)-amount
-        )>0.01
-      )
-        return toast(
-          `El efectivo de ${p.name||"cliente"} debe ser $${money(amount)}.`
-        );
-    }
-
-    if(p.method==="card"){
-      card=amount;
-      terminal=Number(p.terminal||0);
-
-      if(Math.abs(terminal-amount)>0.01)
-        return toast(
-          `La terminal de ${p.name||"cliente"} debe cargarse por $${money(amount)}.`
-        );
-    }
-
-    if(p.method==="mixed"){
-      cash=Number(p.cash||0);
-      card=Number(p.card||0);
-      terminal=card;
-
-      if(Math.abs(cash+card-amount)>0.01)
-        return toast(
-          `Efectivo + tarjeta de ${p.name||"cliente"} deben sumar $${money(amount)}.`
-        );
-    }
-
-    const allocations=Object.entries(p.alloc)
-      .map(([order_item_id,qty])=>({
-        order_item_id:Number(order_item_id),
-        qty:Number(qty)
-      }));
-
     try{
-      await api(`/orders/${d.order.id}/payments`,{
-        method:"POST",
-        body:JSON.stringify({
-          payer_name:p.name,
-          method:p.method,
-          amount,
-          cash_amount:cash,
-          card_amount:card,
-          terminal_amount:terminal,
-          terminal_reference:p.ref||"",
-          allocations
-        })
-      });
-    }catch(e){
-      return toast(e.message);
-    }
+      await api(`/orders/${d.order.id}/payments`,{method:"POST",body:JSON.stringify({payer_name:p.name, method:p.method, amount, cash_amount:amount, card_amount:0, terminal_amount:0, allocations:Object.entries(p.alloc).map(([id,qty])=>({order_item_id:Number(id),qty:Number(qty)}))})});
+    }catch(e){return toast(e.message);}
   }
-
-  toast("Cobro registrado correctamente");
-  closePayment();
-  loadOrders();
-  if(isAdmin())loadDashboard();
+  toast("Cobro registrado"); closePayment(); loadOrders(); if(isAdmin())loadDashboard();
 }
 
 async function loadDashboard(){
   try{
     const d=await api("/dashboard");
-
     $("dashboard").innerHTML=`
-      <div class="card">
-        <h2>Ventas de hoy</h2>
-        <div class="total">$${money(d.sales?.total)}</div>
-        <p>${d.sales?.orders||0} órdenes pagadas</p>
-      </div>
-
-      <div class="card">
-        <h2>Órdenes abiertas</h2>
-        <div class="total">${d.open?.count||0}</div>
-      </div>
-
-      <div class="card">
-        <h2>En cocina</h2>
-        <div class="total">${d.kitchen?.count||0}</div>
-      </div>
-
-      <div class="card">
-        <h2>Cobros de hoy</h2>
-        <p><b>Total cobrado:</b> $${money(d.payments?.total)}</p>
-        <p>💵 Efectivo: $${money(d.payments?.cash)}</p>
-        <p>💳 Tarjeta: $${money(d.payments?.card)}</p>
-        <p>🏧 Terminal: $${money(d.payments?.terminal)}</p>
-        <p class="muted">${d.payments?.transactions||0} movimientos de cobro</p>
-      </div>
+      <div class="card"><h2>Ventas hoy</h2><div class="total">$${money(d.sales?.total)}</div><p>${d.sales?.orders||0} pagadas</p></div>
+      <div class="card"><h2>Abiertas</h2><div class="total">${d.open?.count||0}</div></div>
+      <div class="card"><h2>Cocina</h2><div class="total">${d.kitchen?.count||0}</div></div>
     `;
-  }catch(e){toast(e.message)}
+  }catch(e){}
 }
 
 async function cashIn(){cash("ingreso")}
 async function cashOut(){cash("egreso")}
-
 async function cash(type){
   const amount=Number($("cashAmount").value);
-  if(!amount)return toast("Indica un monto.");
-
-  try{
-    await api("/cash",{
-      method:"POST",
-      body:JSON.stringify({
-        type,
-        amount,
-        concept:$("cashConcept").value
-      })
-    });
-
-    toast("Movimiento registrado");
-    $("cashAmount").value="";
-    $("cashConcept").value="";
-    loadDashboard();
-
-  }catch(e){toast(e.message)}
+  if(!amount)return toast("Monto requerido.");
+  try{ await api("/cash",{method:"POST",body:JSON.stringify({type, amount, concept:$("cashConcept").value})}); toast("Movimiento OK"); $("cashAmount").value=""; $("cashConcept").value=""; }catch(e){toast(e.message)}
 }
 
 function renderProductAdmin(){
-  $("productAdmin").innerHTML=products.map(p=>`
-    <div class="card">
-      <h3>${esc(p.name)}</h3>
-      <p>${esc(p.category)} · $${money(p.price)}</p>
-      <p class="muted">${esc(p.description||"")}</p>
-    </div>
-  `).join("");
+  $("productAdmin").innerHTML=products.map(p=>`<div class="card"><h3>${esc(p.name)}</h3><p>${esc(p.category)} · $${money(p.price)}</p></div>`).join("");
 }
-
 async function createProduct(){
   try{
-    await api("/menu",{
-      method:"POST",
-      body:JSON.stringify({
-        name:$("pName").value,
-        category:$("pCategory").value,
-        price:Number($("pPrice").value),
-        description:$("pDesc").value
-      })
-    });
-
-    toast("Producto creado");
-
-    ["pName","pCategory","pPrice","pDesc"]
-      .forEach(x=>$(x).value="");
-
-    products=await api("/menu");
-    renderCategoryChips();
-    renderProducts();
-    renderProductAdmin();
-
+    await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value, category:$("pCategory").value, price:Number($("pPrice").value), description:$("pDesc").value})});
+    toast("Creado"); ["pName","pCategory","pPrice","pDesc"].forEach(x=>$(x).value="");
+    products=await api("/menu"); renderCategoryChips(); renderProducts(); renderProductAdmin();
   }catch(e){toast(e.message)}
 }
 
 async function loadUsers(){
   try{
     const us=await api("/users");
-
-    $("users").innerHTML=`
-      <div class="card">
-        <table>
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Usuario</th>
-              <th>Rol</th>
-              <th>Activo</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${us.map(u=>`
-              <tr>
-                <td>${esc(u.name)}</td>
-                <td>${esc(u.username)}</td>
-                <td>${roleName(u.role)}</td>
-                <td>${u.active?"Sí":"No"}</td>
-                <td>
-                  <button class="danger" style="padding: 6px 12px; font-size: 13px;" onclick="deleteUser('${escAttr(u.id)}', '${escAttr(u.name)}')">Eliminar</button>
-                </td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      </div>
-    `;
-  }catch(e){toast(e.message)}
+    $("users").innerHTML=`<div class="card"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.username)}</td><td>${roleName(u.role)}</td><td><button class="danger" onclick="deleteUser('${u.id}')">Eliminar</button></td></tr>`).join("")}</tbody></table></div>`;
+  }catch(e){}
 }
-
 async function createUser(){
   try{
-    await api("/users",{
-      method:"POST",
-      body:JSON.stringify({
-        name:$("uName").value,
-        username:$("uUsername").value,
-        password:$("uPassword").value,
-        role:$("uRole").value
-      })
-    });
-
-    toast("Usuario creado");
-
-    ["uName","uUsername","uPassword"]
-      .forEach(x=>$(x).value="");
-
-    loadUsers();
-
+    await api("/users",{method:"POST",body:JSON.stringify({name:$("uName").value, username:$("uUsername").value, password:$("uPassword").value, role:$("uRole").value})});
+    toast("Usuario creado"); ["uName","uUsername","uPassword"].forEach(x=>$(x).value=""); loadUsers();
   }catch(e){toast(e.message)}
 }
+async function deleteUser(id){ if(confirm("¿Borrar usuario?")){ await api("/users/"+id,{method:"DELETE"}); loadUsers(); } }
 
-async function deleteUser(id, name){
-  if(!confirm(`¿Estás seguro de que deseas eliminar permanentemente al usuario "${name}"?`)){
-    return;
-  }
+function tableName(id){ const t=tables.find(x=>x.id===id); return t?t.name||("Mesa "+t.number):"Sin mesa"; }
+function money(n){ return Number(n||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m])); }
+function escAttr(s){ return esc(s); }
 
-  try{
-    await api(`/users/${id}`, {
-      method: "DELETE"
-    });
-
-    toast("Usuario eliminado");
-    loadUsers(); 
-
-  }catch(e){
-    toast(e.message);
-  }
+// CHAT
+let currentChatOrder=null;
+async function openChat(id){ currentChatOrder=id; $("chatModal").classList.remove("hidden"); loadChat(); }
+function closeChat(){ $("chatModal").classList.add("hidden"); currentChatOrder=null; }
+async function loadChat(){
+  if(!currentChatOrder)return;
+  const msgs=await api(`/orders/${currentChatOrder}/comments`);
+  $("chatMessages").innerHTML=msgs.map(m=>`<div style="background:${m.role==='cocina'?'#fff2cc':'#dbeafe'}; padding:8px; border-radius:8px; margin-bottom:6px;"><b>${esc(m.user_name)}:</b> ${esc(m.comment)}</div>`).join("")||"<p class='muted'>Sin mensajes.</p>";
+}
+async function sendChat(){
+  const text=$("chatInput").value.trim(); if(!text)return;
+  await api(`/orders/${currentChatOrder}/comments`,{method:"POST",body:JSON.stringify({comment:text})});
+  $("chatInput").value=""; loadChat();
 }
 
-function tableName(id){
-  const t=tables.find(x=>x.id===id);
-  return t?t.name||("Mesa "+t.number):"Sin mesa";
-}
-
-function money(n){
-  return Number(n||0).toLocaleString(
-    "es-MX",
-    {minimumFractionDigits:2,maximumFractionDigits:2}
-  );
-}
-
-function esc(s){
-  return String(s??"").replace(
-    /[&<>"']/g,
-    m=>({
-      "&":"&amp;",
-      "<":"&lt;",
-      ">":"&gt;",
-      '"':"&quot;",
-      "'":"&#039;"
-    }[m])
-  );
-}
-
-function escAttr(s){
-  return esc(s);
-}
-
-// --- SISTEMA DE CHAT ---
-let currentChatOrder = null;
-
-async function openChat(orderId) {
-  currentChatOrder = orderId;
-  $("chatModal").classList.remove("hidden");
-  $("chatMessages").innerHTML = "<p class='muted'>Cargando mensajes...</p>";
-  await loadChat();
-}
-
-function closeChat() {
-  $("chatModal").classList.add("hidden");
-  currentChatOrder = null;
-}
-
-async function loadChat() {
-  if(!currentChatOrder) return;
-  try {
-    const msgs = await api(`/orders/${currentChatOrder}/comments`);
-    $("chatMessages").innerHTML = msgs.length ? msgs.map(m => `
-      <div style="background:${m.role==='cocina'?'#fff2cc':'#dbeafe'}; padding:10px; border-radius:10px; margin-bottom:8px;">
-        <div class="row between">
-          <b style="font-size:13px">${esc(m.user_name)} (${roleName(m.role)})</b>
-          <span style="font-size:11px; color:#777;">${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
-        </div>
-        <div style="margin-top:4px; line-height:1.4;">${esc(m.comment)}</div>
-      </div>
-    `).join("") : "<p class='muted' style='text-align:center'>No hay mensajes aún. Escribe el primero.</p>";
-    $("chatMessages").scrollTop = $("chatMessages").scrollHeight; 
-  } catch(e){toast(e.message)}
-}
-
-async function sendChat() {
-  const text = $("chatInput").value.trim();
-  if(!text) return;
-  try {
-    await api(`/orders/${currentChatOrder}/comments`, {
-      method: "POST",
-      body: JSON.stringify({ comment: text })
-    });
-    $("chatInput").value = "";
-    await loadChat();
-  } catch(e){toast(e.message)}
-}
-
-// --- NOTIFICACIONES, ALERTAS Y SONIDOS ---
-let knownOrders = null;
-let pollInterval = null;
-
-function startPolling() {
+// POLLING & NOTIFICATIONS
+let knownOrders=null, pollInterval=null;
+function startPolling(){
   if(pollInterval) clearInterval(pollInterval);
-  pollInterval = setInterval(pollNotifications, 8000); 
+  pollInterval=setInterval(pollNotifications, 8000);
   pollNotifications();
 }
-
-function playBeep(type) {
-  try {
-    if(navigator.vibrate) navigator.vibrate([200, 100, 200]); 
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    if(type === 'kitchen') {
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(500, ctx.currentTime);
-      osc.frequency.setValueAtTime(700, ctx.currentTime + 0.15); 
-    } else {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, ctx.currentTime);
-      osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.15); 
-    }
+function playBeep(type){
+  try{
+    if(navigator.vibrate) navigator.vibrate(200);
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator(); const gain=ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(type==='kitchen'?500:800, ctx.currentTime);
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.4);
-  } catch(e) {}
+    osc.start(); osc.stop(ctx.currentTime+0.3);
+  }catch(e){}
 }
-
-async function pollNotifications() {
-  if(!token || !me) return;
-  try {
-    const os = await api("/orders");
-    if (knownOrders === null) {
-      knownOrders = {};
-      os.forEach(o => knownOrders[o.id] = o.status);
-      return;
-    }
-
-    let needsReload = false;
-    os.forEach(o => {
-      const prevStatus = knownOrders[o.id];
-      if(prevStatus !== o.status) {
-        needsReload = true;
-        
-        if(isKitchen() && (!prevStatus || prevStatus==='undefined') && o.status === 'open') {
-          playBeep('kitchen');
-          toast(`🔔 ¡Nueva orden! Mesa: ${tableName(o.table_id)}`);
-        }
-        
-        if(isWaiterRole(me.role) && prevStatus === 'preparing' && o.status === 'ready') {
-          playBeep('waiter');
-          toast(`✅ ¡Orden lista! Mesa: ${tableName(o.table_id)}`);
-        }
+async function pollNotifications(){
+  if(!token||!me)return;
+  try{
+    const os=await api("/orders");
+    if(knownOrders===null){ knownOrders={}; os.forEach(o=>knownOrders[o.id]={status:o.status, print:o.print_requested}); return; }
+    let reload=false;
+    os.forEach(o=>{
+      const prev=knownOrders[o.id]||{};
+      if(prev.status!==o.status || prev.print!==o.print_requested){
+        reload=true;
+        if(isKitchen() && !prev.status && o.status==='open'){ playBeep('kitchen'); toast("🔔 ¡Nueva orden!"); }
+        if(isWaiterRole(me.role) && prev.status==='preparing' && o.status==='ready'){ playBeep('waiter'); toast("✅ ¡Orden lista!"); }
       }
-      knownOrders[o.id] = o.status;
+      knownOrders[o.id]={status:o.status, print:o.print_requested};
     });
-
-    if(needsReload) { 
-       if(!$("cocina").classList.contains("hidden")) loadKitchen();
-       if(!$("ordenes").classList.contains("hidden")) loadOrders();
-    }
-  } catch(e) {}
+    if(reload){ if(!$("cocina").classList.contains("hidden")) loadKitchen(); if(!$("ordenes").classList.contains("hidden")) loadOrders(); }
+  }catch(e){}
 }
 
 boot();
