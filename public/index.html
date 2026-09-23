@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v13</title>
+<title>RUSH POS v14</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v13</div>
+      <div class="brand">RUSH POS v14</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -115,7 +115,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <h1 class="title">🎾 Reservas de Canchas de Pádel</h1>
   <div class="card" style="margin-bottom:15px; background:#f0fdf4; border:1px solid #16a34a;">
     <h2>📅 Agendar Cancha y Crear Cuenta Global</h2>
-    <p class="muted">Al registrar la reserva, el cliente se guardará automáticamente en tu base de datos de lealtad.</p>
     <div class="grid" style="margin-top:12px;">
       <label>Cancha:<select id="resCourtSelect" onchange="updateResTotal()"></select></label>
       <label>Fecha:<input type="date" id="resDate"></label>
@@ -123,8 +122,8 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <label>Duración (horas):<input type="number" id="resHours" step="0.5" value="1.5" oninput="updateResTotal()"></label>
       <label>Nombre del cliente:<input id="resName" placeholder="Nombre completo"></label>
       <label>WhatsApp:<input id="resPhone" placeholder="10 dígitos"></label>
-      <label>Precio Total ($) [Promoción / Libre]:<input type="number" id="resCustomTotal" step="1" placeholder="$ Total"></label>
-      <label>Anticipo / Seña ($):<input type="number" id="resDeposit" value="0" placeholder="$"></label>
+      <label>Precio Total ($):<input id="resCustomTotal" type="number" step="1"></label>
+      <label>Anticipo / Seña ($):<input type="number" id="resDeposit" value="0"></label>
       <button class="success" onclick="createReservation()" style="grid-column:1/-1;">Confirmar Reserva y Generar Cuenta</button>
     </div>
   </div>
@@ -266,19 +265,19 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </div>
 
-<!-- MODAL DE TICKET / VISTA PREVIA E IMPRESIÓN -->
+<!-- MODAL DE TICKET -->
 <div id="ticketModal" class="modal hidden">
   <div class="modalbox" style="max-width:420px; text-align:center;">
     <div class="row between"><h2 style="margin:0">Ticket de Venta</h2><button onclick="$('ticketModal').classList.add('hidden')">✕</button></div>
     <div id="ticketContent" style="margin:15px 0;"></div>
     <div class="row" style="margin-top:15px;">
-      <button class="primary" style="flex:1;" onclick="window.print()">🖨️ Imprimir Ticket</button>
-      <button class="success" style="flex:1;" onclick="sendTicketWhatsApp()">💬 Enviar WhatsApp</button>
+      <button class="primary" style="flex:1;" onclick="window.print()">🖨️ Imprimir</button>
+      <button class="success" style="flex:1;" onclick="sendTicketWhatsApp()">💬 WhatsApp</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL DE EDICIÓN DE RESERVA -->
+<!-- MODAL EDICIÓN RESERVA -->
 <div id="editResModal" class="modal hidden">
   <div class="modalbox" style="max-width:500px;">
     <div class="row between"><h2 style="margin:0">Modificar Reserva</h2><button onclick="$('editResModal').classList.add('hidden')">✕</button></div>
@@ -304,6 +303,7 @@ let token=localStorage.getItem("rush_token");
 let me=null, products=[], tables=[], cart=[], inventoryItems=[], courtsList=[], currentCategory="TODOS";
 let activeChatOrderId=null;
 let currentTicketData=null;
+let allOrdersCache=[];
 const $=id=>document.getElementById(id);
 
 function toast(msg){
@@ -664,30 +664,33 @@ async function updateOrderStatus(id, newStatus){
 }
 
 // -----------------------------------------------------
-// ÓRDENES, IMPRESIÓN DE TICKET Y WHATSAPP
+// ÓRDENES, TICKET DETALLADO Y WHATSAPP
 // -----------------------------------------------------
 async function loadOrders(){
-  const os = await api("/orders");
-  $("orders").innerHTML = os.map(o=>`
-    <div class="card">
-      <h3>Orden #${o.id.slice(0,6)}</h3>
-      <p>Cliente: ${o.customer_name||"General"} | Total: <b>$${o.total}</b></p>
-      <span class="status ${o.status}">${o.status}</span>
-      <div class="row" style="margin-top:10px; flex-wrap:wrap;">
-        <button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ver / Imprimir Ticket</button>
-        <button class="success" style="flex:1;" onclick="payAndClear('${o.id}')">💵 Finalizar Cuenta</button>
-        <button onclick="openChat('${o.id}')">💬 Chat</button>
-        ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
+  try{
+    allOrdersCache = await api("/orders");
+    $("orders").innerHTML = allOrdersCache.map(o=>`
+      <div class="card">
+        <h3>Orden #${o.id.slice(0,6)}</h3>
+        <p><b>Destino:</b> ${o.table_name || o.customer_name || "General"} | <b>Mesero:</b> ${o.user_name || "Personal"} | Total: <b>$${o.total}</b></p>
+        <span class="status ${o.status}">${o.status}</span>
+        <div class="row" style="margin-top:10px; flex-wrap:wrap;">
+          <button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ver / Imprimir Ticket</button>
+          <button class="success" style="flex:1;" onclick="payAndClear('${o.id}')">💵 Finalizar Cuenta</button>
+          <button onclick="openChat('${o.id}')">💬 Chat</button>
+          ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
+        </div>
       </div>
-    </div>
-  `).join("");
+    `).join("") || "<p class='muted'>No hay órdenes activas.</p>";
+  }catch(e){}
 }
 
 async function previewTicket(id){
   try{
+    // Buscamos la orden completa desde la API o caché
     const o = await api("/orders/" + id);
     currentTicketData = o;
-    
+
     let itemsHtml = "";
     if(o.items && o.items.length){
       itemsHtml = o.items.map(it=>`
@@ -701,16 +704,19 @@ async function previewTicket(id){
     $("ticketContent").innerHTML = `
       <div class="ticket-preview">
         <b>RUSH CLUB PÁDEL</b><br>
-        <small>Punto de Venta · Ticket de Consumo</small>
+        <small>Punto de Venta · Comprobante</small>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="text-align:left; font-size:13px;">
           <b>Folio:</b> #${o.id.slice(0,6)}<br>
+          <b>Destino:</b> ${o.table_name || 'Mostrador / General'}<br>
           <b>Cliente:</b> ${o.customer_name || 'General'}<br>
+          <b>Atendió (Mesero):</b> ${o.user_name || 'Personal'}<br>
           <b>Fecha:</b> ${new Date().toLocaleString()}
         </div>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="text-align:left;">
-          ${itemsHtml}
+          <b>Consumo detallado:</b>
+          ${itemsHtml || '<small>Sin artículos registrados</small>'}
         </div>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold;">
@@ -722,21 +728,21 @@ async function previewTicket(id){
       </div>
     `;
     $("ticketModal").classList.remove("hidden");
-  }catch(e){toast("Error al cargar ticket: "+e.message)}
+  }catch(e){toast("Error al generar ticket: "+e.message)}
 }
 
 function sendTicketWhatsApp(){
   if(!currentTicketData) return;
   const o = currentTicketData;
   const phone = o.customer_phone;
-  if(!phone || phone.length < 10) return toast("Este cliente no cuenta con un número de WhatsApp registrado en la comanda.");
+  if(!phone || phone.length < 10) return toast("Este cliente no cuenta con número de WhatsApp registrado en la comanda.");
 
   let itemsText = "";
   if(o.items && o.items.length){
     itemsText = o.items.map(it=>`- ${it.qty}x ${it.name} ($${it.qty * it.unit_price})`).join("\n");
   }
 
-  const msg = `Hola *${o.customer_name || 'Cliente'}* 👋 Aquí tienes el ticket de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${o.id.slice(0,6)}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${o.total}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
+  const msg = `Hola *${o.customer_name || 'Cliente'}* 👋 Aquí tienes el resumen de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${o.id.slice(0,6)}\n🏟️ *Destino:* ${o.table_name || 'General'}\n👤 *Atendió:* ${o.user_name || 'Personal'}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${o.total}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
   window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -943,7 +949,7 @@ async function createUser(){
     await api("/users",{method:"POST",body:JSON.stringify({
       name: $("uName").value, username: $("uUsername").value, password: $("uPassword").value, role: $("uRole").value
     })});
-    toast("Error al crear usuario");
+    toast("Usuario creado");
     $("uName").value=""; $("uUsername").value=""; $("uPassword").value="";
     loadUsers();
   }catch(e){toast(e.message)}
