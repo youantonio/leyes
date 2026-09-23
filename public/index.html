@@ -652,15 +652,49 @@ async function loadKitchen(){
         <p><b>Mesero:</b> ${esc(o.waiter_name||"No asignado")}</p>
         <p>${esc(o.customer_name||"Sin cliente")}</p>
         ${o.estimated_time ? `<p class="muted">⏳ Estimado: <b>${o.estimated_time} min</b></p>` : ''}
-        <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
-          ${o.status==="open"?`<button class="primary" onclick="acceptOrder('${escAttr(o.id)}')">Aceptar pedido</button>`:""}
-          ${o.status==="preparing"?`<button class="primary" onclick="orderStatus('${escAttr(o.id)}','ready')">Listo ✔️</button>`:""}
-          <button onclick="openChat('${escAttr(o.id)}')">💬 Chat / Dudas</button>
+        
+        <label style="display:block; margin-top:15px;">
+          <b>Estado del pedido:</b>
+          <select onchange="handleKitchenStatus('${escAttr(o.id)}', this.value)" style="margin-top:5px; background: #f0fdf4; border: 1px solid #16a34a; font-weight: bold;">
+            <option value="open" ${o.status==='open'?'selected':''}>📝 NUEVO (En espera)</option>
+            <option value="preparing" ${o.status==='preparing'?'selected':''}>👨‍🍳 Preparando...</option>
+            <option value="ready" ${o.status==='ready'?'selected':''}>✅ ¡Listo para entregar!</option>
+          </select>
+        </label>
+
+        <div class="row" style="margin-top:15px; gap:8px;">
+          <button style="width: 100%;" onclick="openChat('${escAttr(o.id)}')">💬 Chat / Dudas con Mesero</button>
         </div>
       </div>
     `).join("")||"<p class='muted'>No hay pedidos pendientes.</p>";
 
   }catch(e){toast(e.message)}
+}
+
+async function handleKitchenStatus(id, newStatus) {
+  if (newStatus === 'preparing') {
+    // Si cambia a preparando, le preguntamos el tiempo
+    const mins = prompt("¿En cuántos minutos aprox. estará listo? (Ingresa solo el número o deja vacío)");
+    const bodyData = { status: "preparing" };
+    if (mins !== null && mins.trim() !== "") {
+       bodyData.estimated_time = Number(mins) || 0;
+    }
+    try {
+      await api("/orders/"+id, { method: "PATCH", body: JSON.stringify(bodyData) });
+      loadKitchen();
+      pollNotifications();
+      toast("Pedido en preparación.");
+    } catch(e) { toast(e.message) }
+    
+  } else {
+    // Si lo cambia a Nuevo o Listo, simplemente lo actualizamos
+    try {
+      await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({status: newStatus}) });
+      loadKitchen();
+      pollNotifications();
+      if (newStatus === 'ready') toast("¡Avisando al mesero que está listo!");
+    } catch(e) { toast(e.message) }
+  }
 }
 
 async function orderStatus(id,status){
@@ -672,18 +706,63 @@ async function orderStatus(id,status){
   }catch(e){toast(e.message)}
 }
 
-async function acceptOrder(id) {
-  const mins = prompt("¿En cuántos minutos aprox. estará listo? (Solo ingresa el número)");
-  if(mins === null) return; 
-  try {
-    await api("/orders/"+id, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "preparing", estimated_time: Number(mins) || 0 })
-    });
-    loadKitchen();
-    pollNotifications();
-    toast("Pedido aceptado. Notificando tiempo...");
+async function loadKitchen(){
+  try{
+    const os=await api("/orders");
+    const open=os.filter(x=>["open","preparing","ready"].includes(x.status));
+
+    $("kitchenOrders").innerHTML=open.map(o=>`
+      <div class="card">
+        <div class="row between">
+          <h2>Mesa ${tableName(o.table_id)}</h2>
+          <span class="status ${o.status}">${esc(o.status)}</span>
+        </div>
+        <p><b>Mesero:</b> ${esc(o.waiter_name||"No asignado")}</p>
+        <p>${esc(o.customer_name||"Sin cliente")}</p>
+        ${o.estimated_time ? `<p class="muted">⏳ Estimado: <b>${o.estimated_time} min</b></p>` : ''}
+        
+        <label style="display:block; margin-top:15px;">
+          <b>Estado del pedido:</b>
+          <select onchange="handleKitchenStatus('${escAttr(o.id)}', this.value)" style="margin-top:5px; background: #f0fdf4; border: 1px solid #16a34a; font-weight: bold;">
+            <option value="open" ${o.status==='open'?'selected':''}>📝 NUEVO (En espera)</option>
+            <option value="preparing" ${o.status==='preparing'?'selected':''}>👨‍🍳 Preparando...</option>
+            <option value="ready" ${o.status==='ready'?'selected':''}>✅ ¡Listo para entregar!</option>
+          </select>
+        </label>
+
+        <div class="row" style="margin-top:15px; gap:8px;">
+          <button style="width: 100%;" onclick="openChat('${escAttr(o.id)}')">💬 Chat / Dudas con Mesero</button>
+        </div>
+      </div>
+    `).join("")||"<p class='muted'>No hay pedidos pendientes.</p>";
+
   }catch(e){toast(e.message)}
+}
+
+async function handleKitchenStatus(id, newStatus) {
+  if (newStatus === 'preparing') {
+    // Si cambia a preparando, le preguntamos el tiempo
+    const mins = prompt("¿En cuántos minutos aprox. estará listo? (Ingresa solo el número o deja vacío)");
+    const bodyData = { status: "preparing" };
+    if (mins !== null && mins.trim() !== "") {
+       bodyData.estimated_time = Number(mins) || 0;
+    }
+    try {
+      await api("/orders/"+id, { method: "PATCH", body: JSON.stringify(bodyData) });
+      loadKitchen();
+      pollNotifications();
+      toast("Pedido en preparación.");
+    } catch(e) { toast(e.message) }
+    
+  } else {
+    // Si lo cambia a Nuevo o Listo, simplemente lo actualizamos
+    try {
+      await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({status: newStatus}) });
+      loadKitchen();
+      pollNotifications();
+      if (newStatus === 'ready') toast("¡Avisando al mesero que está listo!");
+    } catch(e) { toast(e.message) }
+  }
 }
 
 async function loadOrders(){
