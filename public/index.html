@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v15</title>
+<title>RUSH POS v16</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v15</div>
+      <div class="brand">RUSH POS v16</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -84,7 +84,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <nav id="nav"></nav>
 
 <main>
-<!-- VENTAS -->
+<!-- VENTAS CON TIPO DE CONSUMO Y DATOS DE CLIENTE LEAL -->
 <section id="venta" class="view">
   <h1 class="title">Nueva Venta / Servicio</h1>
   <div class="card">
@@ -97,11 +97,24 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 
   <div class="card" style="margin-top:13px">
-    <div class="row between"><h2 style="margin:0">Destino del Pedido</h2><span id="waiterLabel" class="muted"></span></div>
+    <div class="row between"><h2 style="margin:0">Destino y Datos del Cliente</h2></div>
     <div class="grid" style="margin-top:12px">
-      <label>Mesa / Cancha / Canal<select id="tableSelect"></select></label>
-      <label>WhatsApp del cliente<input id="customerPhone" placeholder="10 dígitos"></label>
-      <label>Nombre del cliente<input id="customerName" placeholder="Nombre o referencia"></label>
+      <label>Tipo de Consumo:
+        <select id="orderType">
+          <option value="Restaurante (Para Aquí)">🍽️ Restaurante (Para Aquí)</option>
+          <option value="Para Llevar">📦 Para Llevar</option>
+        </select>
+      </label>
+      <label>Mesa / Cancha:<select id="tableSelect"></select></label>
+      <label>WhatsApp del cliente (10 dígitos) *Vital:<input id="customerPhone" placeholder="Ej. 7711234567" maxlength="10"></label>
+      <label>Nombre del cliente:<input id="customerName" placeholder="Nombre completo"></label>
+      <label>Género:
+        <select id="customerGender">
+          <option value="No especificado">Seleccionar...</option>
+          <option value="H">Hombre (H)</option>
+          <option value="M">Mujer (M)</option>
+        </select>
+      </label>
     </div>
     <div id="cart" style="margin-top:12px"></div>
     <div class="row between" style="margin-top:13px"><span class="total">Total</span><span id="cartTotal" class="total">$0.00</span></div>
@@ -440,18 +453,36 @@ function renderTableSelect(){
 
 async function sendOrder(){
   if(!cart.length) return toast("Agrega productos al carrito.");
+  const phone = $("customerPhone").value.trim();
+  const name = $("customerName").value.trim() || "Mostrador";
+  const orderType = $("orderType").value;
+  const notes = `[${orderType}] ${$("notes").value || ""}`;
+
+  if(!phone || phone.length < 10) return toast("Por favor ingresa un número de WhatsApp válido de 10 dígitos.");
+
+  const total = cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
+
   try{
+    // 1. Enviar orden a cocina
     await api("/orders",{
       method:"POST",
       body:JSON.stringify({
         table_id: $("tableSelect").value || null,
-        customer_name: $("customerName").value || "Mostrador",
-        customer_phone: $("customerPhone").value || "",
-        notes: $("notes").value || "",
+        customer_name: `${name} (${phone})`,
+        customer_phone: phone,
+        notes: notes,
         items: cart
       })
     });
-    toast("¡Orden enviada a cocina con éxito!");
+
+    // 2. Registrar automáticamente en la base de datos de lealtad
+    await api("/loyalty/register", {method:"POST", body:JSON.stringify({
+      name: name,
+      phone: phone,
+      amount: total
+    })}).catch(()=>{});
+
+    toast("¡Orden enviada y cliente registrado en lealtad!");
     cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("notes").value="";
     loadAll();
   }catch(e){toast(e.message)}
