@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v4</title>
+<title>RUSH POS v6</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -24,12 +24,12 @@ nav{display:flex;gap:8px;overflow:auto;padding:10px 14px;background:#fff;border-
 nav button{white-space:nowrap;padding:10px 14px} .active{background:#111;color:#fff}
 main{max-width:1180px;margin:auto;padding:16px}
 .title{font-size:29px;font-weight:900;margin:0 0 14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:13px}
-.card{background:#fff;border:1px solid #e3e3e3;border-radius:18px;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #e3e3e3;border-radius:18px;padding:18px;box-shadow:0 4px 12px rgba(0,0,0,.03)}
 .row{display:flex;gap:10px;align-items:center} .between{justify-content:space-between} .stack>*+*{margin-top:10px}
 .muted{color:#777} .total{font-size:28px;font-weight:900}
-.status{padding:6px 10px;border-radius:999px;background:#eee;font-size:12px}
-.status.open{background:#fff2cc}.status.preparing{background:#dbeafe}.status.ready{background:#dcfce7}.status.paid{background:#e5e7eb}
+.status{padding:6px 10px;border-radius:999px;background:#eee;font-size:12px;font-weight:700}
+.status.open{background:#fff2cc;color:#854d0e}.status.preparing{background:#dbeafe;color:#1e40af}.status.ready{background:#dcfce7;color:#166534}.status.paid{background:#e5e7eb;color:#374151}
 .login{min-height:100vh;display:grid;place-items:center;padding:20px}
 .loginbox{width:min(430px,100%);background:#fff;border-radius:24px;padding:28px;border:1px solid #ddd}
 .search{font-size:17px;padding:15px 16px;border-radius:16px}
@@ -48,6 +48,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:13px 18px;border-radius:12px;z-index:80}
 .report-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; text-align: center; }
 .report-val { font-size: 24px; font-weight: 900; color: #111; margin-top: 5px; }
+.kitchen-item { font-size: 16px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
 </style>
 </head>
 <body>
@@ -68,7 +69,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v4</div>
+      <div class="brand">RUSH POS v6</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -135,9 +136,12 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="tables" class="grid"></div>
 </section>
 
-<!-- COCINA -->
+<!-- COCINA / KDS UNIFICADO Y ULTRA VISUAL -->
 <section id="cocina" class="view hidden">
-  <h1 class="title">Cocina (KDS) y Comunicación</h1>
+  <div class="row between" style="margin-bottom:14px;">
+    <h1 class="title" style="margin:0">👨‍🍳 Pantalla de Cocina (KDS)</h1>
+    <button onclick="loadKitchen()" class="primary">🔄 Actualizar Pedidos</button>
+  </div>
   <div id="kitchenOrders" class="grid"></div>
 </section>
 
@@ -310,7 +314,8 @@ function showApp(){
   
   let nav=[];
   if(me.role==="cocina"){
-    nav=[["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
+    // El cocinero tiene su vista KDS limpia y directa en una sola pestaña
+    nav=[["cocina","👨‍🍳 Cocina (KDS)"]];
   } else if(me.role==="mesero"){
     nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
   } else {
@@ -455,7 +460,7 @@ async function createReservation(){
 }
 
 // -----------------------------------------------------
-// MESAS, COCINA Y CHAT
+// COCINA (KDS) UNIFICADO Y ULTRA VISUAL
 // -----------------------------------------------------
 function renderTables(){
   $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`
@@ -468,16 +473,47 @@ function renderTables(){
 
 async function loadKitchen(){
   const os = await api("/orders");
-  $("kitchenOrders").innerHTML = os.filter(x=>["open","preparing"].includes(x.status)).map(o=>`
-    <div class="card">
-      <h3>Orden #${o.id.slice(0,6)}</h3>
-      <p>Total: $${o.total} | ${o.notes ? 'Nota: '+o.notes : ''}</p>
-      <div class="row" style="margin-top:10px;">
-        <button class="primary" onclick="api('/orders/${o.id}',{method:'PATCH',body:JSON.stringify({status:'ready'})}).then(loadKitchen)">Marcar Lista</button>
-        <button onclick="openChat('${o.id}')">💬 Chat</button>
+  const activeOrders = os.filter(x=>["open","preparing"].includes(x.status));
+  if(!activeOrders.length) {
+    $("kitchenOrders").innerHTML = "<p class='muted'>¡Excelente trabajo! No hay pedidos pendientes en cocina por ahora.</p>";
+    return;
+  }
+
+  let html = "";
+  for(const o of activeOrders){
+    let itemsHtml = "<div style='margin:12px 0;'>";
+    try {
+      const details = await api("/orders/" + o.id);
+      if(details.items && details.items.length){
+        itemsHtml += details.items.map(it=>`
+          <div class="kitchen-item">
+            <span><b>${it.qty}x</b> ${it.name}</span>
+            ${it.notes ? `<span style='color:#b91c1c;font-size:13px;'>(${it.notes})</span>`:''}
+          </div>
+        `).join("");
+      }
+    } catch(e) {}
+    itemsHtml += "</div>";
+
+    html += `
+      <div class="card" style="border-left: 6px solid #16a34a; background:#fff;">
+        <div class="row between">
+          <h3 style="margin:0;">Orden #${o.id.slice(0,6)}</h3>
+          <span class="status ${o.status}">${o.status.toUpperCase()}</span>
+        </div>
+        <p style="margin:8px 0; font-size:15px;"><b>👤 Destino / Mesa:</b> ${o.customer_name || 'General'}</p>
+        ${o.notes ? `<p style="background:#fff7ed; padding:10px; border-radius:10px; margin:8px 0; border:1px solid #fed7aa;"><b>⚠️ Nota general:</b> ${o.notes}</p>` : ''}
+        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+        <div style="font-size:14px; color:#555; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Platillos a preparar:</div>
+        ${itemsHtml}
+        <div class="row" style="margin-top:12px;">
+          <button class="success" style="flex:1; padding:14px;" onclick="api('/orders/${o.id}',{method:'PATCH',body:JSON.stringify({status:'ready'})}).then(loadKitchen)">✅ Marcar Lista</button>
+          <button onclick="openChat('${o.id}')" style="padding:14px;">💬 Chat</button>
+        </div>
       </div>
-    </div>
-  `).join("")||"<p class='muted'>Sin pedidos pendientes en cocina.</p>";
+    `;
+  }
+  $("kitchenOrders").innerHTML = html;
 }
 
 async function loadOrders(){
