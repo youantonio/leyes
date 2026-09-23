@@ -1,2397 +1,1263 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111">
 <title>RUSH POS</title>
-
 <style>
-*{
-  box-sizing:border-box;
+:root{
+  font-family:Inter,Arial,Helvetica,sans-serif;
+  color:#111;background:#f5f5f5;
+  --dark:#111;--muted:#707070;--line:#e5e5e5;--card:#fff;
 }
-
-body{
-  margin:0;
-  font-family:Arial,Helvetica,sans-serif;
-  background:#f5f5f5;
-  color:#111;
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f5}
+.hidden{display:none!important}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer;border:1px solid #ddd;background:#fff;border-radius:14px;padding:13px 16px}
+button:active{transform:scale(.98)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.danger{background:#b91c1c;color:#fff;border-color:#b91c1c}
+input,select,textarea{width:100%;padding:13px;border:1px solid #ddd;border-radius:12px;background:#fff}
+header{background:#111;color:#fff;padding:15px 18px;position:sticky;top:0;z-index:20}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.brand{font-size:24px;font-weight:900;letter-spacing:.3px}
+.sub{color:#bbb;margin-top:3px;font-size:13px}
+.pill{padding:8px 12px;border-radius:999px;background:#205f32;font-size:13px}
+nav{display:flex;gap:8px;overflow:auto;padding:10px 14px;background:#fff;border-bottom:1px solid #ddd;position:sticky;top:66px;z-index:15}
+nav button{white-space:nowrap;padding:10px 14px}
+.active{background:#111;color:#fff}
+main{max-width:1180px;margin:auto;padding:16px}
+.title{font-size:29px;font-weight:900;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:13px}
+.card{background:#fff;border:1px solid #e3e3e3;border-radius:18px;padding:16px}
+.row{display:flex;gap:10px;align-items:center}
+.between{justify-content:space-between}
+.stack>*+*{margin-top:10px}
+.muted{color:#777}
+.total{font-size:28px;font-weight:900}
+.status{padding:6px 10px;border-radius:999px;background:#eee;font-size:12px}
+.status.open{background:#fff2cc}.status.preparing{background:#dbeafe}.status.ready{background:#dcfce7}.status.paid{background:#e5e7eb}
+.login{min-height:100vh;display:grid;place-items:center;padding:20px}
+.loginbox{width:min(430px,100%);background:#fff;border-radius:24px;padding:28px;border:1px solid #ddd}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.search{font-size:17px;padding:15px 16px;border-radius:16px}
+.chips{display:flex;gap:8px;overflow:auto;padding:3px 0 12px}
+.chip{white-space:nowrap;border-radius:999px;padding:10px 15px;background:#fff}
+.chip.active{background:#111;color:#fff}
+.product-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.product{
+  min-height:142px;text-align:left;padding:15px;border-radius:17px;
+  display:flex;flex-direction:column;justify-content:space-between;
+  border:1px solid #e2e2e2;background:#fff
 }
-
-button,
-input,
-select,
-textarea{
-  font:inherit;
+.product b{font-size:17px;line-height:1.2}
+.product .desc{font-size:12px;color:#777;margin-top:5px;line-height:1.3}
+.price{font-size:17px;font-weight:800;margin-top:8px}
+.add{margin-top:10px;background:#111;color:#fff;border:0;padding:9px 12px;border-radius:11px;font-weight:700}
+.order-item{display:grid;grid-template-columns:1fr auto;gap:8px;padding:11px 0;border-bottom:1px solid #eee}
+.qty-controls{display:flex;gap:5px;align-items:center}
+.qty-controls button{padding:7px 10px;border-radius:10px}
+.sticky-cart{position:sticky;bottom:10px;margin-top:12px;z-index:10}
+.cartbar{background:#111;color:#fff;border-radius:17px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 8px 25px rgba(0,0,0,.18)}
+.cartbar button{background:#fff;color:#111;border:0;padding:10px 14px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:50;display:grid;place-items:center;padding:12px}
+.modalbox{background:#fff;border-radius:22px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:20px}
+.split-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.payer{border:1px solid #ddd;border-radius:16px;padding:14px}
+.payer h3{margin:0 0 8px}
+.alloc{display:grid;grid-template-columns:1fr 65px 85px;gap:7px;align-items:center;padding:8px 0;border-bottom:1px solid #eee}
+.big-pay{font-size:22px;font-weight:900}
+.payment-summary{background:#f7f7f7;border-radius:14px;padding:12px}
+.terminal{background:#fff7d6;border:1px solid #ead78b;border-radius:14px;padding:12px}
+table{width:100%;border-collapse:collapse;background:#fff}
+th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:13px 18px;border-radius:12px;z-index:80}
+.empty{padding:25px;text-align:center;color:#777}
+.section-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#777;font-weight:800;margin:16px 2px 8px}
+@media(min-width:800px){
+  .product-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
-
-button{
-  cursor:pointer;
-}
-
-.hidden{
-  display:none!important;
-}
-
-/* HEADER */
-
-header{
-  background:#111;
-  color:white;
-  padding:15px;
-  position:sticky;
-  top:0;
-  z-index:50;
-}
-
-.header-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-}
-
-.logo{
-  font-size:24px;
-  font-weight:900;
-}
-
-.user-info{
-  font-size:13px;
-  color:#ccc;
-}
-
-/* NAVEGACIÓN */
-
-nav{
-  display:flex;
-  gap:8px;
-  overflow-x:auto;
-  background:white;
-  padding:10px;
-  border-bottom:1px solid #ddd;
-  position:sticky;
-  top:65px;
-  z-index:40;
-}
-
-nav button{
-  border:1px solid #ddd;
-  background:white;
-  border-radius:20px;
-  padding:10px 15px;
-  white-space:nowrap;
-}
-
-nav button.active{
-  background:#111;
-  color:white;
-}
-
-/* CONTENEDOR */
-
-main{
-  max-width:1200px;
-  margin:auto;
-  padding:15px;
-}
-
-.section{
-  margin-bottom:20px;
-}
-
-.section-title{
-  font-size:25px;
-  font-weight:900;
-  margin-bottom:15px;
-}
-
-/* TARJETAS */
-
-.card{
-  background:white;
-  border-radius:18px;
-  padding:16px;
-  margin-bottom:15px;
-  border:1px solid #e5e5e5;
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:12px;
-}
-
-/* INPUTS */
-
-input,
-select,
-textarea{
-  width:100%;
-  padding:13px;
-  border:1px solid #ddd;
-  border-radius:12px;
-  background:white;
-}
-
-.search-box{
-  position:relative;
-}
-
-.search-box input{
-  font-size:17px;
-  padding:16px 16px 16px 45px;
-}
-
-.search-icon{
-  position:absolute;
-  left:15px;
-  top:50%;
-  transform:translateY(-50%);
-  font-size:20px;
-}
-
-/* CATEGORÍAS */
-
-.category-scroll{
-  display:flex;
-  gap:8px;
-  overflow-x:auto;
-  padding:5px 0 14px;
-  scrollbar-width:none;
-}
-
-.category-scroll::-webkit-scrollbar{
-  display:none;
-}
-
-.category-btn{
-  flex:0 0 auto;
-  border:1px solid #ddd;
-  background:white;
-  border-radius:25px;
-  padding:11px 17px;
-  font-weight:700;
-}
-
-.category-btn.active{
-  background:#111;
-  color:white;
-  border-color:#111;
-}
-
-/* PRODUCTOS */
-
-.category-heading{
-  font-size:15px;
-  font-weight:900;
-  text-transform:uppercase;
-  letter-spacing:.08em;
-  margin:18px 2px 10px;
-  color:#555;
-}
-
-.products-grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px;
-}
-
-.product-card{
-  background:white;
-  border:1px solid #ddd;
-  border-radius:18px;
-  padding:15px;
-  min-height:155px;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  text-align:left;
-}
-
-.product-name{
-  font-size:17px;
-  font-weight:900;
-  line-height:1.2;
-}
-
-.product-description{
-  color:#777;
-  font-size:12px;
-  margin-top:6px;
-  line-height:1.35;
-}
-
-.product-price{
-  font-size:18px;
-  font-weight:900;
-  margin-top:10px;
-}
-
-.add-product{
-  width:100%;
-  border:0;
-  background:#111;
-  color:white;
-  border-radius:12px;
-  padding:10px;
-  margin-top:10px;
-  font-weight:800;
-}
-
-/* PEDIDO */
-
-.order-item{
-  display:grid;
-  grid-template-columns:1fr auto;
-  gap:10px;
-  padding:12px 0;
-  border-bottom:1px solid #eee;
-}
-
-.order-item:last-child{
-  border-bottom:0;
-}
-
-.qty-controls{
-  display:flex;
-  align-items:center;
-  justify-content:flex-end;
-  gap:5px;
-  margin-top:7px;
-}
-
-.qty-controls button{
-  border:1px solid #ddd;
-  background:white;
-  border-radius:9px;
-  padding:6px 10px;
-}
-
-.total-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-top:15px;
-  font-size:24px;
-  font-weight:900;
-}
-
-/* BOTONES */
-
-.btn{
-  border:1px solid #ddd;
-  background:white;
-  border-radius:12px;
-  padding:12px 15px;
-}
-
-.btn-primary{
-  background:#111;
-  color:white;
-  border-color:#111;
-}
-
-.btn-danger{
-  background:#b91c1c;
-  color:white;
-  border-color:#b91c1c;
-}
-
-/* CARRITO FIJO */
-
-.sticky-cart{
-  position:fixed;
-  bottom:12px;
-  left:12px;
-  right:12px;
-  z-index:45;
-  background:#111;
-  color:white;
-  border-radius:18px;
-  padding:13px 15px;
-  box-shadow:0 8px 25px rgba(0,0,0,.25);
-}
-
-.sticky-cart-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-}
-
-.sticky-cart button{
-  background:white;
-  color:#111;
-  border:0;
-  border-radius:12px;
-  padding:10px 14px;
-  font-weight:800;
-}
-
-/* MODALES */
-
-.modal{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.6);
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  padding:15px;
-  z-index:100;
-}
-
-.modal-content{
-  background:white;
-  width:min(850px,100%);
-  max-height:92vh;
-  overflow:auto;
-  border-radius:22px;
-  padding:20px;
-}
-
-.modal-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-}
-
-.close{
-  border:0;
-  background:#eee;
-  border-radius:50%;
-  width:40px;
-  height:40px;
-}
-
-/* LOGIN */
-
-.login-screen{
-  min-height:100vh;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  padding:20px;
-}
-
-.login-card{
-  background:white;
-  width:min(430px,100%);
-  padding:30px;
-  border-radius:24px;
-  border:1px solid #ddd;
-}
-
-.login-title{
-  font-size:38px;
-  font-weight:900;
-  margin:0;
-}
-
-/* UTILIDADES */
-
-.row{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-.between{
-  justify-content:space-between;
-}
-
-.muted{
-  color:#777;
-}
-
-.empty{
-  text-align:center;
-  padding:30px;
-  color:#777;
-}
-
-.badge{
-  display:inline-block;
-  padding:6px 10px;
-  border-radius:999px;
-  background:#eee;
-  font-size:12px;
-}
-
-@media(min-width:750px){
-  .products-grid{
-    grid-template-columns:repeat(3,minmax(0,1fr));
-  }
-}
-
-@media(max-width:600px){
-  main{
-    padding:10px;
-  }
-
-  .products-grid{
-    grid-template-columns:repeat(2,minmax(0,1fr));
-  }
-
-  .product-card{
-    min-height:145px;
-    padding:13px;
-  }
-
-  .product-name{
-    font-size:15px;
-  }
-
-  .product-price{
-    font-size:16px;
-  }
+@media(max-width:650px){
+  main{padding:11px}
+  .title{font-size:25px}
+  .top{align-items:flex-start}
+  .top button{padding:8px 10px}
+  .card{padding:14px}
+  nav{top:62px}
+  .brand{font-size:21px}
+  .pill{font-size:11px}
 }
 </style>
 </head>
-
 <body>
 
-<!-- LOGIN -->
-
-<div id="loginView" class="login-screen">
-  <div class="login-card">
-
-    <h1 class="login-title">RUSH</h1>
-
-    <p class="muted">
-      Punto de venta · Rush Club Pádel
-    </p>
-
-    <div style="margin-top:20px">
-
-      <label>
-        Usuario
-        <input
-          id="loginUser"
-          autocomplete="username"
-          placeholder="Usuario">
-      </label>
-
-      <br>
-
-      <label>
-        Contraseña
-        <input
-          id="loginPass"
-          type="password"
-          autocomplete="current-password"
-          placeholder="Contraseña">
-      </label>
-
-      <br>
-
-      <button
-        class="btn btn-primary"
-        style="width:100%"
-        onclick="login()">
-        Iniciar sesión
-      </button>
-
+<section id="loginView" class="login">
+  <div class="loginbox">
+    <h1 style="font-size:36px;margin:0">RUSH POS</h1>
+    <p class="muted">Rush Club Pádel · Punto de venta</p>
+    <div class="stack">
+      <label>Usuario<input id="loginUser" autocomplete="username" placeholder="Usuario"></label>
+      <label>Contraseña<input id="loginPass" type="password" autocomplete="current-password" placeholder="Contraseña"></label>
+      <button class="primary" onclick="login()">Iniciar sesión</button>
     </div>
-
+    <p class="muted" style="font-size:13px;margin-top:18px">Acceso por perfiles: Administrador, Mesero, Cocina y Caja.</p>
   </div>
-</div>
+</section>
 
-
-<!-- APP -->
-
-<div id="appView" class="hidden">
-
+<section id="appView" class="hidden">
 <header>
-
-  <div class="header-row">
-
+  <div class="top">
     <div>
-      <div class="logo">RUSH POS</div>
-
-      <div
-        id="userInfo"
-        class="user-info">
-      </div>
+      <div class="brand">RUSH POS</div>
+      <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
-
-    <button
-      class="btn"
-      onclick="logout()">
-      Salir
-    </button>
-
+    <div class="row">
+      <span id="userPill" class="pill">● Conectado</span>
+      <button onclick="logout()">Salir</button>
+    </div>
   </div>
-
 </header>
 
-
-<nav id="mainNav"></nav>
-
+<nav id="nav"></nav>
 
 <main>
-
-<!-- VENTA -->
-
-<section
-  id="ventaView"
-  class="section">
-
-  <div class="section-title">
-    Nueva venta
-  </div>
-
-
-  <!-- MESA Y CLIENTE -->
+<section id="venta" class="view">
+  <h1 class="title">Nueva venta</h1>
 
   <div class="card">
-
-    <div class="grid">
-
-      <label>
-        Mesa
-
-        <select id="tableSelect">
-          <option value="">
-            Seleccionar mesa
-          </option>
-        </select>
-
-      </label>
-
-
-      <label>
-        Cliente / grupo
-
-        <input
-          id="customerName"
-          placeholder="Nombre o referencia">
-      </label>
-
+    <div class="row" style="margin-bottom:10px">
+      <div style="flex:1">
+        <input id="productSearch" class="search" placeholder="🔎 Buscar bebida, comida, café..." oninput="renderProducts()">
+      </div>
+      <button onclick="loadAll()">↻</button>
     </div>
-
+    <div id="categoryChips" class="chips"></div>
+    <div id="products"></div>
   </div>
 
-
-  <!-- BUSCADOR Y CATEGORÍAS -->
-
-  <div class="card">
-
-    <div class="search-box">
-
-      <span class="search-icon">
-        🔎
-      </span>
-
-      <input
-        id="productSearch"
-        type="search"
-        placeholder="Buscar bebida, comida, café..."
-        oninput="renderProducts()">
-
-    </div>
-
-
-    <div
-      id="categoryTabs"
-      class="category-scroll"
-      style="margin-top:10px">
-    </div>
-
-
-    <div id="productsContainer">
-    </div>
-
-  </div>
-
-
-  <!-- PEDIDO -->
-
-  <div class="card">
-
+  <div class="card" style="margin-top:13px">
     <div class="row between">
-
-      <div>
-        <strong>Pedido</strong>
-      </div>
-
-      <div
-        id="waiterName"
-        class="muted">
-      </div>
-
+      <h2 style="margin:0">Pedido</h2>
+      <span id="waiterLabel" class="muted"></span>
     </div>
-
-
-    <div
-      id="cartContainer"
-      style="margin-top:10px">
+    <div class="grid" style="margin-top:12px">
+      <label>Mesa<select id="tableSelect"></select></label>
+      <label>Cliente / grupo<input id="customer" placeholder="Nombre o referencia"></label>
     </div>
-
-
-    <div class="total-row">
-
-      <span>Total</span>
-
-      <span id="cartTotal">
-        $0.00
-      </span>
-
+    <div id="cart" style="margin-top:12px"></div>
+    <div class="row between" style="margin-top:13px">
+      <span class="total">Total</span>
+      <span id="cartTotal" class="total">$0.00</span>
     </div>
-
-
-    <label
-      style="display:block;margin-top:12px">
-
-      Notas
-
-      <textarea
-        id="orderNotes"
-        rows="2"
-        placeholder="Notas para cocina o servicio">
-      </textarea>
-
-    </label>
-
-
-    <button
-      class="btn btn-primary"
-      style="width:100%;margin-top:12px"
-      onclick="sendOrder()">
-
-      Enviar a cocina
-
-    </button>
-
+    <label style="display:block;margin-top:10px">Notas generales<textarea id="notes" rows="2" placeholder="Sin azúcar, entrega en mesa, etc."></textarea></label>
+    <button class="primary" style="width:100%;margin-top:10px" onclick="sendOrder()">Enviar a cocina</button>
   </div>
 
+  <div id="stickyCart" class="sticky-cart hidden">
+    <div class="cartbar">
+      <div><b id="stickyCount">0 productos</b><br><small id="stickyTotal">$0.00</small></div>
+      <button onclick="document.getElementById('cart').scrollIntoView({behavior:'smooth'})">Ver pedido</button>
+    </div>
+  </div>
 </section>
 
-
-<!-- MESAS -->
-
-<section
-  id="mesasView"
-  class="section hidden">
-
-  <div class="section-title">
-    Mesas
-  </div>
-
-  <div
-    id="tablesContainer"
-    class="grid">
-  </div>
-
+<section id="mesas" class="view hidden">
+  <h1 class="title">Mesas</h1>
+  <div id="tables" class="grid"></div>
 </section>
 
-
-<!-- COCINA -->
-
-<section
-  id="cocinaView"
-  class="section hidden">
-
-  <div class="section-title">
-    Cocina
-  </div>
-
-  <div
-    id="kitchenContainer"
-    class="grid">
-  </div>
-
+<section id="cocina" class="view hidden">
+  <h1 class="title">Cocina</h1>
+  <div id="kitchenOrders" class="grid"></div>
 </section>
 
-
-<!-- ORDENES -->
-
-<section
-  id="ordersView"
-  class="section hidden">
-
-  <div class="section-title">
-    Órdenes
-  </div>
-
-  <div
-    id="ordersContainer"
-    class="grid">
-  </div>
-
+<section id="ordenes" class="view hidden">
+  <h1 class="title">Órdenes</h1>
+  <div id="orders" class="grid"></div>
 </section>
 
-
-<!-- CAJA -->
-
-<section
-  id="cajaView"
-  class="section hidden">
-
-  <div class="section-title">
-    Caja
-  </div>
-
-  <div
-    id="cashierContainer">
-  </div>
-
-</section>
-
-
-<!-- PRODUCTOS -->
-
-<section
-  id="productsAdminView"
-  class="section hidden">
-
-  <div class="section-title">
-    Productos
-  </div>
-
-  <div class="card">
-
+<section id="caja" class="view hidden">
+  <h1 class="title">Caja</h1>
+  <div id="dashboard" class="grid"></div>
+  <div class="card" style="margin-top:15px">
+    <h2>Movimiento de caja</h2>
     <div class="grid">
-
-      <input
-        id="newProductName"
-        placeholder="Nombre">
-
-      <input
-        id="newProductCategory"
-        placeholder="Categoría">
-
-      <input
-        id="newProductPrice"
-        type="number"
-        step="0.01"
-        placeholder="Precio">
-
-      <input
-        id="newProductDescription"
-        placeholder="Descripción">
-
+      <input id="cashAmount" type="number" placeholder="Monto">
+      <input id="cashConcept" placeholder="Concepto">
+      <button class="primary" onclick="cashIn()">Registrar ingreso</button>
+      <button onclick="cashOut()">Registrar egreso</button>
     </div>
-
-    <button
-      class="btn btn-primary"
-      style="margin-top:12px"
-      onclick="createProduct()">
-
-      Crear producto
-
-    </button>
-
   </div>
-
-  <div
-    id="adminProductsContainer"
-    class="grid">
-  </div>
-
 </section>
 
-
-<!-- USUARIOS -->
-
-<section
-  id="usersView"
-  class="section hidden">
-
-  <div class="section-title">
-    Usuarios
-  </div>
-
+<section id="productos" class="view hidden">
+  <h1 class="title">Productos</h1>
   <div class="card">
-
     <div class="grid">
+      <input id="pName" placeholder="Nombre">
+      <input id="pCategory" placeholder="Categoría">
+      <input id="pPrice" type="number" step=".01" placeholder="Precio">
+      <input id="pDesc" placeholder="Descripción">
+      <button class="primary" onclick="createProduct()">Crear producto</button>
+    </div>
+  </div>
+  <div id="productAdmin" class="grid" style="margin-top:15px"></div>
+</section>
 
-      <input
-        id="newUserName"
-        placeholder="Nombre">
-
-      <input
-        id="newUsername"
-        placeholder="Usuario">
-
-      <input
-        id="newUserPassword"
-        type="password"
-        placeholder="Contraseña">
-
-      <select id="newUserRole">
-
-        <option value="waiter">
-          Mesero
-        </option>
-
-        <option value="kitchen">
-          Cocina
-        </option>
-
-        <option value="cashier">
-          Caja
-        </option>
-
-        <option value="admin">
-          Administrador
-        </option>
-
+<section id="usuarios" class="view hidden">
+  <h1 class="title">Usuarios</h1>
+  <div class="card">
+    <h2>Crear usuario</h2>
+    <div class="grid">
+      <input id="uName" placeholder="Nombre completo">
+      <input id="uUsername" placeholder="Usuario">
+      <input id="uPassword" type="password" placeholder="Contraseña">
+      <select id="uRole">
+        <option value="waiter">Mesero</option>
+        <option value="kitchen">Cocina</option>
+        <option value="cashier">Caja</option>
+        <option value="admin">Administrador</option>
       </select>
-
+      <button class="primary" onclick="createUser()">Crear usuario</button>
     </div>
-
-    <button
-      class="btn btn-primary"
-      style="margin-top:12px"
-      onclick="createUser()">
-
-      Crear usuario
-
-    </button>
-
   </div>
-
-  <div id="usersContainer">
-  </div>
-
+  <div id="users" style="margin-top:15px"></div>
+</section>
+</main>
 </section>
 
-</main>
-
-</div>
-
-
-<!-- CARRITO FIJO -->
-
-<div
-  id="stickyCart"
-  class="sticky-cart hidden">
-
-  <div class="sticky-cart-row">
-
-    <div>
-
-      <strong id="stickyCount">
-        0 productos
-      </strong>
-
-      <br>
-
-      <small id="stickyTotal">
-        $0.00
-      </small>
-
-    </div>
-
-    <button
-      onclick="scrollToCart()">
-
-      Ver pedido
-
-    </button>
-
-  </div>
-
-</div>
-
-
-<!-- MODAL PRODUCTO -->
-
-<div
-  id="productModal"
-  class="modal hidden">
-
-  <div class="modal-content">
-
-    <div class="modal-header">
-
+<div id="productModal" class="modal hidden">
+  <div class="modalbox">
+    <div class="row between">
       <div>
-
-        <h2
-          id="modalProductName"
-          style="margin:0">
-        </h2>
-
-        <p
-          id="modalProductDescription"
-          class="muted">
-        </p>
-
+        <h2 id="productModalTitle" style="margin:0"></h2>
+        <p id="productModalDesc" class="muted"></p>
       </div>
-
-      <button
-        class="close"
-        onclick="closeProductModal()">
-
-        ×
-
-      </button>
-
+      <button onclick="closeProductModal()">✕</button>
     </div>
-
-
-    <div class="card">
-
-      <label>
-
-        Personalización / indicaciones
-
-        <textarea
-          id="modalProductNotes"
-          rows="3"
-          placeholder="Ej. sin azúcar, extra queso, sin cebolla...">
-        </textarea>
-
+    <div class="card" style="margin-top:12px">
+      <label>Indicaciones / personalización
+        <textarea id="productModalNotes" rows="3" placeholder="Ej. sin azúcar, extra queso, sin cebolla..."></textarea>
       </label>
-
-
-      <div
-        class="row between"
-        style="margin-top:15px">
-
-        <strong
-          id="modalProductPrice">
-          $0.00
-        </strong>
-
-        <button
-          class="btn btn-primary"
-          onclick="confirmAddProduct()">
-
-          Agregar al pedido
-
-        </button>
-
+      <div class="row between" style="margin-top:12px">
+        <b id="productModalPrice"></b>
+        <button class="primary" onclick="confirmAddProduct()">Agregar al pedido</button>
       </div>
-
     </div>
-
   </div>
-
 </div>
 
-
-<!-- TOAST -->
-
-<div
-  id="toast"
-  class="hidden"
-  style="
-    position:fixed;
-    bottom:20px;
-    left:50%;
-    transform:translateX(-50%);
-    background:#111;
-    color:white;
-    padding:13px 18px;
-    border-radius:12px;
-    z-index:200;
-  ">
+<div id="paymentModal" class="modal hidden">
+  <div class="modalbox">
+    <div class="row between">
+      <div><h2 style="margin:0">Cobro de cuenta</h2><p id="payOrderInfo" class="muted" style="margin:5px 0"></p></div>
+      <button onclick="closePayment()">✕</button>
+    </div>
+    <div id="paymentBody" style="margin-top:14px"></div>
+  </div>
 </div>
 
+<div id="toast" class="toast hidden"></div>
 
 <script>
+const API="/api";
+let token=localStorage.getItem("rush_token");
+let me=null,products=[],tables=[],cart=[];
+let selectedCategory="Todos";
+let pendingProduct=null;
+let paymentState=null;
 
-/* =========================================================
-   CONFIGURACIÓN
-========================================================= */
+const $=id=>document.getElementById(id);
 
-const API = "/api";
-
-let token =
-  localStorage.getItem("rush_token");
-
-let currentUser = null;
-
-let products = [];
-
-let tables = [];
-
-let cart = [];
-
-let selectedCategory = "Todos";
-
-let pendingProduct = null;
-
-
-/* =========================================================
-   UTILIDADES
-========================================================= */
-
-function $(id){
-  return document.getElementById(id);
+function toast(msg){
+  $("toast").textContent=msg;
+  $("toast").classList.remove("hidden");
+  setTimeout(()=>$("toast").classList.add("hidden"),3000);
 }
 
-
-function money(value){
-
-  return Number(value || 0).toLocaleString(
-    "es-MX",
-    {
-      minimumFractionDigits:2,
-      maximumFractionDigits:2
-    }
-  );
-
-}
-
-
-function escapeHTML(value){
-
-  return String(value ?? "")
-    .replace(/[&<>"']/g,function(char){
-
-      return {
-        "&":"&amp;",
-        "<":"&lt;",
-        ">":"&gt;",
-        '"':"&quot;",
-        "'":"&#039;"
-      }[char];
-
-    });
-
-}
-
-
-function toast(message){
-
-  const el = $("toast");
-
-  el.textContent = message;
-
-  el.classList.remove("hidden");
-
-  clearTimeout(window.toastTimer);
-
-  window.toastTimer =
-    setTimeout(function(){
-
-      el.classList.add("hidden");
-
-    },3000);
-
-}
-
-
-/* =========================================================
-   API
-========================================================= */
-
-async function api(path,options={}){
-
-  options.headers = {
-    ...(options.headers || {}),
-    "Content-Type":"application/json"
-  };
-
-  if(token){
-
-    options.headers.Authorization =
-      "Bearer " + token;
-
-  }
-
-  const response =
-    await fetch(API + path,options);
-
-  const data =
-    await response.json().catch(function(){
-      return {};
-    });
-
-  if(response.status === 401){
-
-    logout(false);
-
-    throw new Error(
-      data.error || "Sesión expirada"
-    );
-
-  }
-
-  if(!response.ok){
-
-    throw new Error(
-      data.error || "Error en la operación"
-    );
-
-  }
-
+async function api(path,opts={}){
+  opts.headers={...(opts.headers||{}),"Content-Type":"application/json"};
+  if(token) opts.headers.Authorization="Bearer "+token;
+  const r=await fetch(API+path,opts);
+  const data=await r.json().catch(()=>({}));
+  if(r.status===401){logout(false);throw new Error(data.error||"Sesión expirada")}
+  if(!r.ok) throw new Error(data.error||"Error");
   return data;
-
 }
-
-
-/* =========================================================
-   LOGIN
-========================================================= */
 
 async function login(){
-
   try{
-
-    const data =
-      await api("/login",{
-        method:"POST",
-
-        body:JSON.stringify({
-
-          username:
-            $("loginUser").value.trim(),
-
-          password:
-            $("loginPass").value
-
-        })
-
-      });
-
-
-    token = data.token;
-
-    localStorage.setItem(
-      "rush_token",
-      token
-    );
-
-    currentUser =
-      data.user;
-
+    const data=await api("/login",{
+      method:"POST",
+      body:JSON.stringify({
+        username:$("loginUser").value,
+        password:$("loginPass").value
+      })
+    });
+    token=data.token;
+    localStorage.setItem("rush_token",token);
+    me=data.user;
     showApp();
-
-    await loadAll();
-
-  }catch(error){
-
-    toast(error.message);
-
-  }
-
+    loadAll();
+  }catch(e){toast(e.message)}
 }
 
+async function logout(show=true){
+  try{if(token)await api("/logout",{method:"POST"})}catch{}
+  token=null;me=null;
+  localStorage.removeItem("rush_token");
+  $("appView").classList.add("hidden");
+  $("loginView").classList.remove("hidden");
+  if(show)toast("Sesión cerrada");
+}
 
 async function boot(){
-
-  if(!token){
-
-    return;
-
-  }
-
+  if(!token)return;
   try{
-
-    const data =
-      await api("/me");
-
-    currentUser =
-      data.user;
-
+    const d=await api("/me");
+    me=d.user;
     showApp();
-
-    await loadAll();
-
-  }catch(error){
-
-    localStorage.removeItem(
-      "rush_token"
-    );
-
-    token = null;
-
-  }
-
+    loadAll();
+  }catch{}
 }
-
-
-async function logout(showMessage=true){
-
-  try{
-
-    if(token){
-
-      await api(
-        "/logout",
-        {method:"POST"}
-      );
-
-    }
-
-  }catch(error){}
-
-  token = null;
-
-  currentUser = null;
-
-  localStorage.removeItem(
-    "rush_token"
-  );
-
-  $("appView")
-    .classList
-    .add("hidden");
-
-  $("loginView")
-    .classList
-    .remove("hidden");
-
-  if(showMessage){
-
-    toast("Sesión cerrada");
-
-  }
-
-}
-
-
-/* =========================================================
-   ROLES
-========================================================= */
-
-function isAdmin(){
-
-  return currentUser &&
-    currentUser.role === "admin";
-
-}
-
 
 function isWaiter(){
-
-  return currentUser &&
-    (
-      currentUser.role === "waiter" ||
-      currentUser.role === "mesero"
-    );
-
+  return ["waiter","mesero"].includes(me?.role);
 }
-
-
 function isKitchen(){
-
-  return currentUser &&
-    (
-      currentUser.role === "kitchen" ||
-      currentUser.role === "cocina"
-    );
-
+  return ["kitchen","cocina"].includes(me?.role);
 }
-
-
-function isCashier(){
-
-  return currentUser &&
-    currentUser.role === "cashier";
-
+function isAdmin(){
+  return me?.role==="admin";
 }
-
-
-function roleName(role){
-
-  if(role === "admin")
-    return "Administrador";
-
-  if(
-    role === "waiter" ||
-    role === "mesero"
-  )
-    return "Mesero";
-
-  if(
-    role === "kitchen" ||
-    role === "cocina"
-  )
-    return "Cocina";
-
-  if(role === "cashier")
-    return "Caja";
-
-  return role;
-
+function roleName(r){
+  return r==="admin"?"Administrador":
+         isWaiterRole(r)?"Mesero":
+         isKitchenRole(r)?"Cocina":
+         r==="cashier"?"Caja":r;
 }
-
-
-/* =========================================================
-   APP / NAVEGACIÓN
-========================================================= */
+function isWaiterRole(r){return ["waiter","mesero"].includes(r)}
+function isKitchenRole(r){return ["kitchen","cocina"].includes(r)}
 
 function showApp(){
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("userPill").textContent=`● ${me.name} · ${roleName(me.role)}`;
+  $("waiterLabel").textContent=isWaiter()||isAdmin()?`Atiende: ${me.name}`:"";
 
-  $("loginView")
-    .classList
-    .add("hidden");
+  const nav=[];
+  if(isAdmin()||isWaiter())nav.push(["venta","🛒 Venta"]);
+  if(isAdmin()||isWaiter())nav.push(["mesas","🪑 Mesas"]);
+  if(isAdmin()||isKitchen())nav.push(["cocina","👨‍🍳 Cocina"]);
+  if(isAdmin()||isWaiter())nav.push(["ordenes","📋 Órdenes"]);
+  if(isAdmin())nav.push(["caja","💰 Caja"],["productos","📦 Productos"],["usuarios","👥 Usuarios"]);
 
-  $("appView")
-    .classList
-    .remove("hidden");
+  $("nav").innerHTML=nav.map((x,i)=>
+    `<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`
+  ).join("");
 
-
-  $("userInfo").textContent =
-    currentUser.name +
-    " · " +
-    roleName(currentUser.role);
-
-
-  $("waiterName").textContent =
-    isWaiter() || isAdmin()
-      ? "Atiende: " + currentUser.name
-      : "";
-
-
-  const nav = [];
-
-  if(isAdmin() || isWaiter())
-    nav.push(
-      ["ventaView","🛒 Venta"]
-    );
-
-  if(isAdmin() || isWaiter())
-    nav.push(
-      ["mesasView","🪑 Mesas"]
-    );
-
-  if(isAdmin() || isKitchen())
-    nav.push(
-      ["cocinaView","👨‍🍳 Cocina"]
-    );
-
-  if(isAdmin() || isWaiter())
-    nav.push(
-      ["ordersView","📋 Órdenes"]
-    );
-
-  if(isAdmin() || isCashier())
-    nav.push(
-      ["cajaView","💰 Caja"]
-    );
-
-  if(isAdmin())
-    nav.push(
-      ["productsAdminView","📦 Productos"]
-    );
-
-  if(isAdmin())
-    nav.push(
-      ["usersView","👥 Usuarios"]
-    );
-
-
-  $("mainNav").innerHTML =
-    nav.map(function(item,index){
-
-      return `
-        <button
-          class="${index===0 ? "active" : ""}"
-          onclick="showView('${item[0]}',this)">
-          ${item[1]}
-        </button>
-      `;
-
-    }).join("");
-
-
-  if(nav.length){
-
-    showView(
-      nav[0][0],
-      $("mainNav").firstElementChild
-    );
-
-  }
-
+  if(nav[0])view(nav[0][0],$("nav").firstElementChild);
 }
 
-
-function showView(id,button){
-
-  document
-    .querySelectorAll("main > section")
-    .forEach(function(section){
-
-      section.classList.add("hidden");
-
-    });
-
-
-  $(id)
-    .classList
-    .remove("hidden");
-
-
-  document
-    .querySelectorAll("#mainNav button")
-    .forEach(function(btn){
-
-      btn.classList.remove("active");
-
-    });
-
-
-  if(button){
-
-    button.classList.add("active");
-
-  }
-
-
-  if(id === "ventaView"){
-
-    renderCategoryTabs();
-
-    renderProducts();
-
-    renderCart();
-
-  }
-
-
-  if(id === "mesasView")
-    renderTables();
-
-
-  if(id === "cocinaView")
-    loadKitchen();
-
-
-  if(id === "ordersView")
-    loadOrders();
-
-
-  if(id === "cajaView")
-    loadCashier();
-
-
-  if(id === "productsAdminView")
-    renderAdminProducts();
-
-
-  if(id === "usersView")
-    loadUsers();
-
+function view(id,btn){
+  document.querySelectorAll(".view").forEach(x=>x.classList.add("hidden"));
+  $(id).classList.remove("hidden");
+  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  if(id==="mesas")renderTables();
+  if(id==="cocina")loadKitchen();
+  if(id==="ordenes")loadOrders();
+  if(id==="caja")loadDashboard();
+  if(id==="productos")renderProductAdmin();
+  if(id==="usuarios")loadUsers();
+  if(id==="venta"){renderCategoryChips();renderProducts()}
 }
-
-
-/* =========================================================
-   CARGA GENERAL
-========================================================= */
 
 async function loadAll(){
-
   try{
-
-    products =
-      await api("/menu");
-
-    tables =
-      await api("/tables");
-
-
-    renderCategoryTabs();
-
+    products=await api("/menu");
+    tables=await api("/tables");
+    renderCategoryChips();
     renderProducts();
-
-    renderTables();
-
     renderTableSelect();
-
+    renderTables();
     renderCart();
-
-  }catch(error){
-
-    toast(error.message);
-
-  }
-
+    if(isKitchen()||isAdmin())loadKitchen();
+  }catch(e){toast(e.message)}
 }
 
-
-/* =========================================================
-   CATEGORÍAS
-========================================================= */
-
-function getProductCategory(product){
-
-  const category =
-    String(
-      product.category || ""
-    ).toLowerCase();
-
-  const text =
-    (
-      product.name || ""
-    ).toLowerCase()
-    +
-    " "
-    +
-    (
-      product.description || ""
-    ).toLowerCase()
-    +
-    " "
-    +
-    category;
-
-
-  if(
-    /café|cafe|espresso|latte|capuchino|cappuccino|americano|mocha|macchiato|frappé|frappe|té |te |refresco|agua|limonada|jugo|smoothie|bebida/.test(text)
-  ){
-
-    return "Bebidas";
-
-  }
-
-
-  if(
-    /desayuno|huevo|huevos|omelette|chilaquil|hot cake|hotcake|waffle|mollete/.test(text)
-  ){
-
-    return "Desayunos";
-
-  }
-
-
-  if(
-    /hamburguesa|hamburguesas|hamburger|burger/.test(text)
-  ){
-
-    return "Hamburguesas";
-
-  }
-
-
-  if(
-    /ensalada|ensaladas|salad/.test(text)
-  ){
-
-    return "Ensaladas";
-
-  }
-
-
-  if(
-    /postre|pastel|brownie|cheesecake|galleta|helado|dulce/.test(text)
-  ){
-
-    return "Postres";
-
-  }
-
-
-  if(
-    /extra|adicional|complemento|papas|salsa/.test(text)
-  ){
-
-    return "Extras";
-
-  }
-
-
-  if(
-    /sandwich|sándwich|panini|bagel|wrap|pizza|hot dog|hotdog|snack|comida|entrada/.test(text)
-  ){
-
-    return "Comida";
-
-  }
-
-
-  if(product.category){
-
-    return product.category;
-
-  }
-
-
+function categoryFor(p){
+  const c=String(p.category||"").trim().toLowerCase();
+  const n=String(p.name||"").toLowerCase();
+  const text=c+" "+n;
+  if(/cafe|café|espresso|latte|capuch|cappucc|americano|mocha|macchiato|frappe|frappé|bebida|te |té |refresco|agua|limonada|smoothie|jugo/.test(text))return "Bebidas";
+  if(/desayuno|huevo|omelette|chilaquil|hot cake|waffle|toast|mollete/.test(text))return "Desayunos";
+  if(/hamburg|burger/.test(text))return "Hamburguesas";
+  if(/ensalada|salad/.test(text))return "Ensaladas";
+  if(/postre|pastel|brownie|cheesecake|galleta|helado|dulce/.test(text))return "Postres";
+  if(/extra|adicional|complemento|papas|salsa/.test(text))return "Extras";
+  if(/sandwich|sándwich|panini|bagel|wrap|club|pizza|hot dog|hotdog|comida|entrada|snack/.test(text))return "Comida";
+  if(c)return p.category;
   return "Otros";
-
 }
 
-
-function getCategories(){
-
-  const categories = [];
-
-  products.forEach(function(product){
-
-    const category =
-      getProductCategory(product);
-
-    if(
-      !categories.includes(category)
-    ){
-
-      categories.push(category);
-
-    }
-
-  });
-
-
-  return [
-    "Todos",
-    ...categories
-  ];
-
+function categories(){
+  const arr=products.map(categoryFor);
+  return ["Todos",...new Set(arr)];
 }
 
-
-function categoryIcon(category){
-
-  const icons = {
-
-    "Todos":"✨",
-
-    "Bebidas":"☕",
-
-    "Desayunos":"🍳",
-
-    "Comida":"🥪",
-
-    "Hamburguesas":"🍔",
-
-    "Ensaladas":"🥗",
-
-    "Postres":"🍰",
-
-    "Extras":"➕"
-
-  };
-
-  return icons[category] || "•";
-
+function renderCategoryChips(){
+  $("categoryChips").innerHTML=categories().map(c=>
+    `<button class="chip ${selectedCategory===c?"active":""}" onclick="selectCategory('${escAttr(c)}')">${categoryIcon(c)} ${esc(c)}</button>`
+  ).join("");
 }
 
-
-function renderCategoryTabs(){
-
-  const categories =
-    getCategories();
-
-
-  $("categoryTabs").innerHTML =
-    categories.map(function(category){
-
-      return `
-        <button
-          class="category-btn ${
-            selectedCategory === category
-              ? "active"
-              : ""
-          }"
-          onclick="selectCategory('${escapeHTML(category)}')">
-
-          ${categoryIcon(category)}
-          ${escapeHTML(category)}
-
-        </button>
-      `;
-
-    }).join("");
-
-}
-
-
-function selectCategory(category){
-
-  selectedCategory =
-    category;
-
-  renderCategoryTabs();
-
+function selectCategory(c){
+  selectedCategory=c;
+  renderCategoryChips();
   renderProducts();
-
 }
 
-
-/* =========================================================
-   PRODUCTOS
-========================================================= */
+function categoryIcon(c){
+  return ({
+    "Todos":"✨","Bebidas":"☕","Desayunos":"🍳","Comida":"🥪",
+    "Hamburguesas":"🍔","Ensaladas":"🥗","Postres":"🍰","Extras":"➕"
+  })[c]||"•";
+}
 
 function renderProducts(){
+  const q=($("productSearch")?.value||"").trim().toLowerCase();
 
-  const search =
-    (
-      $("productSearch").value ||
-      ""
-    )
-    .trim()
-    .toLowerCase();
-
-
-  const filtered =
-    products.filter(function(product){
-
-      const category =
-        getProductCategory(product);
-
-
-      const categoryMatch =
-        selectedCategory === "Todos" ||
-        category === selectedCategory;
-
-
-      const searchText =
-        (
-          product.name || ""
-        )
-        +
-        " "
-        +
-        (
-          product.description || ""
-        )
-        +
-        " "
-        +
-        (
-          product.category || ""
-        );
-
-
-      const searchMatch =
-        !search ||
-        searchText
-          .toLowerCase()
-          .includes(search);
-
-
-      return (
-        categoryMatch &&
-        searchMatch
-      );
-
-    });
-
-
-  if(!filtered.length){
-
-    $("productsContainer").innerHTML = `
-      <div class="empty">
-        No encontramos productos.
-      </div>
-    `;
-
-    return;
-
-  }
-
-
-  const groups = {};
-
-
-  filtered.forEach(function(product){
-
-    const category =
-      getProductCategory(product);
-
-    if(!groups[category])
-      groups[category] = [];
-
-    groups[category].push(product);
-
+  let list=products.filter(p=>{
+    const cat=categoryFor(p);
+    const matchCat=selectedCategory==="Todos"||cat===selectedCategory||String(p.category||"")===selectedCategory;
+    const hay=(p.name+" "+(p.description||"")+" "+(p.category||"")).toLowerCase();
+    return matchCat&&(!q||hay.includes(q));
   });
 
+  const grouped={};
+  list.forEach(p=>{
+    const cat=categoryFor(p);
+    (grouped[cat] ||= []).push(p);
+  });
 
-  let html = "";
-
-
-  Object.keys(groups)
-    .forEach(function(category){
-
-      if(selectedCategory === "Todos"){
-
-        html += `
-          <div class="category-heading">
-            ${categoryIcon(category)}
-            ${escapeHTML(category)}
-          </div>
-        `;
-
-      }
-
-
-      html += `
-        <div class="products-grid">
-      `;
-
-
-      groups[category]
-        .forEach(function(product){
-
-          html += `
-            <button
-              class="product-card"
-              onclick="openProduct('${escapeHTML(product.id)}')">
-
-              <div>
-
-                <div class="product-name">
-                  ${escapeHTML(product.name)}
-                </div>
-
-                <div class="product-description">
-                  ${escapeHTML(
-                    product.description || ""
-                  )}
-                </div>
-
-              </div>
-
-              <div>
-
-                <div class="product-price">
-                  $${money(product.price)}
-                </div>
-
-                <div class="add-product">
-                  ＋ Agregar
-                </div>
-
-              </div>
-
-            </button>
-          `;
-
-        });
-
-
-      html += `
-        </div>
-      `;
-
-    });
-
-
-  $("productsContainer")
-    .innerHTML = html;
-
-}
-
-
-/* =========================================================
-   MODAL PRODUCTO
-========================================================= */
-
-function openProduct(id){
-
-  const product =
-    products.find(function(item){
-
-      return String(item.id) ===
-        String(id);
-
-    });
-
-
-  if(!product)
+  if(!list.length){
+    $("products").innerHTML=`<div class="empty">No encontramos productos con esa búsqueda.</div>`;
     return;
-
-
-  pendingProduct =
-    product;
-
-
-  $("modalProductName")
-    .textContent =
-      product.name;
-
-
-  $("modalProductDescription")
-    .textContent =
-      product.description || "";
-
-
-  $("modalProductPrice")
-    .textContent =
-      "$" + money(product.price);
-
-
-  $("modalProductNotes")
-    .value = "";
-
-
-  $("productModal")
-    .classList
-    .remove("hidden");
-
-}
-
-
-function closeProductModal(){
-
-  pendingProduct =
-    null;
-
-  $("productModal")
-    .classList
-    .add("hidden");
-
-}
-
-
-function confirmAddProduct(){
-
-  if(!pendingProduct)
-    return;
-
-
-  const notes =
-    $("modalProductNotes")
-      .value
-      .trim();
-
-
-  const existing =
-    cart.find(function(item){
-
-      return (
-        String(item.menu_item_id) ===
-          String(pendingProduct.id)
-        &&
-        item.notes === notes
-      );
-
-    });
-
-
-  if(existing){
-
-    existing.qty++;
-
-  }else{
-
-    cart.push({
-
-      menu_item_id:
-        pendingProduct.id,
-
-      name:
-        pendingProduct.name,
-
-      qty:1,
-
-      unit_price:
-        Number(
-          pendingProduct.price
-        ),
-
-      modifiers:[],
-
-      notes:notes
-
-    });
-
   }
 
+  let html="";
+  Object.keys(grouped).forEach(cat=>{
+    if(selectedCategory==="Todos"){
+      html+=`<div class="section-label">${categoryIcon(cat)} ${esc(cat)}</div>`;
+    }
+    html+=`<div class="product-grid">`;
+    html+=grouped[cat].map(p=>`
+      <button class="product" onclick="openProduct('${p.id}')">
+        <div>
+          <b>${esc(p.name)}</b>
+          <div class="desc">${esc(p.description||"")}</div>
+        </div>
+        <div>
+          <div class="price">$${money(p.price)}</div>
+          <div class="add">＋ Agregar</div>
+        </div>
+      </button>
+    `).join("");
+    html+=`</div>`;
+  });
 
-  closeProductModal();
-
-  renderCart();
-
-  toast(
-    pendingProduct.name +
-    " agregado al pedido"
-  );
-
+  $("products").innerHTML=html;
 }
 
+function openProduct(id){
+  const p=products.find(x=>x.id===id);
+  if(!p)return;
+  pendingProduct=p;
+  $("productModalTitle").textContent=p.name;
+  $("productModalDesc").textContent=p.description||"";
+  $("productModalPrice").textContent="$"+money(p.price);
+  $("productModalNotes").value="";
+  $("productModal").classList.remove("hidden");
+}
 
-/* =========================================================
-   CARRITO
-========================================================= */
+function closeProductModal(){
+  pendingProduct=null;
+  $("productModal").classList.add("hidden");
+}
+
+function confirmAddProduct(){
+  if(!pendingProduct)return;
+  const p=pendingProduct;
+  const notes=$("productModalNotes").value.trim();
+  const existing=cart.find(x=>x.menu_item_id===p.id&&x.notes===notes);
+
+  if(existing)existing.qty++;
+  else cart.push({
+    menu_item_id:p.id,
+    name:p.name,
+    qty:1,
+    unit_price:Number(p.price),
+    modifiers:[],
+    notes
+  });
+
+  closeProductModal();
+  renderCart();
+  toast(`${p.name} agregado`);
+}
+
+function renderTableSelect(){
+  $("tableSelect").innerHTML=
+    "<option value=''>Sin mesa</option>"+
+    tables.map(t=>
+      `<option value="${escAttr(t.id)}">${esc(t.name||"Mesa "+t.number)}</option>`
+    ).join("");
+}
+
+function renderTables(){
+  $("tables").innerHTML=tables.map(t=>`
+    <div class="card">
+      <div class="row between">
+        <h2>${esc(t.name||"Mesa "+t.number)}</h2>
+        <span class="status">${esc(t.status)}</span>
+      </div>
+      <p>Capacidad: ${t.capacity||"-"}</p>
+      ${isAdmin()||isWaiter()?`
+        <button onclick="setTable('${escAttr(t.id)}','available')">Disponible</button>
+        <button onclick="setTable('${escAttr(t.id)}','reserved')">Reservar</button>
+      `:""}
+    </div>
+  `).join("");
+}
+
+async function setTable(id,status){
+  try{
+    await api("/tables/"+id,{method:"PATCH",body:JSON.stringify({status})});
+    tables=await api("/tables");
+    renderTables();
+    renderTableSelect();
+  }catch(e){toast(e.message)}
+}
+
+function addCartSimple(id){
+  const p=products.find(x=>x.id===id);
+  if(!p)return;
+  const x=cart.find(x=>x.menu_item_id===id&&!x.notes);
+  if(x)x.qty++;
+  else cart.push({menu_item_id:id,name:p.name,qty:1,unit_price:Number(p.price),modifiers:[],notes:""});
+  renderCart();
+}
 
 function renderCart(){
+  const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
+  const count=cart.reduce((s,x)=>s+x.qty,0);
 
-  const total =
-    cart.reduce(function(sum,item){
+  $("cart").innerHTML=cart.length?
+    cart.map((x,i)=>`
+      <div class="order-item">
+        <div>
+          <b>${x.qty} × ${esc(x.name)}</b>
+          ${x.notes?`<div class="muted" style="font-size:12px">📝 ${esc(x.notes)}</div>`:""}
+          <div class="muted">$${money(x.unit_price)} c/u</div>
+        </div>
+        <div style="text-align:right">
+          <b>$${money(x.qty*x.unit_price)}</b>
+          <div class="qty-controls">
+            <button onclick="changeQty(${i},-1)">−</button>
+            <span>${x.qty}</span>
+            <button onclick="changeQty(${i},1)">＋</button>
+          </div>
+        </div>
+      </div>
+    `).join("")
+    :"<p class='muted'>Agrega productos desde las categorías de arriba.</p>";
 
-      return sum +
-        Number(item.qty) *
-        Number(item.unit_price);
+  $("cartTotal").textContent="$"+money(total);
 
-    },0);
+  if(count){
+    $("stickyCart").classList.remove("hidden");
+    $("stickyCount").textContent=`${count} ${count===1?"producto":"productos"}`;
+    $("stickyTotal").textContent="$"+money(total);
+  }else{
+    $("stickyCart").classList.add("hidden");
+  }
+}
 
+function changeQty(i,d){
+  if(!cart[i])return;
+  cart[i].qty+=d;
+  if(cart[i].qty<=0)cart.splice(i,1);
+  renderCart();
+}
 
-  const count =
-    cart.reduce(function(sum,item){
+async function sendOrder(){
+  if(!cart.length)return toast("Agrega al menos un producto.");
 
-      return sum +
-        Number(item.qty);
+  try{
+    const d=await api("/orders",{
+      method:"POST",
+      body:JSON.stringify({
+        table_id:$("tableSelect").value||null,
+        customer_name:$("customer").value,
+        notes:$("notes").value,
+        items:cart
+      })
+    });
 
-    },0);
+    toast(`Orden enviada a cocina · ${me.name}`);
+    cart=[];
+    renderCart();
+    $("customer").value="";
+    $("notes").value="";
+    tables=await api("/tables");
+    renderTableSelect();
 
+  }catch(e){toast(e.message)}
+}
 
-  if(!cart.length){
+async function loadKitchen(){
+  try{
+    const os=await api("/orders");
+    const open=os.filter(x=>["open","preparing","ready"].includes(x.status));
 
-    $("cartContainer").innerHTML = `
-      <div class="empty">
-        Agrega productos desde
-        las categorías de arriba.
+    $("kitchenOrders").innerHTML=open.map(o=>`
+      <div class="card">
+        <div class="row between">
+          <h2>Mesa ${tableName(o.table_id)}</h2>
+          <span class="status ${o.status}">${esc(o.status)}</span>
+        </div>
+        <p><b>Mesero:</b> ${esc(o.waiter_name||"No asignado")}</p>
+        <p>${esc(o.customer_name||"Sin cliente")}</p>
+        <p><b>$${money(o.total)}</b></p>
+        <div class="row">
+          ${o.status==="open"?`<button class="primary" onclick="orderStatus('${escAttr(o.id)}','preparing')">Preparando</button>`:""}
+          ${o.status==="preparing"?`<button class="primary" onclick="orderStatus('${escAttr(o.id)}','ready')">Listo</button>`:""}
+        </div>
+      </div>
+    `).join("")||"<p class='muted'>No hay pedidos pendientes.</p>";
+
+  }catch(e){toast(e.message)}
+}
+
+async function orderStatus(id,status){
+  try{
+    await api("/orders/"+id,{method:"PATCH",body:JSON.stringify({status})});
+    loadKitchen();
+    if(status==="paid")loadOrders();
+  }catch(e){toast(e.message)}
+}
+
+async function loadOrders(){
+  try{
+    const os=await api("/orders");
+
+    $("orders").innerHTML=os.map(o=>`
+      <div class="card">
+        <div class="row between">
+          <h3>Orden ${esc(o.id.slice(0,8))}</h3>
+          <span class="status ${o.status}">${esc(o.status)}</span>
+        </div>
+        <p>Mesa: ${esc(tableName(o.table_id))}</p>
+        <p>Mesero: <b>${esc(o.waiter_name||"No asignado")}</b></p>
+        <p>${esc(o.customer_name||"Sin cliente")}</p>
+        <b>$${money(o.total)}</b>
+
+        ${Number(o.paid_amount||0)>0?
+          `<div class="payment-summary" style="margin-top:10px">
+            <b>Cobrado: $${money(o.paid_amount)}</b><br>
+            <small>Efectivo $${money(o.paid_cash)} · Tarjeta $${money(o.paid_card)} · Terminal $${money(o.terminal_amount)}</small>
+            ${o.paid_amount<o.total?`<br><small class="muted">Pendiente $${money(o.total-o.paid_amount)}</small>`:""}
+          </div>`:""}
+
+        ${["waiter","mesero","admin"].includes(me.role)&&["ready","partial"].includes(o.status)?
+          `<button class="primary" style="margin-top:10px" onclick="pay('${escAttr(o.id)}')">Cobrar / dividir cuenta</button>`:""}
+
+        ${["waiter","mesero","admin"].includes(me.role)&&o.status==="ready"?
+          `<button class="primary" style="margin-top:10px" onclick="pay('${escAttr(o.id)}')">Cobrar / dividir cuenta</button>`:""}
+      </div>
+    `).join("");
+
+  }catch(e){toast(e.message)}
+}
+
+async function pay(id){
+  try{
+    const d=await api("/orders/"+id);
+
+    const paid=Number(d.order?.paid_amount||d.order?.paid||0);
+
+    paymentState={
+      ...d,
+      paid,
+      payers:[{
+        name:"Cliente 1",
+        alloc:{},
+        method:"cash",
+        cash:0,
+        card:0,
+        terminal:0,
+        ref:""
+      }]
+    };
+
+    $("paymentModal").classList.remove("hidden");
+    renderPaymentModal();
+
+  }catch(e){toast(e.message)}
+}
+
+function closePayment(){
+  paymentState=null;
+  $("paymentModal").classList.add("hidden");
+}
+
+function addPayer(){
+  const n=paymentState.payers.length+1;
+  paymentState.payers.push({
+    name:"Cliente "+n,
+    alloc:{},
+    method:"cash",
+    cash:0,
+    card:0,
+    terminal:0,
+    ref:""
+  });
+  renderPaymentModal();
+}
+
+function removePayer(i){
+  if(paymentState.payers.length<=1)return;
+  paymentState.payers.splice(i,1);
+  renderPaymentModal();
+}
+
+function assignedQty(itemId){
+  return paymentState.payers.reduce(
+    (s,p)=>s+Number(p.alloc[itemId]||0),0
+  );
+}
+
+function payerTotal(p){
+  return paymentState.items.reduce(
+    (s,it)=>s+
+      Number(p.alloc[it.id]||0)*
+      Number(it.unit_price||0),
+    0
+  );
+}
+
+function renderPaymentModal(){
+  const d=paymentState;
+  const paid=Number(d.paid||0);
+  const remaining=Math.max(
+    0,
+    Number(d.order.total||0)-paid
+  );
+
+  $("payOrderInfo").textContent=
+    `Orden ${d.order.id.slice(0,8)} · Total $${money(d.order.total)} · Pendiente $${money(remaining)}`;
+
+  $("paymentBody").innerHTML=`
+    <div class="payment-summary">
+      <b>¿Cómo dividir la cuenta?</b>
+      <p class="muted">
+        Puedes cobrar toda la cuenta a una persona o repartir productos entre varios invitados.
+        Cada persona puede pagar en efectivo, tarjeta o combinar ambos.
+      </p>
+    </div>
+
+    <div class="row" style="margin:12px 0;flex-wrap:wrap">
+      <button class="primary" onclick="addPayer()">＋ Agregar persona</button>
+      <button onclick="assignAllToFirst()">Asignar todo al primero</button>
+    </div>
+
+    <div class="split-grid">
+      ${d.payers.map((p,i)=>payerCard(p,i)).join("")}
+    </div>
+
+    <div class="payment-summary" style="margin-top:14px">
+      <div class="row between">
+        <span>Asignado entre invitados</span>
+        <b>$${money(d.payers.reduce((s,p)=>s+payerTotal(p),0))}</b>
+      </div>
+      <div class="row between">
+        <span>Saldo pendiente</span>
+        <b>$${money(remaining)}</b>
+      </div>
+    </div>
+
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button onclick="closePayment()">Cancelar</button>
+      <button class="primary" onclick="submitPayments()">Registrar cobros</button>
+    </div>
+  `;
+}
+
+function payerCard(p,i){
+  const total=payerTotal(p);
+  const method=p.method;
+
+  return `
+    <div class="payer">
+      <div class="row between">
+        <h3>${esc(p.name)}</h3>
+        ${paymentState.payers.length>1?
+          `<button onclick="removePayer(${i})">Eliminar</button>`:""}
+      </div>
+
+      <input
+        value="${escAttr(p.name)}"
+        onchange="paymentState.payers[${i}].name=this.value"
+        placeholder="Nombre del invitado">
+
+      <div style="margin-top:10px"><b>Productos de esta persona</b></div>
+
+      ${paymentState.items.map(it=>{
+        const max=Math.max(
+          0,
+          Number(it.qty)-
+          assignedQty(it.id)+
+          Number(p.alloc[it.id]||0)
+        );
+
+        const q=Number(p.alloc[it.id]||0);
+
+        return `
+          <div class="alloc">
+            <span>
+              ${q?`${q} × `:""}${esc(it.name)}
+              <br>
+              <small class="muted">$${money(it.unit_price)} c/u · disponibles ${max}</small>
+            </span>
+
+            <select onchange="setAlloc(${i},${it.id},this.value)">
+              <option value="0">0</option>
+              ${Array.from(
+                {length:Math.floor(max)},
+                (_,k)=>
+                  `<option value="${k+1}" ${q===k+1?"selected":""}>${k+1}</option>`
+              ).join("")}
+            </select>
+
+            <b>$${money(q*Number(it.unit_price||0))}</b>
+          </div>
+        `;
+      }).join("")}
+
+      <div class="big-pay" style="margin-top:10px">
+        Total: $${money(total)}
+      </div>
+
+      <label style="display:block;margin-top:10px">
+        Forma de pago
+        <select onchange="setMethod(${i},this.value)">
+          <option value="cash" ${method==="cash"?"selected":""}>💵 Todo efectivo</option>
+          <option value="card" ${method==="card"?"selected":""}>💳 Todo tarjeta</option>
+          <option value="mixed" ${method==="mixed"?"selected":""}>💳＋💵 Efectivo + tarjeta</option>
+        </select>
+      </label>
+
+      ${methodFields(p,i,total)}
+    </div>
+  `;
+}
+
+function methodFields(p,i,total){
+  if(!total)
+    return `<p class="muted">Selecciona productos para esta persona.</p>`;
+
+  if(p.method==="cash")
+    return `
+      <label style="display:block;margin-top:10px">
+        Efectivo recibido
+        <input
+          type="number"
+          step=".01"
+          value="${p.cash||total}"
+          onchange="paymentState.payers[${i}].cash=Number(this.value)">
+      </label>
+      <p class="muted">Se registrarán $${money(total)} en efectivo.</p>
+    `;
+
+  if(p.method==="card")
+    return `
+      <div class="terminal" style="margin-top:10px">
+        <b>💳 Llevar terminal</b>
+        <p style="margin:6px 0">
+          Cargar exactamente <strong>$${money(total)}</strong>.
+        </p>
+        <label>
+          Monto cargado en terminal
+          <input
+            type="number"
+            step=".01"
+            value="${p.terminal||total}"
+            onchange="paymentState.payers[${i}].terminal=Number(this.value)">
+        </label>
+        <label style="display:block;margin-top:8px">
+          Referencia / últimos 4 (opcional)
+          <input
+            value="${escAttr(p.ref||"")}"
+            onchange="paymentState.payers[${i}].ref=this.value"
+            placeholder="Ej. últimos 4 dígitos">
+        </label>
       </div>
     `;
 
+  const card=Number(p.card||0);
+  const cash=Math.max(0,total-card);
+
+  return `
+    <label style="display:block;margin-top:10px">
+      Efectivo
+      <input
+        type="number"
+        step=".01"
+        value="${cash}"
+        onchange="
+          paymentState.payers[${i}].cash=Number(this.value);
+          paymentState.payers[${i}].card=Math.max(0,${total}-Number(this.value));
+          paymentState.payers[${i}].terminal=paymentState.payers[${i}].card;
+          renderPaymentModal()
+        ">
+    </label>
+
+    <div class="terminal" style="margin-top:8px">
+      <b>💳 Terminal</b>
+      <p style="margin:6px 0">
+        Cargar <strong>$${money(card)}</strong> a la tarjeta.
+      </p>
+
+      <input
+        type="number"
+        step=".01"
+        value="${card}"
+        onchange="
+          paymentState.payers[${i}].card=Number(this.value);
+          paymentState.payers[${i}].cash=Math.max(0,${total}-Number(this.value));
+          paymentState.payers[${i}].terminal=Number(this.value);
+          renderPaymentModal()
+        ">
+
+      <small class="muted">
+        Tarjeta + efectivo deben sumar $${money(total)}.
+      </small>
+    </div>
+  `;
+}
+
+function setAlloc(i,itemId,value){
+  const q=Number(value||0);
+  if(q)paymentState.payers[i].alloc[itemId]=q;
+  else delete paymentState.payers[i].alloc[itemId];
+  renderPaymentModal();
+}
+
+function setMethod(i,m){
+  paymentState.payers[i].method=m;
+  const total=payerTotal(paymentState.payers[i]);
+
+  if(m==="cash"){
+    paymentState.payers[i].cash=total;
+    paymentState.payers[i].card=0;
+    paymentState.payers[i].terminal=0;
+  }else if(m==="card"){
+    paymentState.payers[i].cash=0;
+    paymentState.payers[i].card=total;
+    paymentState.payers[i].terminal=total;
   }else{
-
-    $("cartContainer").innerHTML =
-      cart.map(function(item,index){
-
-        return `
-          <div class="order-item">
-
-            <div>
-
-              <strong>
-                ${item.qty} ×
-                ${escapeHTML(item.name)}
-              </strong>
-
-              ${
-                item.notes
-                  ? `
-                    <div
-                      class="muted"
-                      style="font-size:12px;margin-top:4px">
-
-                      📝
-                      ${escapeHTML(item.notes)}
-
-                    </div>
-                  `
-                  : ""
-              }
-
-              <div
-                class="muted"
-                style="font-size:12px;margin-top:4px">
-
-                $${money(item.unit_price)}
-                c/u
-
-              </div>
-
-            </div>
-
-
-            <div>
-
-              <strong>
-                $${money(
-                  item.qty *
-                  item.unit_price
-                )}
-              </strong>
-
-              <div
-                class="qty-controls">
-
-                <button
-                  onclick="changeQty(${index},-1)">
-                  −
-                </button>
-
-                <span>
-                  ${item.qty}
-                </span>
-
-                <button
-                  onclick="changeQty(${index},1)">
-                  ＋
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-        `;
-
-      }).join("");
-
+    paymentState.payers[i].card=0;
+    paymentState.payers[i].cash=total;
+    paymentState.payers[i].terminal=0;
   }
 
+  renderPaymentModal();
+}
 
-  $("cartTotal")
-    .textContent =
-      "$" + money(total);
+function assignAllToFirst(){
+  paymentState.payers.forEach(p=>p.alloc={});
 
+  paymentState.items.forEach(it=>{
+    paymentState.payers[0].alloc[it.id]=Number(it.qty);
+  });
 
-  if(count > 0){
+  paymentState.payers[0].method="cash";
+  paymentState.payers[0].cash=Number(paymentState.order.total);
 
-    $("stickyCart")
-      .classList
-      .remove("hidden");
+  renderPaymentModal();
+}
 
-    $("stickyCount")
-      .textContent =
-        count +
-        (
-          count === 1
-            ? " producto"
-            : " productos"
+async function submitPayments(){
+  const d=paymentState;
+
+  const remaining=Math.max(
+    0,
+    Number(d.order.total)-
+    Number(d.paid||0)
+  );
+
+  const totalAssigned=d.payers.reduce(
+    (s,p)=>s+payerTotal(p),
+    0
+  );
+
+  if(Math.abs(totalAssigned-remaining)>0.01)
+    return toast(
+      `Faltan asignar $${money(remaining-totalAssigned)} de la cuenta.`
+    );
+
+  for(const p of d.payers){
+
+    const amount=payerTotal(p);
+
+    if(!amount)continue;
+
+    let cash=0,card=0,terminal=0;
+
+    if(p.method==="cash"){
+      cash=amount;
+
+      if(
+        Math.abs(
+          Number(p.cash||amount)-amount
+        )>0.01
+      )
+        return toast(
+          `El efectivo de ${p.name||"cliente"} debe ser $${money(amount)}.`
         );
+    }
 
-    $("stickyTotal")
-      .textContent =
-        "$" + money(total);
+    if(p.method==="card"){
+      card=amount;
+      terminal=Number(p.terminal||0);
 
-  }else{
+      if(Math.abs(terminal-amount)>0.01)
+        return toast(
+          `La terminal de ${p.name||"cliente"} debe cargarse por $${money(amount)}.`
+        );
+    }
 
-    $("stickyCart")
-      .classList
-      .add("hidden");
+    if(p.method==="mixed"){
+      cash=Number(p.cash||0);
+      card=Number(p.card||0);
+      terminal=card;
 
+      if(Math.abs(cash+card-amount)>0.01)
+        return toast(
+          `Efectivo + tarjeta de ${p.name||"cliente"} deben sumar $${money(amount)}.`
+        );
+    }
+
+    const allocations=Object.entries(p.alloc)
+      .map(([order_item_id,qty])=>({
+        order_item_id:Number(order_item_id),
+        qty:Number(qty)
+      }));
+
+    try{
+      await api(`/orders/${d.order.id}/payments`,{
+        method:"POST",
+        body:JSON.stringify({
+          payer_name:p.name,
+          method:p.method,
+          amount,
+          cash_amount:cash,
+          card_amount:card,
+          terminal_amount:terminal,
+          terminal_reference:p.ref||"",
+          allocations
+        })
+      });
+    }catch(e){
+      return toast(e.message);
+    }
   }
 
+  toast("Cobro registrado correctamente");
+  closePayment();
+  loadOrders();
+  if(isAdmin())loadDashboard();
 }
 
+async function loadDashboard(){
+  try{
+    const d=await api("/dashboard");
 
-function changeQty(index,difference){
+    $("dashboard").innerHTML=`
+      <div class="card">
+        <h2>Ventas de hoy</h2>
+        <div class="total">$${money(d.sales?.total)}</div>
+        <p>${d.sales?.orders||0} órdenes pagadas</p>
+      </div>
 
-  if(!cart[index])
-    return;
+      <div class="card">
+        <h2>Órdenes abiertas</h2>
+        <div class="total">${d.open?.count||0}</div>
+      </div>
 
+      <div class="card">
+        <h2>En cocina</h2>
+        <div class="total">${d.kitchen?.count||0}</div>
+      </div>
 
-  cart[index].qty +=
-    difference;
-
-
-  if(cart[index].qty <= 0){
-
-    cart.splice(index,1);
-
-  }
-
-
-  renderCart();
-
+      <div class="card">
+        <h2>Cobros de hoy</h2>
+        <p><b>Total cobrado:</b> $${money(d.payments?.total)}</p>
+        <p>💵 Efectivo: $${money(d.payments?.cash)}</p>
+        <p>💳 Tarjeta: $${money(d.payments?.card)}</p>
+        <p>🏧 Terminal: $${money(d.payments?.terminal)}</p>
+        <p class="muted">${d.payments?.transactions||0} movimientos de cobro</p>
+      </div>
+    `;
+  }catch(e){toast(e.message)}
 }
 
+async function cashIn(){cash("ingreso")}
+async function cashOut(){cash("egreso")}
 
-function scrollToCart(){
+async function cash(type){
+  const amount=Number($("cashAmount").value);
+  if(!amount)return toast("Indica un monto.");
 
-  $("cartContainer")
-    .scrollIntoView({
-      behavior:"smooth"
+  try{
+    await api("/cash",{
+      method:"POST",
+      body:JSON.stringify({
+        type,
+        amount,
+        concept:$("cashConcept").value
+      })
     });
 
+    toast("Movimiento registrado");
+    $("cashAmount").value="";
+    $("cashConcept").value="";
+    loadDashboard();
+
+  }catch(e){toast(e.message)}
 }
 
-
-/* =========================================================
-   MESAS
-========================================================= */
-
-function renderTableSelect(){
-
-  $("tableSelect").innerHTML =
-    `
-      <option value="">
-        Seleccionar mesa
-      </option>
-    `
-    +
-    tables.map(function(table){
-
-      return `
-        <option
-          value="${escapeHTML(table.id)}">
-
-          ${escapeHTML(
-            table.name ||
-            ("Mesa " + table.number)
-          )}
-
-        </option>
-      `;
-
-    }).join("");
-
+function renderProductAdmin(){
+  $("productAdmin").innerHTML=products.map(p=>`
+    <div class="card">
+      <h3>${esc(p.name)}</h3>
+      <p>${esc(p.category)} · $${money(p.price)}</p>
+      <p class="muted">${esc(p.description||"")}</p>
+    </div>
+  `).join("");
 }
 
-
-function renderTables(){
-
-  $("tablesContainer").innerHTML =
-    tables.map(function(table){
-
-      return `
-        <div class="card">
-
-          <div
-            class="row between">
-
-            <strong>
-              ${escapeHTML(
-                table.name ||
-                ("Mesa " + table.number)
-              )}
-            </strong>
-
-            <span class="badge">
-              ${escapeHTML(
-                table.status || ""
-              )}
-            </span>
-
-          </div>
-
-          <p>
-            Capacidad:
-            ${table.capacity || "-"}
-          </p>
-
-          ${
-            isAdmin() || isWaiter()
-              ? `
-                <button
-                  class="btn"
-                  onclick="setTable(
-                    '${escapeHTML(table.id)}',
-                    'available'
-                  )">
-
-                  Disponible
-
-                </button>
-
-                <button
-                  class="btn"
-                  onclick="setTable(
-                    '${escapeHTML(table.id)}',
-                    'reserved'
-                  )">
-
-                  Reservar
-
-                </button>
-              `
-              : ""
-          }
-
-        </div>
-      `;
-
-    }).join("");
-
-}
-
-
-async function setTable(id,status){
-
+async function createProduct(){
   try{
+    await api("/menu",{
+      method:"POST",
+      body:JSON.stringify({
+        name:$("pName").value,
+        category:$("pCategory").value,
+        price:Number($("pPrice").value),
+        description:$("pDesc").value
+      })
+    });
 
-    await api(
-      "/tables/" + id,
-      {
-        method:"PATCH",
+    toast("Producto creado");
 
-        body:JSON.stringify({
-          status:status
-        })
+    ["pName","pCategory","pPrice","pDesc"]
+      .forEach(x=>$(x).value="");
 
-      }
-    );
+    products=await api("/menu");
+    renderCategoryChips();
+    renderProducts();
+    renderProductAdmin();
 
-
-    tables =
-      await api("/tables");
-
-    renderTables();
-
-    renderTableSelect();
-
-  }catch(error){
-
-    toast(error.message);
-
-  }
-
+  }catch(e){toast(e.message)}
 }
 
-
-/* =========================================================
-   ENVIAR ORDEN
-========================================================= */
-
-async function sendOrder(){
-
-  if(!cart.length){
-
-    toast(
-      "Agrega al menos un producto."
-    );
-
-    return;
-
-  }
-
-
+async function loadUsers(){
   try{
+    const us=await api("/users");
 
-    await api(
-      "/orders",
-      {
-        method:"POST",
-
-        body:JSON.stringify({
-
-          table_id:
-            $("tableSelect").value ||
-            null,
-
-          customer_name:
-            $("customerName").value,
-
-          notes:
-            $("orderNotes").value,
-
-          items:
-            cart
-
-        })
-
-      }
-    );
-
-
-    toast(
-      "Orden enviada a cocina"
-    );
-
-
-    cart = [];
-
-    renderCart();
-
-
-    $("customerName").value = "";
-
-    $("orderNotes").value = "";
-
-
-    tables =
-      await api("/tables");
-
-    renderTableSelect();
-
-
-  }catch(error){
-
-    toast(error.message);
-
-  }
-
+    $("users").innerHTML=`
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Activo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${us.map(u=>`
+              <tr>
+                <td>${esc(u.name)}</td>
+                <td>${esc(u.username)}</td>
+                <td>${roleName(u.role)}</td>
+                <td>${u.active?"Sí":"No"}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }catch(e){toast(e.message)}
 }
 
+async function createUser(){
+  try{
+    await api("/users",{
+      method:"POST",
+      body:JSON.stringify({
+        name:$("uName").value,
+        username:$("uUsername").value,
+        password:$("uPassword").value,
+        role:$("uRole").value
+      })
+    });
 
-/* =========================================================
-   INICIALIZACIÓN
-========================================================= */
+    toast("Usuario creado");
+
+    ["uName","uUsername","uPassword"]
+      .forEach(x=>$(x).value="");
+
+    loadUsers();
+
+  }catch(e){toast(e.message)}
+}
+
+function tableName(id){
+  const t=tables.find(x=>x.id===id);
+  return t?t.name||("Mesa "+t.number):"Sin mesa";
+}
+
+function money(n){
+  return Number(n||0).toLocaleString(
+    "es-MX",
+    {minimumFractionDigits:2,maximumFractionDigits:2}
+  );
+}
+
+function esc(s){
+  return String(s??"").replace(
+    /[&<>"']/g,
+    m=>({
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      '"':"&quot;",
+      "'":"&#039;"
+    }[m])
+  );
+}
+
+function escAttr(s){
+  return esc(s);
+}
 
 boot();
-
 </script>
-
 </body>
 </html>
