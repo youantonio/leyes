@@ -2,9 +2,20 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    try {
+      await ensureDatabase(env);
+    } catch (err) {
+      return json({
+        error: "Error inicializando la base de datos",
+        detail: err?.message || String(err)
+      }, 500);
+    }
+
     if (url.pathname.startsWith("/api/")) {
       if (request.method === "OPTIONS") {
-        return new Response(null, { headers: corsHeaders() });
+        return new Response(null, {
+          headers: corsHeaders()
+        });
       }
 
       try {
@@ -12,8 +23,11 @@ export default {
         return withCors(response);
       } catch (err) {
         console.error(err);
+
         return withCors(
-          json({ error: err?.message || "Server error" }, 500)
+          json({
+            error: err?.message || "Server error"
+          }, 500)
         );
       }
     }
@@ -23,17 +37,23 @@ export default {
 };
 
 
+const SESSION_DAYS = 7;
+
+
 /* =========================================================
-   UTILIDADES
+   CORS
 ========================================================= */
 
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+    "Access-Control-Allow-Methods":
+      "GET,POST,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization"
   };
 }
+
 
 function withCors(response) {
   const headers = new Headers(response.headers);
@@ -48,14 +68,24 @@ function withCors(response) {
   });
 }
 
+
+/* =========================================================
+   RESPUESTAS
+========================================================= */
+
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8"
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: {
+        "Content-Type":
+          "application/json; charset=utf-8"
+      }
     }
-  });
+  );
 }
+
 
 async function body(request) {
   return await request.json().catch(() => ({}));
@@ -63,93 +93,783 @@ async function body(request) {
 
 
 /* =========================================================
+   FECHAS
+========================================================= */
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+
+function futureIso(days) {
+  return new Date(
+    Date.now() + days * 86400000
+  ).toISOString();
+}
+
+
+/* =========================================================
+   CRIPTOGRAFÍA
+========================================================= */
+
+function randomHex(bytes = 16) {
+  const a = new Uint8Array(bytes);
+
+  crypto.getRandomValues(a);
+
+  return [...a]
+    .map(x =>
+      x.toString(16).padStart(2, "0")
+    )
+    .join("");
+}
+
+
+async function hashPassword(password, saltHex) {
+
+  const salt =
+    saltHex || randomHex(16);
+
+  const enc = new TextEncoder();
+
+  const key =
+    await crypto.subtle.importKey(
+      "raw",
+      enc.encode(password),
+      "PBKDF2",
+      false,
+      ["deriveBits"]
+    );
+
+  const bits =
+    await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        salt: enc.encode(salt),
+        iterations: 120000,
+        hash: "SHA-256"
+      },
+      key,
+      256
+    );
+
+  const hash =
+    [...new Uint8Array(bits)]
+      .map(x =>
+        x.toString(16).padStart(2, "0")
+      )
+      .join("");
+
+  return {
+    salt,
+    hash
+  };
+}
+
+
+async function verifyPassword(
+  password,
+  salt,
+  expectedHash
+) {
+  const { hash } =
+    await hashPassword(
+      password,
+      salt
+    );
+
+  return hash === expectedHash;
+}
+
+
+/* =========================================================
+   BASE DE DATOS
+========================================================= */
+
+async function ensureDatabase(env) {
+
+  await env.DB.batch([
+
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL
+          CHECK(role IN ('admin','mesero','cocina')),
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `),
+
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS menu_items (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT DEFAULT 'General',
+        price REAL NOT NULL DEFAULT 0,
+        description TEXT DEFAULT '',
+        active INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS "tables" (
+        id TEXT PRIMARY KEY,
+        number INTEGER NOT NULL,
+        name TEXT DEFAULT '',
+        type TEXT DEFAULT 'mesa',
+        status TEXT DEFAULT 'available',
+        capacity INTEGER DEFAULT 4,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY,
+        table_id TEXT,
+        customer_name TEXT DEFAULT '',
+        notes TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'open',
+        subtotal REAL NOT NULL DEFAULT 0,
+        discount REAL NOT NULL DEFAULT 0,
+        total REAL NOT NULL DEFAULT 0,
+        payment_status TEXT NOT NULL DEFAULT 'pending',
+        payment_method TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        closed_at TEXT
+      )
+    `),
+
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id TEXT NOT NULL,
+        menu_item_id TEXT,
+        name TEXT NOT NULL,
+        qty REAL NOT NULL DEFAULT 1,
+        unit_price REAL NOT NULL DEFAULT 0,
+        modifiers TEXT DEFAULT '[]',
+        notes TEXT DEFAULT ''
+      )
+    `),
+
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cash_movements (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        amount REAL NOT NULL DEFAULT 0,
+        concept TEXT DEFAULT '',
+        order_id TEXT,
+        created_at TEXT NOT NULL
+      )
+    `)
+
+  ]);
+
+
+  /* =======================================================
+     USUARIOS INICIALES
+  ======================================================= */
+
+  const count =
+    await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count FROM users`
+      )
+      .first();
+
+
+  if (Number(count?.count || 0) === 0) {
+
+    const t = nowIso();
+
+    const seeds = [
+
+      [
+        "admin",
+        "Administrador",
+        "admin",
+        "RushAdmin2026!"
+      ],
+
+      [
+        "mesero",
+        "Mesero",
+        "mesero",
+        "RushMesero2026!"
+      ],
+
+      [
+        "cocina",
+        "Cocina",
+        "cocina",
+        "RushCocina2026!"
+      ]
+
+    ];
+
+
+    const stmts = [];
+
+
+    for (
+      const [username, name, role, password]
+      of seeds
+    ) {
+
+      const {
+        salt,
+        hash
+      } =
+        await hashPassword(password);
+
+
+      stmts.push(
+        env.DB.prepare(`
+          INSERT INTO users
+          (
+            id,
+            username,
+            name,
+            role,
+            password_hash,
+            password_salt,
+            active,
+            created_at,
+            updated_at
+          )
+          VALUES
+          (?, ?, ?, ?, ?, ?, 1, ?, ?)
+        `)
+        .bind(
+          crypto.randomUUID(),
+          username,
+          name,
+          role,
+          hash,
+          salt,
+          t,
+          t
+        )
+      );
+    }
+
+
+    await env.DB.batch(stmts);
+  }
+
+
+  /* =======================================================
+     MESAS INICIALES
+  ======================================================= */
+
+  const tableCount =
+    await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count FROM "tables"`
+      )
+      .first();
+
+
+  if (Number(tableCount?.count || 0) === 0) {
+
+    const stmts = [];
+
+
+    for (let i = 1; i <= 12; i++) {
+
+      stmts.push(
+        env.DB.prepare(`
+          INSERT INTO "tables"
+          (
+            id,
+            number,
+            name,
+            type,
+            status,
+            capacity,
+            active
+          )
+          VALUES
+          (?, ?, ?, ?, ?, ?, 1)
+        `)
+        .bind(
+          crypto.randomUUID(),
+          i,
+          `Mesa ${i}`,
+          "mesa",
+          "available",
+          4
+        )
+      );
+
+    }
+
+
+    await env.DB.batch(stmts);
+  }
+
+
+  /* =======================================================
+     MENÚ INICIAL RUSH CLUB PÁDEL
+  ======================================================= */
+
+  const menuCount =
+    await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count FROM menu_items`
+      )
+      .first();
+
+
+  if (Number(menuCount?.count || 0) === 0) {
+
+    const menu = [
+
+      /* =========================
+         ALIMENTOS
+      ========================= */
+
+      [
+        "Hamburguesa Clásica",
+        "Alimentos",
+        149,
+        "Hamburguesa de res con queso, lechuga, jitomate y papas.",
+        1
+      ],
+
+      [
+        "Hamburguesa BBQ",
+        "Alimentos",
+        169,
+        "Hamburguesa de res, queso, tocino y salsa BBQ con papas.",
+        2
+      ],
+
+      [
+        "Chicken Burger",
+        "Alimentos",
+        159,
+        "Hamburguesa de pollo empanizado con lechuga y aderezo.",
+        3
+      ],
+
+      [
+        "Club Sandwich",
+        "Alimentos",
+        159,
+        "Sándwich de pollo, jamón, queso, lechuga y jitomate con papas.",
+        4
+      ],
+
+      [
+        "Quesadillas",
+        "Alimentos",
+        119,
+        "Quesadillas de queso acompañadas de guacamole.",
+        5
+      ],
+
+      [
+        "Nachos con Queso",
+        "Alimentos",
+        129,
+        "Totopos con queso, jalapeños y pico de gallo.",
+        6
+      ],
+
+      [
+        "Nachos con Carne",
+        "Alimentos",
+        169,
+        "Totopos con queso, carne, jalapeños y pico de gallo.",
+        7
+      ],
+
+      [
+        "Boneless",
+        "Alimentos",
+        179,
+        "Boneless de pollo con aderezo y papas.",
+        8
+      ],
+
+      [
+        "Alitas",
+        "Alimentos",
+        179,
+        "Alitas de pollo con salsa a elegir y apio.",
+        9
+      ],
+
+      [
+        "Papas a la Francesa",
+        "Alimentos",
+        89,
+        "Papas a la francesa.",
+        10
+      ],
+
+      [
+        "Papas con Queso y Tocino",
+        "Alimentos",
+        119,
+        "Papas a la francesa con queso y tocino.",
+        11
+      ],
+
+      [
+        "Ensalada César",
+        "Alimentos",
+        149,
+        "Lechuga, pollo, parmesano y aderezo César.",
+        12
+      ],
+
+      [
+        "Pizza Individual",
+        "Alimentos",
+        169,
+        "Pizza individual. Ingredientes según disponibilidad.",
+        13
+      ],
+
+
+      /* =========================
+         DESAYUNOS
+      ========================= */
+
+      [
+        "Chilaquiles",
+        "Desayunos",
+        139,
+        "Chilaquiles rojos o verdes con crema, queso y huevo.",
+        20
+      ],
+
+      [
+        "Huevos al Gusto",
+        "Desayunos",
+        119,
+        "Huevos preparados al gusto con frijoles y pan.",
+        21
+      ],
+
+      [
+        "Molletes",
+        "Desayunos",
+        109,
+        "Molletes con frijoles, queso y pico de gallo.",
+        22
+      ],
+
+      [
+        "Hot Cakes",
+        "Desayunos",
+        109,
+        "Hot cakes con miel y fruta.",
+        23
+      ],
+
+      [
+        "Avocado Toast",
+        "Desayunos",
+        129,
+        "Pan tostado con aguacate y huevo.",
+        24
+      ],
+
+
+      /* =========================
+         CAFÉ
+      ========================= */
+
+      [
+        "Espresso",
+        "Café",
+        45,
+        "Espresso sencillo.",
+        30
+      ],
+
+      [
+        "Americano",
+        "Café",
+        49,
+        "Café americano.",
+        31
+      ],
+
+      [
+        "Cappuccino",
+        "Café",
+        65,
+        "Cappuccino.",
+        32
+      ],
+
+      [
+        "Latte",
+        "Café",
+        69,
+        "Café latte.",
+        33
+      ],
+
+      [
+        "Latte Vainilla",
+        "Café",
+        75,
+        "Latte con vainilla.",
+        34
+      ],
+
+      [
+        "Chocolate Caliente",
+        "Café",
+        69,
+        "Chocolate caliente.",
+        35
+      ],
+
+      [
+        "Té",
+        "Café",
+        49,
+        "Té caliente.",
+        36
+      ],
+
+
+      /* =========================
+         BEBIDAS
+      ========================= */
+
+      [
+        "Agua Natural",
+        "Bebidas",
+        35,
+        "Agua embotellada.",
+        40
+      ],
+
+      [
+        "Agua Mineral",
+        "Bebidas",
+        45,
+        "Agua mineral.",
+        41
+      ],
+
+      [
+        "Refresco",
+        "Bebidas",
+        45,
+        "Refresco en presentación individual.",
+        42
+      ],
+
+      [
+        "Agua de Jamaica",
+        "Bebidas",
+        49,
+        "Agua fresca de jamaica.",
+        43
+      ],
+
+      [
+        "Agua de Horchata",
+        "Bebidas",
+        49,
+        "Agua fresca de horchata.",
+        44
+      ],
+
+      [
+        "Limonada",
+        "Bebidas",
+        59,
+        "Limonada natural.",
+        45
+      ],
+
+      [
+        "Naranjada",
+        "Bebidas",
+        59,
+        "Naranjada natural.",
+        46
+      ],
+
+      [
+        "Smoothie de Frutos Rojos",
+        "Bebidas",
+        89,
+        "Smoothie de frutos rojos.",
+        47
+      ],
+
+      [
+        "Smoothie de Mango",
+        "Bebidas",
+        89,
+        "Smoothie de mango.",
+        48
+      ],
+
+
+      /* =========================
+         SNACKS
+      ========================= */
+
+      [
+        "Barra de Granola",
+        "Snacks",
+        45,
+        "Barra de granola.",
+        60
+      ],
+
+      [
+        "Fruta de Temporada",
+        "Snacks",
+        69,
+        "Porción de fruta de temporada.",
+        61
+      ],
+
+      [
+        "Yogurt con Granola",
+        "Snacks",
+        79,
+        "Yogurt con fruta y granola.",
+        62
+      ]
+
+    ];
+
+
+    const stmts =
+      menu.map(
+        ([
+          name,
+          category,
+          price,
+          description,
+          sortOrder
+        ]) =>
+
+          env.DB.prepare(`
+            INSERT INTO menu_items
+            (
+              id,
+              name,
+              category,
+              price,
+              description,
+              active,
+              sort_order
+            )
+            VALUES
+            (?, ?, ?, ?, ?, 1, ?)
+          `)
+          .bind(
+            crypto.randomUUID(),
+            name,
+            category,
+            price,
+            description,
+            sortOrder
+          )
+      );
+
+
+    await env.DB.batch(stmts);
+  }
+}
+
+
+/* =========================================================
    AUTENTICACIÓN
 ========================================================= */
 
-async function requireAuth(request, env, roles = []) {
-  const auth = request.headers.get("Authorization") || "";
-  const token = auth.startsWith("Bearer ")
-    ? auth.slice(7)
-    : "";
+function getToken(request) {
+
+  const h =
+    request.headers.get(
+      "Authorization"
+    ) || "";
+
+  if (
+    h.toLowerCase()
+      .startsWith("bearer ")
+  ) {
+    return h.slice(7).trim();
+  }
+
+  return null;
+}
+
+
+async function auth(request, env) {
+
+  const token =
+    getToken(request);
 
   if (!token) {
-    throw new Error("No autorizado");
+    return null;
   }
 
-  const session = await env.DB.prepare(`
-    SELECT
-      s.token,
-      s.expires_at,
-      u.id,
-      u.name,
-      u.username,
-      u.role,
-      u.active,
-      u.approved
-    FROM sessions s
-    JOIN users u ON u.id = s.user_id
-    WHERE s.token = ?
-      AND s.expires_at > datetime('now')
-  `)
-    .bind(token)
+
+  return await env.DB
+    .prepare(`
+      SELECT
+        u.id,
+        u.username,
+        u.name,
+        u.role,
+        u.active,
+        s.token,
+        s.expires_at
+      FROM sessions s
+      JOIN users u
+        ON u.id = s.user_id
+      WHERE
+        s.token = ?
+        AND u.active = 1
+        AND s.expires_at > ?
+    `)
+    .bind(
+      token,
+      nowIso()
+    )
     .first();
-
-  if (!session) {
-    throw new Error("Sesión inválida");
-  }
-
-  if (!session.active || !session.approved) {
-    throw new Error("Usuario inactivo o pendiente de aprobación");
-  }
-
-  if (roles.length && !roles.includes(session.role)) {
-    throw new Error("Permisos insuficientes");
-  }
-
-  return session;
 }
 
 
-/* =========================================================
-   TABLA DE COBROS
-   Se crea automáticamente si todavía no existe.
-========================================================= */
-
-async function ensurePaymentsTable(env) {
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS payments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      order_id TEXT NOT NULL,
-      payer_name TEXT,
-      method TEXT NOT NULL,
-      amount REAL NOT NULL DEFAULT 0,
-      cash_amount REAL NOT NULL DEFAULT 0,
-      card_amount REAL NOT NULL DEFAULT 0,
-      terminal_amount REAL NOT NULL DEFAULT 0,
-      terminal_reference TEXT,
-      allocations TEXT,
-      created_by TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `).run();
-}
-
-
-/* =========================================================
-   TABLA DE MOVIMIENTOS DE CAJA
-========================================================= */
-
-async function ensureCashTable(env) {
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS cash_movements (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type TEXT NOT NULL,
-      amount REAL NOT NULL DEFAULT 0,
-      concept TEXT,
-      user_id TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `).run();
+function requireRole(user, roles) {
+  return (
+    user &&
+    roles.includes(user.role)
+  );
 }
 
 
@@ -157,26 +877,40 @@ async function ensureCashTable(env) {
    API
 ========================================================= */
 
-async function api(request, env, url) {
+async function api(
+  request,
+  env,
+  url
+) {
 
-  const p = url.pathname.replace(/^\/api\/?/, "");
-  const parts = p.split("/");
+  const p =
+    url.pathname
+      .replace(/^\/api\/?/, "");
 
-  const resource = parts[0];
-  const id = parts[1];
-  const subresource = parts[2];
+
+  const [
+    resource,
+    id,
+    action
+  ] =
+    p.split("/");
 
 
   /* =======================================================
      HEALTH
   ======================================================= */
 
-  if (request.method === "GET" && resource === "health") {
+  if (
+    request.method === "GET" &&
+    resource === "health"
+  ) {
+
     return json({
       ok: true,
       service: "RUSH POS",
-      time: new Date().toISOString()
+      time: nowIso()
     });
+
   }
 
 
@@ -184,84 +918,111 @@ async function api(request, env, url) {
      LOGIN
   ======================================================= */
 
-  if (request.method === "POST" && resource === "login") {
+  if (
+    request.method === "POST" &&
+    resource === "login"
+  ) {
 
-    const d = await body(request);
+    const d =
+      await body(request);
 
-    const username = String(d.username || "")
+
+    const username =
+      String(
+        d.username || ""
+      )
       .trim()
       .toLowerCase();
 
-    const password = String(d.password || "");
 
-    if (!username || !password) {
-      return json({
-        error: "Usuario y contraseña son obligatorios."
-      }, 400);
-    }
+    const password =
+      String(
+        d.password || ""
+      );
 
-    const user = await env.DB.prepare(`
-      SELECT
-        id,
-        name,
-        username,
-        role,
-        active,
-        approved,
-        password_hash
-      FROM users
-      WHERE lower(username) = ?
-    `)
-      .bind(username)
-      .first();
 
-    if (!user || !user.active || !user.approved) {
+    if (
+      !username ||
+      !password
+    ) {
+
       return json({
         error:
-          "Usuario no encontrado, inactivo o pendiente de aprobación."
-      }, 401);
+          "Usuario y contraseña son obligatorios."
+      }, 400);
+
     }
 
-    const hash = await sha256(password);
 
-    if (hash !== user.password_hash) {
+    const user =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM users
+          WHERE username = ?
+            AND active = 1
+        `)
+        .bind(username)
+        .first();
+
+
+    if (
+      !user ||
+      !(
+        await verifyPassword(
+          password,
+          user.password_salt,
+          user.password_hash
+        )
+      )
+    ) {
+
       return json({
-        error: "Contraseña incorrecta."
+        error:
+          "Usuario o contraseña incorrectos."
       }, 401);
+
     }
+
 
     const token =
-      crypto.randomUUID() +
-      crypto.randomUUID().replaceAll("-", "");
+      randomHex(32);
 
-    const expires = new Date(
-      Date.now() + 12 * 60 * 60 * 1000
-    )
-      .toISOString()
-      .replace("T", " ")
-      .slice(0, 19);
 
-    await env.DB.prepare(`
-      INSERT INTO sessions(
+    await env.DB
+      .prepare(`
+        INSERT INTO sessions
+        (
+          token,
+          user_id,
+          expires_at,
+          created_at
+        )
+        VALUES
+        (?, ?, ?, ?)
+      `)
+      .bind(
         token,
-        user_id,
-        expires_at,
-        created_at
+        user.id,
+        futureIso(SESSION_DAYS),
+        nowIso()
       )
-      VALUES (?, ?, ?, datetime('now'))
-    `)
-      .bind(token, user.id, expires)
       .run();
 
+
     return json({
+
       token,
+
       user: {
         id: user.id,
-        name: user.name,
         username: user.username,
+        name: user.name,
         role: user.role
       }
+
     });
+
   }
 
 
@@ -269,215 +1030,97 @@ async function api(request, env, url) {
      LOGOUT
   ======================================================= */
 
-  if (request.method === "POST" && resource === "logout") {
-
-    const auth =
-      request.headers.get("Authorization") || "";
-
-    const token =
-      auth.startsWith("Bearer ")
-        ? auth.slice(7)
-        : "";
-
-    if (token) {
-      await env.DB.prepare(
-        "DELETE FROM sessions WHERE token = ?"
-      )
-        .bind(token)
-        .run();
-    }
-
-    return json({ ok: true });
-  }
-
-
-  /* =======================================================
-     USUARIO ACTUAL
-  ======================================================= */
-
-  if (request.method === "GET" && resource === "me") {
-
-    const me = await requireAuth(request, env);
-
-    return json({
-      user: {
-        id: me.id,
-        name: me.name,
-        username: me.username,
-        role: me.role
-      }
-    });
-  }
-
-
-  /* =======================================================
-     USUARIOS
-  ======================================================= */
-
-  if (request.method === "GET" && resource === "users") {
-
-    await requireAuth(request, env, ["admin"]);
-
-    const rows = await env.DB.prepare(`
-      SELECT
-        id,
-        name,
-        username,
-        role,
-        active,
-        approved,
-        created_at
-      FROM users
-      ORDER BY name
-    `).all();
-
-    return json(rows.results);
-  }
-
-
-  if (request.method === "POST" && resource === "users") {
-
-    await requireAuth(request, env, ["admin"]);
-
-    const d = await body(request);
-
-    const name = String(d.name || "").trim();
-
-    const username = String(d.username || "")
-      .trim()
-      .toLowerCase();
-
-    const password = String(d.password || "");
-
-    const role =
-      ["admin", "waiter", "cashier", "kitchen"].includes(d.role)
-        ? d.role
-        : "waiter";
-
-    if (!name || !username || !password) {
-      return json({
-        error:
-          "Nombre, usuario y contraseña son obligatorios."
-      }, 400);
-    }
-
-    if (password.length < 6) {
-      return json({
-        error:
-          "La contraseña debe tener al menos 6 caracteres."
-      }, 400);
-    }
-
-    const exists = await env.DB.prepare(
-      "SELECT id FROM users WHERE lower(username)=?"
-    )
-      .bind(username)
-      .first();
-
-    if (exists) {
-      return json({
-        error: "Ese usuario ya existe."
-      }, 409);
-    }
-
-    const id = crypto.randomUUID();
-
-    const hash = await sha256(password);
-
-    await env.DB.prepare(`
-      INSERT INTO users(
-        id,
-        name,
-        username,
-        password_hash,
-        role,
-        active,
-        approved,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?, 1, 1, datetime('now'))
-    `)
-      .bind(
-        id,
-        name,
-        username,
-        hash,
-        role
-      )
-      .run();
-
-    return json({
-      ok: true,
-      id
-    }, 201);
-  }
-
-
   if (
-    request.method === "PATCH" &&
-    resource === "users" &&
-    id
+    request.method === "POST" &&
+    resource === "logout"
   ) {
 
-    await requireAuth(request, env, ["admin"]);
+    const token =
+      getToken(request);
 
-    const d = await body(request);
 
-    const sets = [];
-    const vals = [];
+    if (token) {
 
-    if (d.name !== undefined) {
-      sets.push("name=?");
-      vals.push(String(d.name).trim());
+      await env.DB
+        .prepare(
+          `DELETE FROM sessions WHERE token=?`
+        )
+        .bind(token)
+        .run();
+
     }
 
-    if (
-      d.role !== undefined &&
-      ["admin", "waiter", "cashier", "kitchen"].includes(d.role)
-    ) {
-      sets.push("role=?");
-      vals.push(d.role);
-    }
-
-    if (d.active !== undefined) {
-      sets.push("active=?");
-      vals.push(d.active ? 1 : 0);
-    }
-
-    if (d.approved !== undefined) {
-      sets.push("approved=?");
-      vals.push(d.approved ? 1 : 0);
-    }
-
-    if (d.password) {
-      sets.push("password_hash=?");
-      vals.push(await sha256(String(d.password)));
-    }
-
-    if (!sets.length) {
-      return json({
-        error: "Sin cambios."
-      }, 400);
-    }
-
-    vals.push(id);
-
-    await env.DB.prepare(`
-      UPDATE users
-      SET ${sets.join(", ")}
-      WHERE id=?
-    `)
-      .bind(...vals)
-      .run();
 
     return json({
       ok: true
     });
+
   }
 
 
   /* =======================================================
-     PRODUCTOS / MENÚ
+     ME
+  ======================================================= */
+
+  if (
+    request.method === "GET" &&
+    resource === "me"
+  ) {
+
+    const user =
+      await auth(
+        request,
+        env
+      );
+
+
+    if (!user) {
+
+      return json({
+        error:
+          "No autenticado."
+      }, 401);
+
+    }
+
+
+    return json({
+
+      user: {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        role: user.role
+      }
+
+    });
+
+  }
+
+
+  /* =======================================================
+     AUTENTICACIÓN PARA EL RESTO
+  ======================================================= */
+
+  const user =
+    await auth(
+      request,
+      env
+    );
+
+
+  if (!user) {
+
+    return json({
+      error:
+        "Sesión no válida o expirada."
+    }, 401);
+
+  }
+
+
+  /* =======================================================
+     MENÚ - CONSULTAR
   ======================================================= */
 
   if (
@@ -485,353 +1128,474 @@ async function api(request, env, url) {
     resource === "menu"
   ) {
 
-    const rows = await env.DB.prepare(`
-      SELECT *
-      FROM menu_items
-      WHERE active=1
-      ORDER BY category, sort_order, name
-    `).all();
+    const rows =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM menu_items
+          WHERE active = 1
+          ORDER BY
+            category,
+            sort_order,
+            name
+        `)
+        .all();
 
-    return json(rows.results);
+
+    return json(
+      rows.results
+    );
+
   }
 
+
+  /* =======================================================
+     MENÚ - CREAR
+  ======================================================= */
 
   if (
     request.method === "POST" &&
     resource === "menu"
   ) {
 
-    await requireAuth(request, env, ["admin"]);
+    if (
+      !requireRole(
+        user,
+        ["admin"]
+      )
+    ) {
 
-    const d = await body(request);
-
-    const item = {
-      id: crypto.randomUUID(),
-      name: String(d.name || "").trim(),
-      category: String(d.category || "General").trim(),
-      price: Number(d.price || 0),
-      description: String(d.description || ""),
-      active: 1,
-      sort_order: Number(d.sort_order || 0)
-    };
-
-    if (!item.name) {
       return json({
-        error: "El producto necesita nombre."
-      }, 400);
+        error:
+          "Solo administrador."
+      }, 403);
+
     }
 
-    await env.DB.prepare(`
-      INSERT INTO menu_items(
-        id,
-        name,
-        category,
-        price,
-        description,
-        active,
-        sort_order
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `)
+
+    const d =
+      await body(request);
+
+
+    if (!d.name) {
+
+      return json({
+        error:
+          "El producto necesita nombre."
+      }, 400);
+
+    }
+
+
+    const newId =
+      crypto.randomUUID();
+
+
+    await env.DB
+      .prepare(`
+        INSERT INTO menu_items
+        (
+          id,
+          name,
+          category,
+          price,
+          description,
+          active,
+          sort_order
+        )
+        VALUES
+        (?, ?, ?, ?, ?, 1, ?)
+      `)
       .bind(
-        item.id,
-        item.name,
-        item.category,
-        item.price,
-        item.description,
-        item.active,
-        item.sort_order
+        newId,
+        d.name,
+        d.category || "General",
+        Number(d.price || 0),
+        d.description || "",
+        Number(d.sort_order || 0)
       )
       .run();
 
+
     return json({
-      id: item.id
+      id: newId
     }, 201);
+
   }
 
 
   /* =======================================================
-     MESAS
+     MENÚ - EDITAR
+  ======================================================= */
+
+  if (
+    request.method === "PATCH" &&
+    resource === "menu" &&
+    id
+  ) {
+
+    if (
+      !requireRole(
+        user,
+        ["admin"]
+      )
+    ) {
+
+      return json({
+        error:
+          "Solo administrador."
+      }, 403);
+
+    }
+
+
+    const d =
+      await body(request);
+
+
+    const sets = [];
+    const vals = [];
+
+
+    for (
+      const k of [
+        "name",
+        "category",
+        "price",
+        "description",
+        "active",
+        "sort_order"
+      ]
+    ) {
+
+      if (
+        d[k] !== undefined
+      ) {
+
+        sets.push(
+          `${k}=?`
+        );
+
+
+        vals.push(
+          k === "price" ||
+          k === "sort_order"
+            ? Number(d[k])
+            : d[k]
+        );
+
+      }
+    }
+
+
+    if (!sets.length) {
+
+      return json({
+        error:
+          "Sin cambios."
+      }, 400);
+
+    }
+
+
+    vals.push(id);
+
+
+    await env.DB
+      .prepare(`
+        UPDATE menu_items
+        SET ${sets.join(",")}
+        WHERE id=?
+      `)
+      .bind(...vals)
+      .run();
+
+
+    return json({
+      ok: true
+    });
+
+  }
+
+
+  /* =======================================================
+     MESAS - CONSULTAR
   ======================================================= */
 
   if (
     request.method === "GET" &&
-    resource === "tables" &&
-    !id
+    resource === "tables"
   ) {
 
-    await requireAuth(
-      request,
-      env,
-      ["admin", "waiter", "cashier", "kitchen"]
+    const rows =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM "tables"
+          WHERE active=1
+          ORDER BY
+            type,
+            number
+        `)
+        .all();
+
+
+    return json(
+      rows.results
     );
 
-    const rows = await env.DB.prepare(`
-      SELECT *
-      FROM tables
-      ORDER BY type, number
-    `).all();
-
-    return json(rows.results);
   }
 
 
-  /* PATCH DE MESA */
+  /* =======================================================
+     MESAS - CAMBIAR ESTADO
+  ======================================================= */
+
   if (
     request.method === "PATCH" &&
     resource === "tables" &&
     id
   ) {
 
-    const me = await requireAuth(
-      request,
-      env,
-      ["admin", "waiter", "cashier"]
-    );
+    if (
+      !requireRole(
+        user,
+        ["admin", "mesero"]
+      )
+    ) {
 
-    const d = await body(request);
-
-    if (!["available", "reserved", "occupied"].includes(d.status)) {
       return json({
-        error: "Estado de mesa inválido."
-      }, 400);
+        error:
+          "Sin permiso."
+      }, 403);
+
     }
 
-    await env.DB.prepare(`
-      UPDATE tables
-      SET status=?
-      WHERE id=?
-    `)
-      .bind(d.status, id)
+
+    const d =
+      await body(request);
+
+
+    if (
+      ![
+        "available",
+        "occupied",
+        "reserved"
+      ].includes(
+        String(
+          d.status || ""
+        )
+      )
+    ) {
+
+      return json({
+        error:
+          "Estado de mesa inválido."
+      }, 400);
+
+    }
+
+
+    await env.DB
+      .prepare(`
+        UPDATE "tables"
+        SET status=?
+        WHERE id=?
+      `)
+      .bind(
+        d.status,
+        id
+      )
       .run();
 
+
     return json({
-      ok: true,
-      updated_by: me.name
+      ok: true
     });
+
   }
 
 
   /* =======================================================
-     ORDENES - DETALLE
-     IMPORTANTE: va ANTES del GET general.
+     ORDEN - CONSULTAR UNA
   ======================================================= */
 
   if (
     request.method === "GET" &&
     resource === "orders" &&
-    id &&
-    !subresource
+    id
   ) {
 
-    await requireAuth(
-      request,
-      env,
-      ["admin", "waiter", "cashier", "kitchen"]
-    );
+    const order =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM orders
+          WHERE id=?
+        `)
+        .bind(id)
+        .first();
 
-    await ensurePaymentsTable(env);
-
-    const order = await env.DB.prepare(`
-      SELECT
-        o.*,
-        u.name AS waiter_name
-      FROM orders o
-      LEFT JOIN users u
-        ON u.id=o.waiter_id
-      WHERE o.id=?
-    `)
-      .bind(id)
-      .first();
 
     if (!order) {
+
       return json({
-        error: "Orden no encontrada."
+        error:
+          "Orden no encontrada."
       }, 404);
+
     }
 
-    const items = await env.DB.prepare(`
-      SELECT *
-      FROM order_items
-      WHERE order_id=?
-      ORDER BY id
-    `)
-      .bind(id)
-      .all();
 
-    const payments = await env.DB.prepare(`
-      SELECT *
-      FROM payments
-      WHERE order_id=?
-      ORDER BY id
-    `)
-      .bind(id)
-      .all();
+    const items =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM order_items
+          WHERE order_id=?
+          ORDER BY id
+        `)
+        .bind(id)
+        .all();
 
-    const paid = payments.results.reduce(
-      (s, p) => s + Number(p.amount || 0),
-      0
-    );
-
-    const paidCash = payments.results.reduce(
-      (s, p) => s + Number(p.cash_amount || 0),
-      0
-    );
-
-    const paidCard = payments.results.reduce(
-      (s, p) => s + Number(p.card_amount || 0),
-      0
-    );
-
-    const terminalAmount = payments.results.reduce(
-      (s, p) => s + Number(p.terminal_amount || 0),
-      0
-    );
 
     return json({
-      order: {
-        ...order,
-        paid: paid,
-        paid_amount: paid,
-        paid_cash: paidCash,
-        paid_card: paidCard,
-        terminal_amount: terminalAmount
-      },
-      items: items.results,
-      payments: payments.results
+      order,
+      items:
+        items.results
     });
+
   }
 
 
   /* =======================================================
-     ORDENES - LISTADO
+     ÓRDENES - LISTAR
   ======================================================= */
 
   if (
     request.method === "GET" &&
-    resource === "orders" &&
-    !id
+    resource === "orders"
   ) {
 
-    await requireAuth(
-      request,
-      env,
-      ["admin", "waiter", "cashier", "kitchen"]
-    );
-
-    await ensurePaymentsTable(env);
-
     const status =
-      url.searchParams.get("status");
+      url.searchParams.get(
+        "status"
+      );
 
-    let q = `
-      SELECT
-        o.*,
-        u.name AS waiter_name
-      FROM orders o
-      LEFT JOIN users u
-        ON u.id=o.waiter_id
-    `;
+
+    let q =
+      `SELECT * FROM orders`;
+
 
     const args = [];
 
+
     if (status) {
-      q += " WHERE o.status=?";
+
+      q +=
+        ` WHERE status=?`;
+
       args.push(status);
+
     }
 
-    q += `
-      ORDER BY o.created_at DESC
-      LIMIT 200
-    `;
 
-    const rows = await env.DB
-      .prepare(q)
-      .bind(...args)
-      .all();
+    q +=
+      ` ORDER BY created_at DESC LIMIT 200`;
 
-    const result = [];
 
-    for (const order of rows.results) {
+    const rows =
+      await env.DB
+        .prepare(q)
+        .bind(...args)
+        .all();
 
-      const payments = await env.DB.prepare(`
-        SELECT
-          COALESCE(SUM(amount),0) AS paid_amount,
-          COALESCE(SUM(cash_amount),0) AS paid_cash,
-          COALESCE(SUM(card_amount),0) AS paid_card,
-          COALESCE(SUM(terminal_amount),0) AS terminal_amount
-        FROM payments
-        WHERE order_id=?
-      `)
-        .bind(order.id)
-        .first();
 
-      result.push({
-        ...order,
-        paid_amount: Number(payments?.paid_amount || 0),
-        paid_cash: Number(payments?.paid_cash || 0),
-        paid_card: Number(payments?.paid_card || 0),
-        terminal_amount: Number(
-          payments?.terminal_amount || 0
-        )
-      });
-    }
+    return json(
+      rows.results
+    );
 
-    return json(result);
   }
 
 
   /* =======================================================
-     CREAR ORDEN
+     ÓRDENES - CREAR
   ======================================================= */
 
   if (
     request.method === "POST" &&
-    resource === "orders" &&
-    !id
+    resource === "orders"
   ) {
 
-    const me = await requireAuth(
-      request,
-      env,
-      ["admin", "waiter", "cashier"]
-    );
+    if (
+      !requireRole(
+        user,
+        ["admin", "mesero"]
+      )
+    ) {
 
-    const data = await body(request);
+      return json({
+        error:
+          "Solo mesero o administrador."
+      }, 403);
 
-    if (!data.items?.length) {
+    }
+
+
+    const data =
+      await body(request);
+
+
+    if (
+      !data.items?.length
+    ) {
+
       return json({
         error:
           "La orden necesita al menos un producto."
       }, 400);
+
     }
 
-    const now = new Date().toISOString();
 
-    const orderId = crypto.randomUUID();
+    const orderId =
+      crypto.randomUUID();
 
-    const subtotal = data.items.reduce(
-      (s, x) =>
-        s +
-        Number(x.qty || 1) *
-        Number(x.unit_price || 0),
-      0
-    );
 
-    const discount = Number(
-      data.discount || 0
-    );
+    const now =
+      nowIso();
 
-    const total = Math.max(
-      0,
-      subtotal - discount
-    );
 
-    const stmts = [];
+    const subtotal =
+      data.items.reduce(
+        (s, x) =>
+          s +
+          Number(x.qty || 1) *
+          Number(
+            x.unit_price || 0
+          ),
+        0
+      );
 
-    stmts.push(
+
+    const discount =
+      Number(
+        data.discount || 0
+      );
+
+
+    const total =
+      Math.max(
+        0,
+        subtotal - discount
+      );
+
+
+    const stmts = [
+
       env.DB.prepare(`
-        INSERT INTO orders(
+        INSERT INTO orders
+        (
           id,
           table_id,
           customer_name,
@@ -841,44 +1605,41 @@ async function api(request, env, url) {
           discount,
           total,
           payment_status,
-          waiter_id,
+          payment_method,
           created_at,
           updated_at
         )
-        VALUES(
-          ?,
-          ?,
-          ?,
-          ?,
-          'open',
-          ?,
-          ?,
-          ?,
-          'pending',
-          ?,
-          ?,
-          ?
-        )
+        VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
-        .bind(
-          orderId,
-          data.table_id || null,
-          data.customer_name || "",
-          data.notes || "",
-          subtotal,
-          discount,
-          total,
-          me.id,
-          now,
-          now
-        )
-    );
+      .bind(
+        orderId,
+        data.table_id || null,
+        data.customer_name || "",
+        data.notes || "",
+        "open",
+        subtotal,
+        discount,
+        total,
+        "pending",
+        "",
+        now,
+        now
+      )
 
-    for (const item of data.items) {
+    ];
+
+
+    for (
+      const item
+      of data.items
+    ) {
 
       stmts.push(
+
         env.DB.prepare(`
-          INSERT INTO order_items(
+          INSERT INTO order_items
+          (
             order_id,
             menu_item_id,
             name,
@@ -887,67 +1648,139 @@ async function api(request, env, url) {
             modifiers,
             notes
           )
-          VALUES(
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?
-          )
+          VALUES
+          (?, ?, ?, ?, ?, ?, ?)
         `)
-          .bind(
-            orderId,
-            item.menu_item_id || null,
-            item.name,
-            Number(item.qty || 1),
-            Number(item.unit_price || 0),
-            JSON.stringify(
-              item.modifiers || []
-            ),
-            item.notes || ""
-          )
+        .bind(
+          orderId,
+          item.menu_item_id || null,
+          item.name,
+          Number(
+            item.qty || 1
+          ),
+          Number(
+            item.unit_price || 0
+          ),
+          JSON.stringify(
+            item.modifiers || []
+          ),
+          item.notes || ""
+        )
+
       );
+
     }
 
-    await env.DB.batch(stmts);
+
+    await env.DB.batch(
+      stmts
+    );
+
+
+    if (
+      data.table_id
+    ) {
+
+      await env.DB
+        .prepare(`
+          UPDATE "tables"
+          SET status='occupied'
+          WHERE id=?
+        `)
+        .bind(
+          data.table_id
+        )
+        .run();
+
+    }
+
 
     return json({
       id: orderId,
       subtotal,
       discount,
       total,
-      status: "open",
-      waiter_id: me.id,
-      waiter_name: me.name
+      status: "open"
     }, 201);
+
   }
 
 
   /* =======================================================
-     ACTUALIZAR ORDEN
+     ORDEN - ACTUALIZAR
   ======================================================= */
 
   if (
     request.method === "PATCH" &&
     resource === "orders" &&
-    id &&
-    !subresource
+    id
   ) {
 
-    const me = await requireAuth(
-      request,
-      env,
-      [
-        "admin",
-        "waiter",
-        "cashier",
-        "kitchen"
-      ]
-    );
+    const data =
+      await body(request);
 
-    const data = await body(request);
+
+    const canEdit =
+      requireRole(
+        user,
+        ["admin", "mesero"]
+      );
+
+
+    const canKitchen =
+      requireRole(
+        user,
+        ["admin", "cocina"]
+      );
+
+
+    if (
+      data.status &&
+      [
+        "preparing",
+        "ready"
+      ].includes(
+        data.status
+      ) &&
+      !canKitchen
+    ) {
+
+      return json({
+        error:
+          "Solo cocina o administrador puede cambiar ese estado."
+      }, 403);
+
+    }
+
+
+    if (
+      (
+        data.status === "paid" ||
+        data.payment_status === "paid"
+      ) &&
+      !canEdit
+    ) {
+
+      return json({
+        error:
+          "Solo mesero o administrador puede cobrar."
+      }, 403);
+
+    }
+
+
+    if (
+      !canEdit &&
+      !canKitchen
+    ) {
+
+      return json({
+        error:
+          "Sin permiso."
+      }, 403);
+
+    }
+
 
     const allowed = [
       "status",
@@ -957,251 +1790,122 @@ async function api(request, env, url) {
       "discount"
     ];
 
+
     const sets = [];
     const vals = [];
 
-    for (const k of allowed) {
 
-      if (data[k] !== undefined) {
+    for (
+      const k of allowed
+    ) {
 
-        sets.push(`${k}=?`);
-        vals.push(data[k]);
+      if (
+        data[k] !== undefined
+      ) {
+
+        sets.push(
+          `${k}=?`
+        );
+
+        vals.push(
+          data[k]
+        );
+
       }
     }
 
-    if (!sets.length) {
-      return json({
-        error: "Sin cambios."
-      }, 400);
-    }
 
     if (
       data.status === "paid" ||
       data.payment_status === "paid"
     ) {
-      sets.push("closed_at=?");
-      vals.push(
-        new Date().toISOString()
+
+      sets.push(
+        "closed_at=?"
       );
+
+      vals.push(
+        nowIso()
+      );
+
     }
 
-    sets.push("updated_at=?");
-    vals.push(
-      new Date().toISOString()
+
+    if (!sets.length) {
+
+      return json({
+        error:
+          "Sin cambios."
+      }, 400);
+
+    }
+
+
+    sets.push(
+      "updated_at=?"
     );
 
-    vals.push(id);
 
-    await env.DB.prepare(`
-      UPDATE orders
-      SET ${sets.join(", ")}
-      WHERE id=?
-    `)
+    vals.push(
+      nowIso(),
+      id
+    );
+
+
+    await env.DB
+      .prepare(`
+        UPDATE orders
+        SET ${sets.join(",")}
+        WHERE id=?
+      `)
       .bind(...vals)
       .run();
 
+
+    if (
+      data.status === "paid"
+    ) {
+
+      const order =
+        await env.DB
+          .prepare(`
+            SELECT *
+            FROM orders
+            WHERE id=?
+          `)
+          .bind(id)
+          .first();
+
+
+      if (
+        order?.table_id
+      ) {
+
+        await env.DB
+          .prepare(`
+            UPDATE "tables"
+            SET status='available'
+            WHERE id=?
+          `)
+          .bind(
+            order.table_id
+          )
+          .run();
+
+      }
+
+    }
+
+
     return json({
-      ok: true,
-      updated_by: me.name
+      ok: true
     });
+
   }
 
 
   /* =======================================================
-     COBRO DE UNA ORDEN
-     POST /orders/:id/payments
-  ======================================================= */
-
-  if (
-    request.method === "POST" &&
-    resource === "orders" &&
-    id &&
-    subresource === "payments"
-  ) {
-
-    const me = await requireAuth(
-      request,
-      env,
-      ["admin", "waiter", "cashier"]
-    );
-
-    await ensurePaymentsTable(env);
-
-    const data = await body(request);
-
-    const order = await env.DB.prepare(`
-      SELECT *
-      FROM orders
-      WHERE id=?
-    `)
-      .bind(id)
-      .first();
-
-    if (!order) {
-      return json({
-        error: "Orden no encontrada."
-      }, 404);
-    }
-
-    const amount = Number(
-      data.amount || 0
-    );
-
-    if (amount <= 0) {
-      return json({
-        error: "El monto del cobro debe ser mayor a cero."
-      }, 400);
-    }
-
-    const previous = await env.DB.prepare(`
-      SELECT
-        COALESCE(SUM(amount),0) AS paid
-      FROM payments
-      WHERE order_id=?
-    `)
-      .bind(id)
-      .first();
-
-    const alreadyPaid = Number(
-      previous?.paid || 0
-    );
-
-    const remaining =
-      Number(order.total || 0) -
-      alreadyPaid;
-
-    if (amount > remaining + 0.01) {
-      return json({
-        error:
-          `El cobro supera el saldo pendiente de $${remaining.toFixed(2)}.`
-      }, 400);
-    }
-
-    const method =
-      ["cash", "card", "mixed"].includes(data.method)
-        ? data.method
-        : "cash";
-
-    const cashAmount = Number(
-      data.cash_amount || 0
-    );
-
-    const cardAmount = Number(
-      data.card_amount || 0
-    );
-
-    const terminalAmount = Number(
-      data.terminal_amount || 0
-    );
-
-    const paymentId =
-      await env.DB.prepare(`
-        INSERT INTO payments(
-          order_id,
-          payer_name,
-          method,
-          amount,
-          cash_amount,
-          card_amount,
-          terminal_amount,
-          terminal_reference,
-          allocations,
-          created_by,
-          created_at
-        )
-        VALUES(
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          datetime('now')
-        )
-      `)
-        .bind(
-          id,
-          String(data.payer_name || "Cliente"),
-          method,
-          amount,
-          cashAmount,
-          cardAmount,
-          terminalAmount,
-          String(data.terminal_reference || ""),
-          JSON.stringify(
-            data.allocations || []
-          ),
-          me.id
-        )
-        .run();
-
-    const newPaid =
-      alreadyPaid + amount;
-
-    const fullyPaid =
-      newPaid >= Number(order.total || 0) - 0.01;
-
-    if (fullyPaid) {
-
-      await env.DB.prepare(`
-        UPDATE orders
-        SET
-          status='paid',
-          payment_status='paid',
-          payment_method=?,
-          closed_at=?,
-          updated_at=?
-        WHERE id=?
-      `)
-        .bind(
-          method,
-          new Date().toISOString(),
-          new Date().toISOString(),
-          id
-        )
-        .run();
-
-    } else {
-
-      await env.DB.prepare(`
-        UPDATE orders
-        SET
-          payment_status='partial',
-          payment_method=?,
-          updated_at=?
-        WHERE id=?
-      `)
-        .bind(
-          method,
-          new Date().toISOString(),
-          id
-        )
-        .run();
-    }
-
-    return json({
-      ok: true,
-      payment_id:
-        paymentId?.meta?.last_row_id || null,
-      amount,
-      paid: newPaid,
-      remaining: Math.max(
-        0,
-        Number(order.total || 0) - newPaid
-      ),
-      status: fullyPaid
-        ? "paid"
-        : "partial"
-    }, 201);
-  }
-
-
-  /* =======================================================
-     DASHBOARD / CAJA
+     DASHBOARD
   ======================================================= */
 
   if (
@@ -1209,13 +1913,20 @@ async function api(request, env, url) {
     resource === "dashboard"
   ) {
 
-    await requireAuth(
-      request,
-      env,
-      ["admin", "cashier"]
-    );
+    if (
+      !requireRole(
+        user,
+        ["admin"]
+      )
+    ) {
 
-    await ensurePaymentsTable(env);
+      return json({
+        error:
+          "Solo administrador."
+      }, 403);
+
+    }
+
 
     const today =
       new Date()
@@ -1223,178 +1934,67 @@ async function api(request, env, url) {
         .slice(0, 10);
 
 
-    const sales = await env.DB.prepare(`
-      SELECT
-        COALESCE(SUM(total),0) AS total,
-        COUNT(*) AS orders
-      FROM orders
-      WHERE status='paid'
-        AND substr(created_at,1,10)=?
-    `)
-      .bind(today)
-      .first();
+    const sales =
+      await env.DB
+        .prepare(`
+          SELECT
+            COALESCE(
+              SUM(total),
+              0
+            ) total,
+            COUNT(*) orders
+          FROM orders
+          WHERE status='paid'
+            AND substr(
+              created_at,
+              1,
+              10
+            )=?
+        `)
+        .bind(today)
+        .first();
 
 
-    const open = await env.DB.prepare(`
-      SELECT COUNT(*) AS count
-      FROM orders
-      WHERE status IN(
-        'open',
-        'preparing',
-        'ready'
-      )
-    `)
-      .first();
+    const open =
+      await env.DB
+        .prepare(`
+          SELECT COUNT(*) count
+          FROM orders
+          WHERE status IN
+            (
+              'open',
+              'preparing',
+              'ready'
+            )
+        `)
+        .first();
 
 
-    const kitchen = await env.DB.prepare(`
-      SELECT COUNT(*) AS count
-      FROM orders
-      WHERE status IN(
-        'open',
-        'preparing'
-      )
-    `)
-      .first();
-
-
-    const payments = await env.DB.prepare(`
-      SELECT
-        COALESCE(SUM(amount),0) AS total,
-        COUNT(*) AS transactions,
-        COALESCE(SUM(cash_amount),0) AS cash,
-        COALESCE(SUM(card_amount),0) AS card,
-        COALESCE(SUM(terminal_amount),0) AS terminal
-      FROM payments
-      WHERE substr(created_at,1,10)=?
-    `)
-      .bind(today)
-      .first();
+    const kitchen =
+      await env.DB
+        .prepare(`
+          SELECT COUNT(*) count
+          FROM orders
+          WHERE status IN
+            (
+              'open',
+              'preparing'
+            )
+        `)
+        .first();
 
 
     return json({
-      sales: {
-        total: Number(
-          sales?.total || 0
-        ),
-        orders: Number(
-          sales?.orders || 0
-        )
-      },
-
-      open: {
-        count: Number(
-          open?.count || 0
-        )
-      },
-
-      kitchen: {
-        count: Number(
-          kitchen?.count || 0
-        )
-      },
-
-      payments: {
-        total: Number(
-          payments?.total || 0
-        ),
-        transactions: Number(
-          payments?.transactions || 0
-        ),
-        cash: Number(
-          payments?.cash || 0
-        ),
-        card: Number(
-          payments?.card || 0
-        ),
-        terminal: Number(
-          payments?.terminal || 0
-        )
-      }
+      sales,
+      open,
+      kitchen
     });
+
   }
 
 
   /* =======================================================
-     CAJA - MOVIMIENTO
-  ======================================================= */
-
-  if (
-    request.method === "POST" &&
-    resource === "cash"
-  ) {
-
-    const me = await requireAuth(
-      request,
-      env,
-      ["admin"]
-    );
-
-    await ensureCashTable(env);
-
-    const data = await body(request);
-
-    const type =
-      ["ingreso", "egreso"].includes(data.type)
-        ? data.type
-        : null;
-
-    const amount = Number(
-      data.amount || 0
-    );
-
-    const concept =
-      String(data.concept || "").trim();
-
-    if (!type) {
-      return json({
-        error:
-          "Tipo de movimiento inválido."
-      }, 400);
-    }
-
-    if (amount <= 0) {
-      return json({
-        error:
-          "El monto debe ser mayor a cero."
-      }, 400);
-    }
-
-    const result =
-      await env.DB.prepare(`
-        INSERT INTO cash_movements(
-          type,
-          amount,
-          concept,
-          user_id,
-          created_at
-        )
-        VALUES(
-          ?,
-          ?,
-          ?,
-          ?,
-          datetime('now')
-        )
-      `)
-        .bind(
-          type,
-          amount,
-          concept,
-          me.id
-        )
-        .run();
-
-    return json({
-      ok: true,
-      id:
-        result?.meta?.last_row_id || null
-    }, 201);
-  }
-
-
-  /* =======================================================
-     LISTADO DE MOVIMIENTOS DE CAJA
+     CAJA - CONSULTAR
   ======================================================= */
 
   if (
@@ -1402,26 +2002,479 @@ async function api(request, env, url) {
     resource === "cash"
   ) {
 
-    await requireAuth(
-      request,
-      env,
-      ["admin"]
+    if (
+      !requireRole(
+        user,
+        ["admin"]
+      )
+    ) {
+
+      return json({
+        error:
+          "Solo administrador."
+      }, 403);
+
+    }
+
+
+    const rows =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM cash_movements
+          ORDER BY created_at DESC
+          LIMIT 200
+        `)
+        .all();
+
+
+    return json(
+      rows.results
     );
 
-    await ensureCashTable(env);
+  }
 
-    const rows = await env.DB.prepare(`
-      SELECT
-        c.*,
-        u.name AS user_name
-      FROM cash_movements c
-      LEFT JOIN users u
-        ON u.id=c.user_id
-      ORDER BY c.id DESC
-      LIMIT 200
-    `).all();
 
-    return json(rows.results);
+  /* =======================================================
+     CAJA - CREAR MOVIMIENTO
+  ======================================================= */
+
+  if (
+    request.method === "POST" &&
+    resource === "cash"
+  ) {
+
+    if (
+      !requireRole(
+        user,
+        ["admin"]
+      )
+    ) {
+
+      return json({
+        error:
+          "Solo administrador."
+      }, 403);
+
+    }
+
+
+    const d =
+      await body(request);
+
+
+    const newId =
+      crypto.randomUUID();
+
+
+    await env.DB
+      .prepare(`
+        INSERT INTO cash_movements
+        (
+          id,
+          type,
+          amount,
+          concept,
+          order_id,
+          created_at
+        )
+        VALUES
+        (?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        newId,
+        d.type,
+        Number(
+          d.amount || 0
+        ),
+        d.concept || "",
+        d.order_id || null,
+        nowIso()
+      )
+      .run();
+
+
+    return json({
+      id: newId
+    }, 201);
+
+  }
+
+
+  /* =======================================================
+     USUARIOS
+  ======================================================= */
+
+  if (
+    resource === "users"
+  ) {
+
+    if (
+      !requireRole(
+        user,
+        ["admin"]
+      )
+    ) {
+
+      return json({
+        error:
+          "Solo administrador."
+      }, 403);
+
+    }
+
+
+    /* =====================================================
+       LISTAR USUARIOS
+    ===================================================== */
+
+    if (
+      request.method === "GET" &&
+      !id
+    ) {
+
+      const rows =
+        await env.DB
+          .prepare(`
+            SELECT
+              id,
+              username,
+              name,
+              role,
+              active,
+              created_at,
+              updated_at
+            FROM users
+            ORDER BY name
+          `)
+          .all();
+
+
+      return json(
+        rows.results
+      );
+
+    }
+
+
+    /* =====================================================
+       CREAR USUARIO
+    ===================================================== */
+
+    if (
+      request.method === "POST" &&
+      !id
+    ) {
+
+      const d =
+        await body(request);
+
+
+      const username =
+        String(
+          d.username || ""
+        )
+        .trim()
+        .toLowerCase();
+
+
+      const name =
+        String(
+          d.name || ""
+        )
+        .trim();
+
+
+      const password =
+        String(
+          d.password || ""
+        );
+
+
+      const role =
+        String(
+          d.role || ""
+        )
+        .trim()
+        .toLowerCase();
+
+
+      /* VALIDACIÓN */
+
+      if (
+        !username ||
+        !name ||
+        !password ||
+        ![
+          "admin",
+          "mesero",
+          "cocina"
+        ].includes(role)
+      ) {
+
+        return json({
+          error:
+            "Nombre, usuario, contraseña y rol son obligatorios."
+        }, 400);
+
+      }
+
+
+      /* COMPROBAR USUARIO EXISTENTE */
+
+      const exists =
+        await env.DB
+          .prepare(`
+            SELECT id
+            FROM users
+            WHERE username=?
+          `)
+          .bind(username)
+          .first();
+
+
+      if (exists) {
+
+        return json({
+          error:
+            "Ese usuario ya existe."
+        }, 409);
+
+      }
+
+
+      /* CREAR CONTRASEÑA */
+
+      const {
+        salt,
+        hash
+      } =
+        await hashPassword(
+          password
+        );
+
+
+      /* ID */
+
+      const newId =
+        crypto.randomUUID();
+
+
+      /* INSERTAR USUARIO */
+
+      await env.DB
+        .prepare(`
+          INSERT INTO users
+          (
+            id,
+            username,
+            name,
+            role,
+            password_hash,
+            password_salt,
+            active,
+            created_at,
+            updated_at
+          )
+          VALUES
+          (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            1,
+            ?,
+            ?
+          )
+        `)
+        .bind(
+          newId,
+          username,
+          name,
+          role,
+          hash,
+          salt,
+          nowIso(),
+          nowIso()
+        )
+        .run();
+
+
+      /* RESPUESTA */
+
+      return json({
+        ok: true,
+        id: newId,
+        message:
+          "Usuario creado correctamente.",
+        username,
+        name,
+        role
+      }, 201);
+
+    }
+
+
+    /* =====================================================
+       EDITAR USUARIO
+    ===================================================== */
+
+    if (
+      request.method === "PATCH" &&
+      id
+    ) {
+
+      const d =
+        await body(request);
+
+
+      const target =
+        await env.DB
+          .prepare(`
+            SELECT *
+            FROM users
+            WHERE id=?
+          `)
+          .bind(id)
+          .first();
+
+
+      if (!target) {
+
+        return json({
+          error:
+            "Usuario no encontrado."
+        }, 404);
+
+      }
+
+
+      const sets = [];
+      const vals = [];
+
+
+      if (
+        d.name !== undefined
+      ) {
+
+        sets.push(
+          "name=?"
+        );
+
+        vals.push(
+          d.name
+        );
+
+      }
+
+
+      if (
+        d.role !== undefined &&
+        [
+          "admin",
+          "mesero",
+          "cocina"
+        ].includes(
+          d.role
+        )
+      ) {
+
+        sets.push(
+          "role=?"
+        );
+
+        vals.push(
+          d.role
+        );
+
+      }
+
+
+      if (
+        d.active !== undefined
+      ) {
+
+        sets.push(
+          "active=?"
+        );
+
+        vals.push(
+          d.active ? 1 : 0
+        );
+
+      }
+
+
+      if (
+        d.password
+      ) {
+
+        const {
+          salt,
+          hash
+        } =
+          await hashPassword(
+            String(
+              d.password
+            )
+          );
+
+
+        sets.push(
+          "password_hash=?",
+          "password_salt=?"
+        );
+
+
+        vals.push(
+          hash,
+          salt
+        );
+
+      }
+
+
+      if (!sets.length) {
+
+        return json({
+          error:
+            "Sin cambios."
+        }, 400);
+
+      }
+
+
+      sets.push(
+        "updated_at=?"
+      );
+
+
+      vals.push(
+        nowIso(),
+        id
+      );
+
+
+      await env.DB
+        .prepare(`
+          UPDATE users
+          SET ${sets.join(",")}
+          WHERE id=?
+        `)
+        .bind(...vals)
+        .run();
+
+
+      return json({
+        ok: true,
+        message:
+          "Usuario actualizado correctamente."
+      });
+
+    }
+
   }
 
 
@@ -1430,32 +2483,7 @@ async function api(request, env, url) {
   ======================================================= */
 
   return json({
-    error: "Ruta no encontrada"
+    error:
+      "Ruta no encontrada"
   }, 404);
-}
-
-
-/* =========================================================
-   SHA-256
-========================================================= */
-
-async function sha256(value) {
-
-  const data =
-    new TextEncoder().encode(value);
-
-  const hash =
-    await crypto.subtle.digest(
-      "SHA-256",
-      data
-    );
-
-  return [
-    ...new Uint8Array(hash)
-  ]
-    .map(
-      b =>
-        b.toString(16).padStart(2, "0")
-    )
-    .join("");
 }
