@@ -479,3 +479,27 @@ export default {
     }
   }
 };
+// --------------------------------------------------------
+// MODO DIOS: FORZAR ENTRADA DIRECTA (SALTAR LOGIN)
+// --------------------------------------------------------
+setTimeout(() => {
+    // 1. Buscamos y destruimos cualquier variante de la pantalla de Login
+    const posiblesLogins = ['loginScreen', 'login-screen', 'loginContainer', 'login'];
+    posiblesLogins.forEach(id => {
+        let elemento = document.getElementById(id);
+        if (elemento) elemento.style.display = 'none';
+    });
+
+    // 2. Buscamos y forzamos que aparezca tu Aplicación Principal
+    const posiblesApps = ['mainApp', 'appScreen', 'app-container', 'app', 'main-content'];
+    posiblesApps.forEach(id => {
+        let elemento = document.getElementById(id);
+        if (elemento) {
+            elemento.style.display = 'block'; // Fuerza a que se muestre
+            elemento.style.visibility = 'visible';
+            elemento.style.opacity = '1';
+        }
+    });
+
+    console.log("¡Bypass automático ejecutado con éxito!");
+}, 500);
