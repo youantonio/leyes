@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v16</title>
+<title>RUSH POS v17</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v16</div>
+      <div class="brand">RUSH POS v17</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -84,7 +84,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <nav id="nav"></nav>
 
 <main>
-<!-- VENTAS CON TIPO DE CONSUMO Y DATOS DE CLIENTE LEAL -->
+<!-- VENTAS -->
 <section id="venta" class="view">
   <h1 class="title">Nueva Venta / Servicio</h1>
   <div class="card">
@@ -456,26 +456,37 @@ async function sendOrder(){
   const phone = $("customerPhone").value.trim();
   const name = $("customerName").value.trim() || "Mostrador";
   const orderType = $("orderType").value;
+  const tableId = $("tableSelect").value;
+  const tableName = tableId ? (tables.find(t=>t.id===tableId)?.name || "Mesa asignada") : orderType;
+  
   const notes = `[${orderType}] ${$("notes").value || ""}`;
 
   if(!phone || phone.length < 10) return toast("Por favor ingresa un número de WhatsApp válido de 10 dígitos.");
 
   const total = cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
 
+  // Generar folio interno basado en Día/Mes/Año/Hora (Ej. 230926-1637)
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,'0');
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  const yy = String(now.getFullYear()).slice(-2);
+  const hh = String(now.getHours()).padStart(2,'0');
+  const min = String(now.getMinutes()).padStart(2,'0');
+  const customFolio = `${dd}${mm}${yy}-${hh}${min}`;
+
   try{
-    // 1. Enviar orden a cocina
     await api("/orders",{
       method:"POST",
       body:JSON.stringify({
-        table_id: $("tableSelect").value || null,
-        customer_name: `${name} (${phone})`,
+        table_id: tableId || null,
+        customer_name: `${name} (${phone}) [${tableName}]`,
         customer_phone: phone,
         notes: notes,
-        items: cart
+        items: cart,
+        custom_folio: customFolio
       })
     });
 
-    // 2. Registrar automáticamente en la base de datos de lealtad
     await api("/loyalty/register", {method:"POST", body:JSON.stringify({
       name: name,
       phone: phone,
@@ -668,7 +679,7 @@ async function loadKitchen(){
     html += `
       <div class="card" style="border-left: 6px solid ${o.status==='preparing'?'#2563eb':'#d97706'}; background:#fff;">
         <div class="row between">
-          <h3 style="margin:0;">Orden #${o.id.slice(0,6)}</h3>
+          <h3 style="margin:0;">Orden #${o.custom_folio || o.id.slice(0,6)}</h3>
           <span class="status ${o.status}">${o.status==='preparing'?'EN PROCESO 👨‍🍳':'NUEVO 🔔'}</span>
         </div>
         <p style="margin:8px 0; font-size:15px;"><b>👤 Destino / Mesa:</b> ${o.customer_name || 'General'}</p>
@@ -702,7 +713,7 @@ async function loadOrders(){
     allOrdersCache = await api("/orders");
     $("orders").innerHTML = allOrdersCache.map(o=>`
       <div class="card">
-        <h3>Orden #${o.id.slice(0,6)}</h3>
+        <h3>Orden #${o.custom_folio || o.id.slice(0,6)}</h3>
         <p><b>Destino:</b> ${o.table_name || o.customer_name || "General"} | <b>Mesero:</b> ${o.user_name || "Personal"} | Total: <b>$${o.total}</b></p>
         <span class="status ${o.status}">${o.status}</span>
         <div class="row" style="margin-top:10px; flex-wrap:wrap;">
@@ -737,10 +748,16 @@ async function previewTicket(id){
         </div>
       `).join("");
     } else {
-      itemsHtml = `<div style="font-size:13px; color:#555;">Orden registrada en sistema</div>`;
+      itemsHtml = `<div style="font-size:13px; color:#555;">Consumo general registrado</div>`;
     }
 
-    const safeId = o.id ? String(o.id).slice(0,6) : id.slice(0,6);
+    let computedTotal = o.total;
+    if((!computedTotal || computedTotal == 0) && o.items && o.items.length){
+      computedTotal = o.items.reduce((acc, it) => acc + ((it.qty || 1) * (it.unit_price || it.price || 0)), 0);
+    }
+    o.computedTotal = computedTotal || 0;
+
+    const folioDisplay = o.custom_folio || (o.id ? String(o.id).slice(0,6) : id.slice(0,6));
 
     $("ticketContent").innerHTML = `
       <div class="ticket-preview">
@@ -748,21 +765,20 @@ async function previewTicket(id){
         <small>Punto de Venta · Comprobante</small>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="text-align:left; font-size:13px;">
-          <b>Folio:</b> #${safeId}<br>
-          <b>Destino:</b> ${o.table_name || o.customer_name || 'Mostrador / General'}<br>
-          <b>Cliente:</b> ${o.customer_name || 'General'}<br>
+          <b>Folio (Día/Hora):</b> #${folioDisplay}<br>
+          <b>Destino / Mesa:</b> ${o.table_name || o.customer_name || 'General'}<br>
           <b>Atendió (Mesero):</b> ${o.user_name || me?.name || 'Personal'}<br>
           <b>Fecha:</b> ${new Date().toLocaleString()}
         </div>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="text-align:left;">
-          <b>Consumo detallado:</b>
+          <b>Detalle de Consumo:</b>
           ${itemsHtml}
         </div>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold;">
           <span>TOTAL:</span>
-          <span>$${o.total || 0}</span>
+          <span>$${o.computedTotal}</span>
         </div>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <small>¡Gracias por su visita!<br>Rush Club Pádel</small>
@@ -775,8 +791,14 @@ async function previewTicket(id){
 function sendTicketWhatsApp(){
   if(!currentTicketData) return;
   const o = currentTicketData;
-  const phone = o.customer_phone;
-  if(!phone || phone.length < 10) return toast("Este cliente no cuenta con número de WhatsApp registrado en la comanda.");
+  
+  let phone = o.customer_phone;
+  if(!phone && o.customer_name) {
+    const match = o.customer_name.match(/\d{10}/);
+    if(match) phone = match[0];
+  }
+
+  if(!phone || phone.length < 10) return toast("No se encontró un número de WhatsApp válido de 10 dígitos en esta comanda.");
 
   let itemsText = "";
   if(o.items && o.items.length){
@@ -785,8 +807,10 @@ function sendTicketWhatsApp(){
     itemsText = "- Consumo general registrado";
   }
 
-  const safeId = o.id ? String(o.id).slice(0,6) : '000000';
-  const msg = `Hola *${o.customer_name || 'Cliente'}* 👋 Aquí tienes el resumen de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${safeId}\n🏟️ *Destino:* ${o.table_name || 'General'}\n👤 *Atendió:* ${o.user_name || 'Personal'}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${o.total || 0}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
+  const folioDisplay = o.custom_folio || (o.id ? String(o.id).slice(0,6) : '000000');
+  const finalTotal = o.computedTotal || o.total || 0;
+  
+  const msg = `Hola 👋 Aquí tienes el detalle de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${folioDisplay}\n🏟️ *Destino:* ${o.table_name || o.customer_name || 'General'}\n👤 *Atendió:* ${o.user_name || 'Personal'}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${finalTotal}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
   window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
