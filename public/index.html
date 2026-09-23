@@ -1,10 +1,10 @@
-<!doctype html> <title>RUSH POS v2</title>.
+<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS · Club de Pádel y Restaurante</title>
+<title>RUSH POS v3</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -33,8 +33,8 @@ main{max-width:1180px;margin:auto;padding:16px}
 .login{min-height:100vh;display:grid;place-items:center;padding:20px}
 .loginbox{width:min(430px,100%);background:#fff;border-radius:24px;padding:28px;border:1px solid #ddd}
 .search{font-size:17px;padding:15px 16px;border-radius:16px}
-.chips{display:flex;gap:8px;overflow:auto;padding:3px 0 12px}
-.chip{white-space:nowrap;border-radius:999px;padding:10px 15px;background:#e5e7eb;cursor:pointer;border:0;font-weight:600} 
+.chips{display:flex;gap:8px;overflow-x:auto;padding:6px 0 14px;white-space:nowrap;scrollbar-width:thin}
+.chip{display:inline-block;border-radius:999px;padding:10px 18px;background:#e5e7eb;cursor:pointer;border:0;font-weight:700;font-size:14px} 
 .chip.active{background:#111;color:#fff}
 .product-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .product{ min-height:142px;text-align:left;padding:15px;border-radius:17px; display:flex;flex-direction:column;justify-content:space-between; border:1px solid #e2e2e2;background:#fff }
@@ -44,7 +44,6 @@ main{max-width:1180px;margin:auto;padding:16px}
 .order-item{display:grid;grid-template-columns:1fr auto;gap:8px;padding:11px 0;border-bottom:1px solid #eee}
 .sticky-cart{position:sticky;bottom:10px;margin-top:12px;z-index:10}
 .cartbar{background:#111;color:#fff;border-radius:17px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 8px 25px rgba(0,0,0,.18)}
-.cartbar button{background:#fff;color:#111;border:0;padding:10px 14px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:50;display:grid;place-items:center;padding:12px}
 .modalbox{background:#fff;border-radius:22px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:20px}
 table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
@@ -71,7 +70,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS</div>
+      <div class="brand">RUSH POS v3</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -84,7 +83,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <nav id="nav"></nav>
 
 <main>
-<!-- VENTAS (TIPO STARBUCKS CON FILTROS CLasificados) -->
+<!-- VENTAS -->
 <section id="venta" class="view">
   <h1 class="title">Nueva Venta / Servicio</h1>
   <div class="card">
@@ -92,7 +91,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <div style="flex:1"><input id="productSearch" class="search" placeholder="🔎 Buscar platillo, bebida, café..." oninput="renderProducts()"></div>
       <button onclick="loadAll()">↻</button>
     </div>
-    <!-- Filtros por Categoría tipo Starbucks -->
+    <!-- Filtros por Categoría optimizados tipo Starbucks -->
     <div id="categoryChips" class="chips"></div>
     <div id="products"></div>
   </div>
@@ -101,13 +100,13 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <div class="row between"><h2 style="margin:0">Destino del Pedido</h2><span id="waiterLabel" class="muted"></span></div>
     <div class="grid" style="margin-top:12px">
       <label>Mesa / Cancha / Canal<select id="tableSelect"></select></label>
-      <label>WhatsApp del cliente<input id="customerPhone" placeholder="10 dígitos" onblur="checkLoyaltyClient()"></label>
+      <label>WhatsApp del cliente<input id="customerPhone" placeholder="10 dígitos"></label>
       <label>Nombre del cliente<input id="customerName" placeholder="Nombre o referencia"></label>
     </div>
     <div id="cart" style="margin-top:12px"></div>
     <div class="row between" style="margin-top:13px"><span class="total">Total</span><span id="cartTotal" class="total">$0.00</span></div>
     <label style="display:block;margin-top:10px">Notas generales<textarea id="notes" rows="2" placeholder="Indicaciones especiales..."></textarea></label>
-    <button class="primary" style="width:100%;margin-top:10px" onclick="sendOrder()">Enviar a Cocina / Registrar</button>
+    <button class="primary" style="width:100%;margin-top:10px;padding:16px;font-size:18px;" onclick="sendOrder()">🚀 Enviar a Cocina / Registrar</button>
   </div>
 </section>
 
@@ -116,7 +115,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <h1 class="title">🎾 Reservas de Canchas de Pádel</h1>
   <div class="card" style="margin-bottom:15px; background:#f0fdf4; border:1px solid #16a34a;">
     <h2>📅 Agendar Cancha y Crear Cuenta Global</h2>
-    <p class="muted">La reserva abrirá una orden automática para que puedan pedir bebidas o alimentos durante el partido.</p>
     <div class="grid" style="margin-top:12px;">
       <label>Cancha:<select id="resCourtSelect"></select></label>
       <label>Fecha:<input type="date" id="resDate"></label>
@@ -140,7 +138,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="tables" class="grid"></div>
 </section>
 
-<!-- COCINA (KDS) CON CHAT -->
+<!-- COCINA -->
 <section id="cocina" class="view hidden">
   <h1 class="title">Cocina (KDS) y Comunicación</h1>
   <div id="kitchenOrders" class="grid"></div>
@@ -160,7 +158,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <h1 class="title">Reporte Financiero y Corte de Caja</h1>
   <div class="card" style="margin-bottom:15px; background:#fff7ed; border-color:#fdba74;">
     <h2>🔒 Cierre de Turno / Corte Diario</h2>
-    <p class="muted">Recuerda realizar tu corte y descargar el respaldo de caja semanalmente para seguridad del negocio.</p>
     <button class="danger" onclick="makeCashCut()">Realizar Corte de Caja de Hoy</button>
   </div>
   <div id="dashboard" class="grid"></div>
@@ -177,7 +174,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <button onclick="exportData('loyalty')">📥 Respaldar Clientes (CSV)</button>
   </div>
   <div class="card" style="background:#f0fdf4; border:1px solid #16a34a; margin-top:15px;">
-    <h2>📢 Campaña Masiva de WhatsApp (Anti-Spam)</h2>
+    <h2>📢 Campaña Masiva de WhatsApp</h2>
     <textarea id="bulkMessage" rows="3" placeholder="Escribe tu promoción..."></textarea>
     <div style="margin-top:10px;"><button class="success" onclick="startCampaign()">🚀 Iniciar Envío Guiado</button></div>
     <div id="campaignQueue" class="hidden" style="margin-top:15px; padding:15px; background:#fff; border-radius:12px; border:1px solid #16a34a;">
@@ -203,8 +200,8 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <h2>Registrar Compra a Proveedor</h2>
     <div class="grid">
       <label>Insumo:<select id="purInvSelect"></select></label>
-      <input id="purSupplier" placeholder="Proveedor (Ej. Sam's)">
-      <input id="purRFC" placeholder="RFC (Opcional)">
+      <input id="purSupplier" placeholder="Proveedor">
+      <input id="purRFC" placeholder="RFC">
       <input type="date" id="purDate">
       <input type="number" id="purQty" step="0.01" placeholder="Cantidad">
       <input type="number" id="purCost" step="0.01" placeholder="Costo Total $">
@@ -226,7 +223,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div class="card" style="margin-top:15px;">
     <div class="grid">
       <input id="pName" placeholder="Nombre">
-      <input id="pCategory" placeholder="Categoría (Ej. Desayunos, Alimentos, Café, Bebidas)">
+      <input id="pCategory" placeholder="Categoría (Ej. Bebidas, Chilaquiles, Hamburguesas)">
       <input id="pPrice" type="number" step=".01" placeholder="Precio">
       <input id="pDesc" placeholder="Descripción">
       <button class="primary" onclick="createProduct()">Crear producto</button>
@@ -254,19 +251,12 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </main>
 </section>
 
-<!-- MODALES (PAGO, CHAT, HISTORIAL) -->
-<div id="paymentModal" class="modal hidden">
-  <div class="modalbox">
-    <div class="row between"><h2 style="margin:0">Cobro de cuenta</h2><button onclick="closePayment()">✕</button></div>
-    <div id="paymentBody" style="margin-top:14px"></div>
-  </div>
-</div>
-
+<!-- MODALES -->
 <div id="chatModal" class="modal hidden">
   <div class="modalbox">
     <div class="row between"><h2 style="margin:0" id="chatModalTitle">Chat de Comanda</h2><button onclick="closeChat()">✕</button></div>
     <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow:auto; background:#f9fafb; padding:12px; border-radius:12px;"></div>
-    <div class="row"><input id="chatInput" placeholder="Escribe un mensaje a cocina/mesero..."><button class="primary" onclick="sendChat()">Enviar</button></div>
+    <div class="row"><input id="chatInput" placeholder="Escribe un mensaje..."><button class="primary" onclick="sendChat()">Enviar</button></div>
   </div>
 </div>
 
@@ -320,14 +310,12 @@ function showApp(){
   $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
   $("userPill").textContent=`● ${me.name} (${me.role})`;
   
-  // Opciones de navegación según rol
   let nav=[];
   if(me.role==="cocina"){
     nav=[["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
   } else if(me.role==="mesero"){
     nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
   } else {
-    // Admin ve todo
     nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"],["caja","📊 Caja"],["lealtad","⭐ Lealtad"],["inventario","📦 Inventario"],["productos","🍔 Menú"],["usuarios","👥 Usuarios"]];
   }
 
@@ -361,12 +349,12 @@ async function loadAll(){
 }
 
 // -----------------------------------------------------
-// VENTAS TIPO STARBUCKS (FILTROS Y CATEGORÍAS)
+// VENTAS Y FILTROS TIPO STARBUCKS
 // -----------------------------------------------------
 function renderCategoryChips(){
   const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))];
   $("categoryChips").innerHTML = cats.map(c=>`
-    <button class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>
+    <button type="button" class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>
   `).join("");
 }
 
@@ -385,7 +373,7 @@ function renderProducts(){
   });
 
   $("products").innerHTML=`<div class="product-grid">`+filtered.map(p=>`
-    <button class="product" onclick="addToCart('${p.id}')">
+    <button type="button" class="product" onclick="addToCart('${p.id}')">
       <div><b>${p.name}</b><div class="desc">${p.description||""}</div></div>
       <div><div class="price">$${p.price}</div><div class="add">＋ Agregar</div></div>
     </button>`).join("")+`</div>`;
@@ -403,7 +391,7 @@ function renderCart(){
   $("cart").innerHTML=cart.length?cart.map((x,i)=>`
     <div class="order-item">
       <div>${x.qty} × ${x.name}</div>
-      <div class="row"><b>$${x.qty*x.unit_price}</b><button onclick="cart.splice(${i},1);renderCart()">✕</button></div>
+      <div class="row"><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart()">✕</button></div>
     </div>
   `).join(""):"<p class='muted'>Carrito vacío</p>";
   $("cartTotal").textContent="$"+total;
@@ -419,7 +407,7 @@ async function sendOrder(){
     await api("/orders",{
       method:"POST",
       body:JSON.stringify({
-        table_id: $("tableSelect").value||null,
+        table_id: $("tableSelect").value || null,
         customer_name: $("customerName").value || "Mostrador",
         customer_phone: $("customerPhone").value || "",
         notes: $("notes").value || "",
@@ -510,7 +498,6 @@ async function loadOrders(){
   `).join("");
 }
 
-// CHAT DE COMANDAS
 async function openChat(orderId){
   activeChatOrderId = orderId;
   $("chatModalTitle").textContent = `Chat de Comanda #${orderId.slice(0,6)}`;
@@ -652,7 +639,7 @@ function renderProductAdmin(){
   $("productAdmin").innerHTML = products.map(p=>`
     <div class="card">
       <h3>${p.name}</h3><p>$${p.price} · <b>${p.category}</b></p>
-      <button class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button>
+      <button type="button" class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button>
     </div>
   `).join("");
 }
@@ -676,8 +663,8 @@ async function loadUsers(){
       <td>${u.name}</td>
       <td>${u.role}</td>
       <td>
-        <button onclick="changePass('${u.id}')">🔑 Clave</button>
-        <button class="danger" onclick="deleteUser('${u.id}')">🗑️ Eliminar</button>
+        <button type="button" onclick="changePass('${u.id}')">🔑 Clave</button>
+        <button type="button" class="danger" onclick="deleteUser('${u.id}')">🗑️ Eliminar</button>
       </td>
     </tr>
   `).join("")}</tbody></table>`;
