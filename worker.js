@@ -88,9 +88,26 @@ function json(data, status = 200) {
 
 
 async function body(request) {
-  return await request.json().catch(() => ({}));
-}
 
+  const text = await request.text();
+
+  if (!text || !text.trim()) {
+    throw new Error("La petición llegó sin datos.");
+  }
+
+  try {
+
+    return JSON.parse(text);
+
+  } catch (error) {
+
+    throw new Error(
+      "JSON inválido recibido por el servidor."
+    );
+
+  }
+
+}
 
 /* =========================================================
    FECHAS
