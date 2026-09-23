@@ -258,6 +258,21 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
   </div>
 </div>
 
+<div id="chatModal" class="modal hidden">
+  <div class="modalbox">
+    <div class="row between">
+      <h2 style="margin:0">Chat de la Orden</h2>
+      <button onclick="closeChat()">✕</button>
+    </div>
+    <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow-y:auto; padding:12px; background:#f5f5f5; border-radius:12px; border:1px solid #ddd;">
+    </div>
+    <div class="row">
+      <input id="chatInput" placeholder="Escribe duda o nota..." onkeydown="if(event.key==='Enter')sendChat()">
+      <button class="primary" onclick="sendChat()">Enviar</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script>
@@ -300,6 +315,7 @@ async function login(){
     me=data.user;
     showApp();
     loadAll();
+    startPolling();
   }catch(e){toast(e.message)}
 }
 
@@ -309,6 +325,7 @@ async function logout(show=true){
   localStorage.removeItem("rush_token");
   $("appView").classList.add("hidden");
   $("loginView").classList.remove("hidden");
+  if(pollInterval) clearInterval(pollInterval);
   if(show)toast("Sesión cerrada");
 }
 
@@ -319,6 +336,7 @@ async function boot(){
     me=d.user;
     showApp();
     loadAll();
+    startPolling();
   }catch{}
 }
 
@@ -613,6 +631,9 @@ async function sendOrder(){
     $("notes").value="";
     tables=await api("/tables");
     renderTableSelect();
+    
+    // Forzar lectura inmediata si estamos esperando nuevas comandas
+    pollNotifications();
 
   }catch(e){toast(e.message)}
 }
@@ -630,10 +651,11 @@ async function loadKitchen(){
         </div>
         <p><b>Mesero:</b> ${esc(o.waiter_name||"No asignado")}</p>
         <p>${esc(o.customer_name||"Sin cliente")}</p>
-        <p><b>$${money(o.total)}</b></p>
-        <div class="row">
-          ${o.status==="open"?`<button class="primary" onclick="orderStatus('${escAttr(o.id)}','preparing')">Preparando</button>`:""}
-          ${o.status==="preparing"?`<button class="primary" onclick="orderStatus('${escAttr(o.id)}','ready')">Listo</button>`:""}
+        ${o.estimated_time ? `<p class="muted">⏳ Estimado: <b>${o.estimated_time} min</b></p>` : ''}
+        <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
+          ${o.status==="open"?`<button class="primary" onclick="acceptOrder('${escAttr(o.id)}')">Aceptar pedido</button>`:""}
+          ${o.status==="preparing"?`<button class="primary" onclick="orderStatus('${escAttr(o.id)}','ready')">Listo ✔️</button>`:""}
+          <button onclick="openChat('${escAttr(o.id)}')">💬 Chat / Dudas</button>
         </div>
       </div>
     `).join("")||"<p class='muted'>No hay pedidos pendientes.</p>";
@@ -646,6 +668,21 @@ async function orderStatus(id,status){
     await api("/orders/"+id,{method:"PATCH",body:JSON.stringify({status})});
     loadKitchen();
     if(status==="paid")loadOrders();
+    pollNotifications();
+  }catch(e){toast(e.message)}
+}
+
+async function acceptOrder(id) {
+  const mins = prompt("¿En cuántos minutos aprox. estará listo? (Solo ingresa el número)");
+  if(mins === null) return; 
+  try {
+    await api("/orders/"+id, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "preparing", estimated_time: Number(mins) || 0 })
+    });
+    loadKitchen();
+    pollNotifications();
+    toast("Pedido aceptado. Notificando tiempo...");
   }catch(e){toast(e.message)}
 }
 
@@ -663,17 +700,23 @@ async function loadOrders(){
         <p>Mesero: <b>${esc(o.waiter_name||"No asignado")}</b></p>
         <p>${esc(o.customer_name||"Sin cliente")}</p>
         <b>$${money(o.total)}</b>
+        
+        ${o.estimated_time ? `<p style="color:#b91c1c; font-weight:bold;">⏳ Cocina estima: ${o.estimated_time} min</p>` : ''}
 
         ${Number(o.paid_amount||0)>0?
           `<div class="payment-summary" style="margin-top:10px">
             <b>Cobrado: $${money(o.paid_amount)}</b><br>             <small>Efectivo $${money(o.paid_cash)} · Tarjeta $${money(o.paid_card)} · Terminal $${money(o.terminal_amount)}</small>${o.paid_amount<o.total?`<br><small class="muted">Pendiente $${money(o.total-o.paid_amount)}</small>`:""}
           </div>`:""}
 
-        ${["waiter","mesero","admin"].includes(me.role)&&["ready","partial"].includes(o.status)?
-          `<button class="primary" style="margin-top:10px" onclick="pay('${escAttr(o.id)}')">Cobrar / dividir cuenta</button>`:""}
+        <div class="row" style="margin-top:10px; gap:8px; flex-wrap:wrap;">
+          ${["waiter","mesero","admin"].includes(me.role)&&["ready","partial"].includes(o.status)?
+            `<button class="primary" onclick="pay('${escAttr(o.id)}')">Cobrar / dividir</button>`:""}
 
-        ${["waiter","mesero","admin"].includes(me.role)&&o.status==="ready"?
-          `<button class="primary" style="margin-top:10px" onclick="pay('${escAttr(o.id)}')">Cobrar / dividir cuenta</button>`:""}
+          ${["waiter","mesero","admin"].includes(me.role)&&o.status==="ready"?
+            `<button class="primary" onclick="pay('${escAttr(o.id)}')">Cobrar / dividir</button>`:""}
+
+          <button onclick="openChat('${escAttr(o.id)}')">💬 Chat con Cocina</button>
+        </div>
       </div>
     `).join("");
 
@@ -1204,23 +1247,7 @@ async function loadUsers(){
     `;
   }catch(e){toast(e.message)}
 }
-async function deleteUser(id, name){
-  if(!confirm(`¿Estás seguro de que deseas eliminar permanentemente al usuario "${name}"?`)){
-    return;
-  }
 
-  try{
-    await api(`/users/${id}`, {
-      method: "DELETE"
-    });
-
-    toast("Usuario eliminado");
-    loadUsers(); // Recargamos la tabla para que desaparezca
-
-  }catch(e){
-    toast(e.message);
-  }
-}
 async function createUser(){
   try{
     await api("/users",{
@@ -1241,6 +1268,24 @@ async function createUser(){
     loadUsers();
 
   }catch(e){toast(e.message)}
+}
+
+async function deleteUser(id, name){
+  if(!confirm(`¿Estás seguro de que deseas eliminar permanentemente al usuario "${name}"?`)){
+    return;
+  }
+
+  try{
+    await api(`/users/${id}`, {
+      method: "DELETE"
+    });
+
+    toast("Usuario eliminado");
+    loadUsers(); 
+
+  }catch(e){
+    toast(e.message);
+  }
 }
 
 function tableName(id){
@@ -1270,6 +1315,121 @@ function esc(s){
 
 function escAttr(s){
   return esc(s);
+}
+
+// --- SISTEMA DE CHAT ---
+let currentChatOrder = null;
+
+async function openChat(orderId) {
+  currentChatOrder = orderId;
+  $("chatModal").classList.remove("hidden");
+  $("chatMessages").innerHTML = "<p class='muted'>Cargando mensajes...</p>";
+  await loadChat();
+}
+
+function closeChat() {
+  $("chatModal").classList.add("hidden");
+  currentChatOrder = null;
+}
+
+async function loadChat() {
+  if(!currentChatOrder) return;
+  try {
+    const msgs = await api(`/orders/${currentChatOrder}/comments`);
+    $("chatMessages").innerHTML = msgs.length ? msgs.map(m => `
+      <div style="background:${m.role==='cocina'?'#fff2cc':'#dbeafe'}; padding:10px; border-radius:10px; margin-bottom:8px;">
+        <div class="row between">
+          <b style="font-size:13px">${esc(m.user_name)} (${roleName(m.role)})</b>
+          <span style="font-size:11px; color:#777;">${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div style="margin-top:4px; line-height:1.4;">${esc(m.comment)}</div>
+      </div>
+    `).join("") : "<p class='muted' style='text-align:center'>No hay mensajes aún. Escribe el primero.</p>";
+    $("chatMessages").scrollTop = $("chatMessages").scrollHeight; 
+  } catch(e){toast(e.message)}
+}
+
+async function sendChat() {
+  const text = $("chatInput").value.trim();
+  if(!text) return;
+  try {
+    await api(`/orders/${currentChatOrder}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ comment: text })
+    });
+    $("chatInput").value = "";
+    await loadChat();
+  } catch(e){toast(e.message)}
+}
+
+// --- NOTIFICACIONES, ALERTAS Y SONIDOS ---
+let knownOrders = null;
+let pollInterval = null;
+
+function startPolling() {
+  if(pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(pollNotifications, 8000); // Revisa cada 8 segundos
+  pollNotifications();
+}
+
+function playBeep(type) {
+  try {
+    if(navigator.vibrate) navigator.vibrate([200, 100, 200]); // Vibración
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    if(type === 'kitchen') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(500, ctx.currentTime);
+      osc.frequency.setValueAtTime(700, ctx.currentTime + 0.15); // Tut-Tú
+    } else {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.15); // Tin-Tín
+    }
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+async function pollNotifications() {
+  if(!token || !me) return;
+  try {
+    const os = await api("/orders");
+    if (knownOrders === null) {
+      knownOrders = {};
+      os.forEach(o => knownOrders[o.id] = o.status);
+      return;
+    }
+
+    let needsReload = false;
+    os.forEach(o => {
+      const prevStatus = knownOrders[o.id];
+      if(prevStatus !== o.status) {
+        needsReload = true;
+        // Nueva orden para cocina
+        if(isKitchen() && (!prevStatus || prevStatus==='undefined') && o.status === 'open') {
+          playBeep('kitchen');
+          toast(`🔔 ¡Nueva orden! Mesa: ${tableName(o.table_id)}`);
+        }
+        // Orden lista para mesero
+        if(isWaiterRole(me.role) && prevStatus === 'preparing' && o.status === 'ready') {
+          playBeep('waiter');
+          toast(`✅ ¡Orden lista! Mesa: ${tableName(o.table_id)}`);
+        }
+      }
+      knownOrders[o.id] = o.status;
+    });
+
+    if(needsReload) { 
+       if(!$("cocina").classList.contains("hidden")) loadKitchen();
+       if(!$("ordenes").classList.contains("hidden")) loadOrders();
+    }
+  } catch(e) {}
 }
 
 boot();
