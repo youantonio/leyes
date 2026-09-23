@@ -262,6 +262,7 @@ async function ensureDatabase(env) {
         id TEXT PRIMARY KEY,
         table_id TEXT,
         customer_name TEXT DEFAULT '',
+        customer_phone TEXT DEFAULT '',
         notes TEXT DEFAULT '',
         status TEXT NOT NULL DEFAULT 'open',
         subtotal REAL NOT NULL DEFAULT 0,
@@ -308,13 +309,32 @@ async function ensureDatabase(env) {
         comment TEXT NOT NULL,
         created_at TEXT NOT NULL
       )
+    `),
+
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS loyalty_customers (
+        phone TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        gender TEXT DEFAULT 'No especificado',
+        birthday TEXT DEFAULT '',
+        visits INTEGER DEFAULT 0,
+        total_spent REAL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
     `)
 
   ]);
 
   try {
-    // Añadir columna de tiempo estimado si no existe
     await env.DB.prepare(`ALTER TABLE orders ADD COLUMN estimated_time INTEGER DEFAULT 0`).run();
+  } catch(e) {} 
+
+  try {
+    await env.DB.prepare(`ALTER TABLE orders ADD COLUMN print_requested INTEGER DEFAULT 0`).run();
+  } catch(e) {} 
+
+  try {
+    await env.DB.prepare(`ALTER TABLE orders ADD COLUMN customer_phone TEXT DEFAULT ''`).run();
   } catch(e) {} 
 
 
@@ -956,7 +976,8 @@ async function api(
     resource === "login"
   ) {
 
-    const d = await body(request);
+    const d =
+      await body(request);
 
     const username =
       String(
@@ -1000,23 +1021,21 @@ async function api(
     if (
       !user ||
       !(
-   if (!user) {
+        await verifyPassword(
+          password,
+          user.password_salt,
+          user.password_hash
+        )
+      )
+    ) {
+
       return json({
-        error: `Debug: El usuario '${username}' NO EXISTE en esta base de datos. (Quizás se conectó a una DB vacía).`
+        error:
+          "Usuario o contraseña incorrectos."
       }, 401);
+
     }
 
-    const isValid = await verifyPassword(
-      password,
-      user.password_salt,
-      user.password_hash
-    );
-
-    if (!isValid) {
-      return json({
-        error: `Debug: El usuario existe, pero la contraseña no coincide. Revisa si hay un espacio en blanco al final.`
-      }, 401);
-    }
 
     const token =
       randomHex(32);
@@ -1149,6 +1168,36 @@ async function api(
         "Sesión no válida o expirada."
     }, 401);
 
+  }
+
+
+  /* =======================================================
+     CLIENTES LEALES (LOYALTY)
+  ======================================================= */
+
+  if (resource === "loyalty") {
+    if (request.method === "GET" && !id) {
+      const rows = await env.DB.prepare(`SELECT * FROM loyalty_customers ORDER BY visits DESC, name ASC`).all();
+      return json(rows.results);
+    }
+    if (request.method === "POST" && !id) {
+      const d = await body(request);
+      const phone = String(d.phone || "").trim();
+      const name = String(d.name || "").trim();
+      if (!phone || !name) return json({ error: "Teléfono y nombre son obligatorios." }, 400);
+
+      await env.DB.prepare(`
+        INSERT INTO loyalty_customers (phone, name, gender, birthday, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(phone) DO UPDATE SET name=excluded.name, gender=excluded.gender, birthday=excluded.birthday
+      `).bind(phone, name, d.gender || "No especificado", d.birthday || "", nowIso()).run();
+
+      return json({ ok: true, phone, name });
+    }
+    if (request.method === "GET" && id) {
+      const customer = await env.DB.prepare(`SELECT * FROM loyalty_customers WHERE phone=?`).bind(id).first();
+      return json(customer || { error: "Cliente no encontrado" }, customer ? 200 : 404);
+    }
   }
 
 
@@ -1491,9 +1540,43 @@ async function api(
         .bind(id)
         .all();
 
+    const payments =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM cash_movements
+          WHERE order_id=?
+            AND type='pago'
+          ORDER BY created_at
+        `)
+        .bind(id)
+        .all();
+
+    const paid_amount =
+      payments.results.reduce(
+        (s, x) => s + Number(x.amount || 0),
+        0
+      );
+
+    const paid_cash =
+      payments.results
+        .filter(x => x.concept && x.concept.includes("Efectivo"))
+        .reduce((s, x) => s + Number(x.amount || 0), 0);
+
+    const paid_card =
+      payments.results
+        .filter(x => x.concept && (x.concept.includes("Tarjeta") || x.concept.includes("Terminal")))
+        .reduce((s, x) => s + Number(x.amount || 0), 0);
+
 
     return json({
-      order,
+      order: {
+        ...order,
+        paid_amount,
+        paid_cash,
+        paid_card,
+        terminal_amount: paid_card
+      },
       items:
         items.results
     });
@@ -1625,6 +1708,17 @@ async function api(
         subtotal - discount
       );
 
+    const phone = String(data.customer_phone || "").trim();
+    const custName = String(data.customer_name || "").trim();
+
+    if (phone && custName) {
+      await env.DB.prepare(`
+        INSERT INTO loyalty_customers (phone, name, gender, birthday, created_at)
+        VALUES (?, ?, 'No especificado', '', ?)
+        ON CONFLICT(phone) DO UPDATE SET name=excluded.name
+      `).bind(phone, custName, now).run();
+    }
+
 
     const stmts = [
 
@@ -1634,6 +1728,7 @@ async function api(
           id,
           table_id,
           customer_name,
+          customer_phone,
           notes,
           status,
           subtotal,
@@ -1645,12 +1740,13 @@ async function api(
           updated_at
         )
         VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
         orderId,
         data.table_id || null,
-        data.customer_name || "",
+        custName,
+        phone,
         data.notes || "",
         "open",
         subtotal,
@@ -1742,6 +1838,84 @@ async function api(
 
 
   /* =======================================================
+     ORDEN - PAGOS Y COBROS (PARCIALES)
+  ======================================================= */
+
+  if (
+    request.method === "POST" &&
+    resource === "orders" &&
+    id &&
+    action === "payments"
+  ) {
+    if (!requireRole(user, ["admin", "mesero"])) {
+      return json({ error: "Sin permiso para cobrar." }, 403);
+    }
+
+    const d = await body(request);
+    const amount = Number(d.amount || 0);
+    const cash = Number(d.cash_amount || 0);
+    const card = Number(d.card_amount || 0);
+
+    if (amount <= 0) {
+      return json({ error: "Monto de pago inválido." }, 400);
+    }
+
+    // Registrar en cash_movements como tipo 'pago'
+    const movementId = crypto.randomUUID();
+    let concept = `Cobro orden ${id.slice(0, 8)} - ${d.payer_name || 'Cliente'} (${d.method})`;
+    if (d.terminal_reference) {
+      concept += ` [Ref: ${d.terminal_reference}]`;
+    }
+
+    await env.DB.prepare(`
+      INSERT INTO cash_movements (id, type, amount, concept, order_id, created_at)
+      VALUES (?, 'pago', ?, ?, ?, ?)
+    `).bind(movementId, amount, concept, id, nowIso()).run();
+
+    // Ver si la orden ya se cubrió en su totalidad
+    const order = await env.DB.prepare(`SELECT total FROM orders WHERE id=?`).bind(id).first();
+    const paymentsSum = await env.DB.prepare(`SELECT SUM(amount) AS total FROM cash_movements WHERE order_id=? AND type='pago'`).bind(id).first();
+    const totalPaid = Number(paymentsSum?.total || 0);
+
+    const isFullyPaid = totalPaid >= Number(order?.total || 0) - 0.01;
+
+    let newStatus = "open";
+    if (isFullyPaid) {
+      newStatus = "paid";
+    }
+
+    await env.DB.prepare(`
+      UPDATE orders
+      SET status=?, payment_status=?, payment_method=?, closed_at=?, updated_at=?
+      WHERE id=?
+    `).bind(
+      isFullyPaid ? "paid" : "ready",
+      isFullyPaid ? "paid" : "partial",
+      d.method,
+      isFullyPaid ? nowIso() : null,
+      nowIso(),
+      id
+    ).run();
+
+    if (isFullyPaid) {
+      const ordInfo = await env.DB.prepare(`SELECT table_id, customer_phone, total FROM orders WHERE id=?`).bind(id).first();
+      if (ordInfo?.table_id) {
+        await env.DB.prepare(`UPDATE "tables" SET status='available' WHERE id=?`).bind(ordInfo.table_id).run();
+      }
+      if (ordInfo && ordInfo.customer_phone) {
+        await env.DB.prepare(`
+          UPDATE loyalty_customers 
+          SET visits = visits + 1, total_spent = total_spent + ?
+          WHERE phone = ?
+        `).bind(ordInfo.total, ordInfo.customer_phone).run();
+      }
+    }
+
+    return json({ ok: true, totalPaid, isFullyPaid });
+  }
+
+
+  /* =======================================================
      ORDEN - ACTUALIZAR
   ======================================================= */
 
@@ -1823,7 +1997,8 @@ async function api(
       "payment_method",
       "notes",
       "discount",
-      "estimated_time"
+      "estimated_time",
+      "print_requested"
     ];
 
 
@@ -1930,6 +2105,14 @@ async function api(
 
       }
 
+      if (order && order.customer_phone) {
+        await env.DB.prepare(`
+          UPDATE loyalty_customers 
+          SET visits = visits + 1, total_spent = total_spent + ?
+          WHERE phone = ?
+        `).bind(order.total, order.customer_phone).run();
+      }
+
     }
 
 
@@ -1938,6 +2121,7 @@ async function api(
     });
 
   }
+
 
   /* =======================================================
      COMENTARIOS DE ORDEN (CHAT)
@@ -1963,6 +2147,7 @@ async function api(
       .run();
     return json({ ok: true, id: newId });
   }
+
 
   /* =======================================================
      DASHBOARD
@@ -2043,11 +2228,28 @@ async function api(
         `)
         .first();
 
+    const paymentsSummary =
+      await env.DB
+        .prepare(`
+          SELECT
+            COALESCE(SUM(amount), 0) AS total,
+            COUNT(*) AS transactions,
+            COALESCE(SUM(CASE WHEN concept LIKE '%Efectivo%' THEN amount ELSE 0 END), 0) AS cash,
+            COALESCE(SUM(CASE WHEN concept LIKE '%Tarjeta%' OR concept LIKE '%Terminal%' THEN amount ELSE 0 END), 0) AS card,
+            COALESCE(SUM(CASE WHEN concept LIKE '%Terminal%' THEN amount ELSE 0 END), 0) AS terminal
+          FROM cash_movements
+          WHERE type='pago'
+            AND substr(created_at, 1, 10)=?
+        `)
+        .bind(today)
+        .first();
+
 
     return json({
       sales,
       open,
-      kitchen
+      kitchen,
+      payments: paymentsSummary
     });
 
   }
@@ -2184,10 +2386,7 @@ async function api(
     }
 
 
-    /* =====================================================
-       LISTAR USUARIOS
-    ===================================================== */
-
+    /* LISTAR USUARIOS */
     if (
       request.method === "GET" &&
       !id
@@ -2217,10 +2416,7 @@ async function api(
     }
 
 
-    /* =====================================================
-       CREAR USUARIO
-    ===================================================== */
-
+    /* CREAR USUARIO */
     if (
       request.method === "POST" &&
       !id
@@ -2259,8 +2455,6 @@ async function api(
         .toLowerCase();
 
 
-      /* VALIDACIÓN */
-
       if (
         !username ||
         !name ||
@@ -2274,13 +2468,11 @@ async function api(
 
         return json({
           error:
-            `Debug - Recibido: nombre='${name}', usuario='${username}', pass='${password ? "OK" : "FALTA"}', rol='${role}'`
+            "Nombre, usuario, contraseña y rol son obligatorios."
         }, 400);
 
       }
 
-
-      /* COMPROBAR USUARIO EXISTENTE */
 
       const exists =
         await env.DB
@@ -2303,8 +2495,6 @@ async function api(
       }
 
 
-      /* CREAR CONTRASEÑA */
-
       const {
         salt,
         hash
@@ -2314,13 +2504,9 @@ async function api(
         );
 
 
-      /* ID */
-
       const newId =
         crypto.randomUUID();
 
-
-      /* INSERTAR USUARIO */
 
       await env.DB
         .prepare(`
@@ -2362,8 +2548,6 @@ async function api(
         .run();
 
 
-      /* RESPUESTA */
-
       return json({
         ok: true,
         id: newId,
@@ -2377,10 +2561,7 @@ async function api(
     }
 
 
-    /* =====================================================
-       EDITAR USUARIO
-    ===================================================== */
-
+    /* EDITAR USUARIO */
     if (
       request.method === "PATCH" &&
       id
@@ -2535,10 +2716,8 @@ async function api(
 
     }
 
-    /* =====================================================
-       ELIMINAR USUARIO
-    ===================================================== */
 
+    /* ELIMINAR USUARIO */
     if (
       request.method === "DELETE" &&
       id
