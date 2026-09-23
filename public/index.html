@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v6</title>
+<title>RUSH POS v7</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -14,6 +14,7 @@ button:active{transform:scale(.98)}
 button.primary{background:#111;color:#fff;border-color:#111}
 button.danger{background:#b91c1c;color:#fff;border-color:#b91c1c}
 button.success{background:#16a34a;color:#fff;border-color:#16a34a}
+button.warning{background:#d97706;color:#fff;border-color:#d97706}
 input,select,textarea{width:100%;padding:13px;border:1px solid #ddd;border-radius:12px;background:#fff}
 header{background:#111;color:#fff;padding:15px 18px;position:sticky;top:0;z-index:20}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -69,7 +70,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v6</div>
+      <div class="brand">RUSH POS v7</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -136,7 +137,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="tables" class="grid"></div>
 </section>
 
-<!-- COCINA / KDS UNIFICADO Y ULTRA VISUAL -->
+<!-- COCINA (KDS) UNIFICADO -->
 <section id="cocina" class="view hidden">
   <div class="row between" style="margin-bottom:14px;">
     <h1 class="title" style="margin:0">👨‍🍳 Pantalla de Cocina (KDS)</h1>
@@ -148,7 +149,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <!-- ÓRDENES -->
 <section id="ordenes" class="view hidden">
   <div class="row between">
-    <h1 class="title" style="margin:0">Control de Órdenes y Chat</h1>
+    <h1 class="title" style="margin:0">Control de Órdenes y Soporte</h1>
     <button onclick="exportData('orders')">📥 Respaldar Órdenes (CSV)</button>
   </div>
   <div id="orders" class="grid" style="margin-top:15px"></div>
@@ -314,7 +315,6 @@ function showApp(){
   
   let nav=[];
   if(me.role==="cocina"){
-    // El cocinero tiene su vista KDS limpia y directa en una sola pestaña
     nav=[["cocina","👨‍🍳 Cocina (KDS)"]];
   } else if(me.role==="mesero"){
     nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
@@ -460,7 +460,7 @@ async function createReservation(){
 }
 
 // -----------------------------------------------------
-// COCINA (KDS) UNIFICADO Y ULTRA VISUAL
+// COCINA (KDS) CON FLUJO DE PROGRESO Y COBRO
 // -----------------------------------------------------
 function renderTables(){
   $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`
@@ -473,6 +473,7 @@ function renderTables(){
 
 async function loadKitchen(){
   const os = await api("/orders");
+  // Solo mostramos las que estén abiertas o preparándose en la pantalla del cocinero
   const activeOrders = os.filter(x=>["open","preparing"].includes(x.status));
   if(!activeOrders.length) {
     $("kitchenOrders").innerHTML = "<p class='muted'>¡Excelente trabajo! No hay pedidos pendientes en cocina por ahora.</p>";
@@ -495,11 +496,19 @@ async function loadKitchen(){
     } catch(e) {}
     itemsHtml += "</div>";
 
+    // Botones dinámicos según el estatus del pedido
+    let actionButtons = "";
+    if(o.status === 'open') {
+      actionButtons = `<button class="warning" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'preparing')">🛠️ Tomar Pedido (En Proceso)</button>`;
+    } else {
+      actionButtons = `<button class="success" style="flex:1; padding:14px;" onclick="updateOrderStatus('${o.id}', 'ready')">✅ Pedido Realizado</button>`;
+    }
+
     html += `
-      <div class="card" style="border-left: 6px solid #16a34a; background:#fff;">
+      <div class="card" style="border-left: 6px solid ${o.status==='preparing'?'#2563eb':'#d97706'}; background:#fff;">
         <div class="row between">
           <h3 style="margin:0;">Orden #${o.id.slice(0,6)}</h3>
-          <span class="status ${o.status}">${o.status.toUpperCase()}</span>
+          <span class="status ${o.status}">${o.status==='preparing'?'EN PROCESO 👨‍🍳':'NUEVO 🔔'}</span>
         </div>
         <p style="margin:8px 0; font-size:15px;"><b>👤 Destino / Mesa:</b> ${o.customer_name || 'General'}</p>
         ${o.notes ? `<p style="background:#fff7ed; padding:10px; border-radius:10px; margin:8px 0; border:1px solid #fed7aa;"><b>⚠️ Nota general:</b> ${o.notes}</p>` : ''}
@@ -507,13 +516,21 @@ async function loadKitchen(){
         <div style="font-size:14px; color:#555; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Platillos a preparar:</div>
         ${itemsHtml}
         <div class="row" style="margin-top:12px;">
-          <button class="success" style="flex:1; padding:14px;" onclick="api('/orders/${o.id}',{method:'PATCH',body:JSON.stringify({status:'ready'})}).then(loadKitchen)">✅ Marcar Lista</button>
+          ${actionButtons}
           <button onclick="openChat('${o.id}')" style="padding:14px;">💬 Chat</button>
         </div>
       </div>
     `;
   }
   $("kitchenOrders").innerHTML = html;
+}
+
+async function updateOrderStatus(id, newStatus){
+  try{
+    await api('/orders/'+id, {method:'PATCH', body:JSON.stringify({status: newStatus})});
+    toast(newStatus==='preparing' ? "Pedido tomado (En Proceso)" : "Pedido marcado como realizado");
+    loadKitchen();
+  }catch(e){toast(e.message)}
 }
 
 async function loadOrders(){
@@ -524,12 +541,21 @@ async function loadOrders(){
       <p>Cliente: ${o.customer_name||"General"} | Total: <b>$${o.total}</b></p>
       <span class="status ${o.status}">${o.status}</span>
       <div class="row" style="margin-top:10px;">
-        <button class="primary" onclick="pay('${o.id}')">Cobrar</button>
+        <button class="primary" onclick="payAndClear('${o.id}')">💵 Cobrar y Entregar</button>
         <button onclick="openChat('${o.id}')">💬 Chat</button>
         ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
       </div>
     </div>
   `).join("");
+}
+
+async function payAndClear(id){
+  if(!confirm("¿Confirmar cobro y entrega? La comanda se cerrará y se archivará como soporte.")) return;
+  try{
+    await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({amount: 99999, method:"cash"})});
+    toast("Cobro registrado y comanda archivada con éxito");
+    loadOrders();
+  }catch(e){toast(e.message)}
 }
 
 async function openChat(orderId){
@@ -569,11 +595,6 @@ async function deleteOrder(id){
     await api("/orders/"+id, {method:"DELETE"});
     loadOrders(); toast("Comanda eliminada");
   }
-}
-
-async function pay(id){
-  await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({amount: 99999, method:"cash"})});
-  toast("Cobro registrado con éxito"); loadOrders();
 }
 
 // -----------------------------------------------------
