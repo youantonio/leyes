@@ -385,6 +385,7 @@ function showApp(){
   if(isAdmin()||isWaiter())nav.push(["mesas","🪑 Mesas"]);
   if(isAdmin()||isKitchen())nav.push(["cocina","👨‍🍳 Cocina"]);
   if(isAdmin()||isWaiter())nav.push(["ordenes","📋 Órdenes"]);
+  // AQUÍ ESTÁ EL BOTÓN DE LEALTAD EXCLUSIVO PARA ADMIN:
   if(isAdmin())nav.push(["lealtad","⭐ Lealtad"],["caja","💰 Caja"],["productos","📦 Productos"],["usuarios","👥 Usuarios"]);
 
   $("nav").innerHTML=nav.map((x,i)=>
@@ -431,7 +432,7 @@ async function checkLoyaltyClient(){
       $("customerName").value = c.name;
       if(c.gender) $("customerGender").value = c.gender;
       if(c.birthday) $("customerBirthday").value = c.birthday;
-      toast(`⭐ ¡Cliente frecuente: ${c.name} (${c.visits} visitas)!`);
+      toast(`⭐ ¡Cliente frecuente encontrado: ${c.name} (${c.visits} visitas)!`);
     }
   } catch(e) {}
 }
@@ -555,7 +556,6 @@ async function sendOrder(){
   const bday = $("customerBirthday").value.trim();
 
   try{
-    // Si puso teléfono, guardamos o actualizamos los datos de lealtad (género y cumpleaños)
     if(phone && cName) {
       await api("/loyalty", {
         method: "POST",
