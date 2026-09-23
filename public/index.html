@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS</title>
+<title>RUSH POS · Club de Pádel y Restaurante</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -47,28 +47,11 @@ main{max-width:1180px;margin:auto;padding:16px}
 .cartbar button{background:#fff;color:#111;border:0;padding:10px 14px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:50;display:grid;place-items:center;padding:12px}
 .modalbox{background:#fff;border-radius:22px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:20px}
-.split-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
-.payer{border:1px solid #ddd;border-radius:16px;padding:14px} .payer h3{margin:0 0 8px}
-.alloc{display:grid;grid-template-columns:1fr 65px 85px;gap:7px;align-items:center;padding:8px 0;border-bottom:1px solid #eee}
-.big-pay{font-size:22px;font-weight:900}
 table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:13px 18px;border-radius:12px;z-index:80}
 .section-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#777;font-weight:800;margin:16px 2px 8px}
-
 .report-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; text-align: center; }
 .report-val { font-size: 24px; font-weight: 900; color: #111; margin-top: 5px; }
-.report-exp { color: #b91c1c; font-size: 14px; font-weight: bold; }
-.report-net { color: #16a34a; font-size: 18px; font-weight: bold; }
-
-@media(min-width:800px){ .product-grid{grid-template-columns:repeat(3,minmax(0,1fr))} }
-@media print {
-  body * { display: none !important; }
-  #printArea, #printArea * { display: block !important; }
-  #printArea { position: absolute; left: 0; top: 0; width: 300px; padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff;}
-  .t-center { text-align: center; } .t-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  .t-table th, .t-table td { text-align: left; padding: 4px 0; border-bottom: 1px dashed #ccc; font-size:12px;}
-  .t-table .right { text-align: right; } .t-total { font-size: 16px; font-weight: bold; text-align: right; margin-top: 10px; }
-}
 </style>
 </head>
 <body>
@@ -78,8 +61,8 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <h1 style="font-size:36px;margin:0">RUSH POS</h1>
     <p class="muted">Rush Club Pádel · Punto de venta</p>
     <div class="stack">
-      <label>Usuario<input id="loginUser" autocomplete="username" placeholder="Usuario"></label>
-      <label>Contraseña<input id="loginPass" type="password" autocomplete="current-password" placeholder="Contraseña"></label>
+      <label>Usuario<input id="loginUser" placeholder="Usuario"></label>
+      <label>Contraseña<input id="loginPass" type="password" placeholder="Contraseña"></label>
       <button class="primary" onclick="login()">Iniciar sesión</button>
     </div>
   </div>
@@ -104,10 +87,10 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <main>
 <!-- VENTAS -->
 <section id="venta" class="view">
-  <h1 class="title">Nueva venta</h1>
+  <h1 class="title">Nueva Venta / Servicio</h1>
   <div class="card">
     <div class="row" style="margin-bottom:10px">
-      <div style="flex:1"><input id="productSearch" class="search" placeholder="🔎 Buscar bebida, comida, café..." oninput="renderProducts()"></div>
+      <div style="flex:1"><input id="productSearch" class="search" placeholder="🔎 Buscar platillo, bebida, café..." oninput="renderProducts()"></div>
       <button onclick="loadAll()">↻</button>
     </div>
     <div id="categoryChips" class="chips"></div>
@@ -115,26 +98,41 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 
   <div class="card" style="margin-top:13px">
-    <div class="row between"><h2 style="margin:0">Pedido y Lealtad</h2><span id="waiterLabel" class="muted"></span></div>
+    <div class="row between"><h2 style="margin:0">Destino del Pedido</h2><span id="waiterLabel" class="muted"></span></div>
     <div class="grid" style="margin-top:12px">
-      <label>Tipo de Orden / Mesa<select id="tableSelect"></select></label>
-      <label>WhatsApp del cliente<input id="customerPhone" placeholder="10 dígitos (Ej. 5512345678)" onblur="checkLoyaltyClient()"></label>
+      <label>Mesa / Cancha / Canal<select id="tableSelect"></select></label>
+      <label>WhatsApp del cliente<input id="customerPhone" placeholder="10 dígitos" onblur="checkLoyaltyClient()"></label>
       <label>Nombre del cliente<input id="customerName" placeholder="Nombre o referencia"></label>
-      <label>Género
-        <select id="customerGender">
-          <option value="No especificado">No especificado</option>
-          <option value="Masculino">Masculino</option>
-          <option value="Femenino">Femenino</option>
-        </select>
-      </label>
-      <label>Cumpleaños (Día y Mes)<input id="customerBirthday" placeholder="Ej. 22 de Junio"></label>
     </div>
     <div id="cart" style="margin-top:12px"></div>
     <div class="row between" style="margin-top:13px"><span class="total">Total</span><span id="cartTotal" class="total">$0.00</span></div>
-    <label style="display:block;margin-top:10px">Notas generales<textarea id="notes" rows="2" placeholder="Sin azúcar, entrega en mesa, etc."></textarea></label>
-    <button class="primary" style="width:100%;margin-top:10px" onclick="sendOrder()">Enviar a cocina</button>
+    <label style="display:block;margin-top:10px">Notas generales<textarea id="notes" rows="2" placeholder="Indicaciones especiales..."></textarea></label>
+    <button class="primary" style="width:100%;margin-top:10px" onclick="sendOrder()">Enviar a Cocina / Registrar</button>
   </div>
   <div id="stickyCart" class="sticky-cart hidden"><div class="cartbar"><div><b id="stickyCount">0 productos</b><br><small id="stickyTotal">$0.00</small></div><button onclick="document.getElementById('cart').scrollIntoView({behavior:'smooth'})">Ver pedido</button></div></div>
+</section>
+
+<!-- CANCHAS Y RESERVAS -->
+<section id="canchas" class="view hidden">
+  <h1 class="title">🎾 Reservas de Canchas de Pádel</h1>
+  <div class="card" style="margin-bottom:15px; background:#f0fdf4; border:1px solid #16a34a;">
+    <h2>📅 Agendar Cancha y Crear Cuenta Global</h2>
+    <p class="muted">La reserva abrirá una orden automática para que puedan pedir bebidas o alimentos durante el partido.</p>
+    <div class="grid" style="margin-top:12px;">
+      <label>Cancha:<select id="resCourtSelect"></select></label>
+      <label>Fecha:<input type="date" id="resDate"></label>
+      <label>Hora de inicio:<input type="time" id="resTime" value="18:00"></label>
+      <label>Duración (horas):<input type="number" id="resHours" step="0.5" value="1.5"></label>
+      <label>Nombre del cliente:<input id="resName" placeholder="Nombre completo"></label>
+      <label>WhatsApp:<input id="resPhone" placeholder="10 dígitos"></label>
+      <label>Anticipo / Seña ($):<input type="number" id="resDeposit" value="0" placeholder="$"></label>
+      <button class="success" onclick="createReservation()" style="grid-column:1/-1;">Confirmar Reserva y Generar Cuenta</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Reservas Activas</h2>
+    <div id="reservationsList" style="overflow-x:auto;"></div>
+  </div>
 </section>
 
 <!-- MESAS -->
@@ -145,50 +143,55 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 
 <!-- COCINA -->
 <section id="cocina" class="view hidden">
-  <h1 class="title">Cocina</h1>
+  <h1 class="title">Cocina (KDS)</h1>
   <div id="kitchenOrders" class="grid"></div>
 </section>
 
 <!-- ÓRDENES -->
 <section id="ordenes" class="view hidden">
-  <h1 class="title">Órdenes</h1>
-  <div id="orders" class="grid"></div>
+  <div class="row between">
+    <h1 class="title" style="margin:0">Control de Órdenes</h1>
+    <button onclick="exportData('orders')">📥 Respaldar Órdenes (CSV)</button>
+  </div>
+  <div id="orders" class="grid" style="margin-top:15px"></div>
 </section>
 
 <!-- REPORTES Y CAJA -->
 <section id="caja" class="view hidden">
-  <h1 class="title">Reportes Financieros y Caja</h1>
+  <h1 class="title">Reporte Financiero y Corte de Caja</h1>
+  
+  <div class="card" style="margin-bottom:15px; background:#fff7ed; border-color:#fdba74;">
+    <h2>🔒 Cierre de Turno / Corte Diario</h2>
+    <p class="muted">Recuerda realizar tu corte y descargar el respaldo de caja semanalmente para seguridad del negocio.</p>
+    <button class="danger" onclick="makeCashCut()">Realizar Corte de Caja de Hoy</button>
+  </div>
+
   <div id="dashboard" class="grid"></div>
+  
   <div class="card" style="margin-top:15px">
-    <h2>Movimiento de caja (Entradas/Salidas Extras)</h2>
-    <div class="grid">
-      <input id="cashAmount" type="number" placeholder="Monto">
-      <input id="cashConcept" placeholder="Concepto (Ej. Pago proveedor de agua)">
-      <button class="primary" onclick="cashIn()">Registrar ingreso</button>
-      <button onclick="cashOut()">Registrar egreso</button>
-    </div>
+    <h2>Historial de Cortes Realizados</h2>
+    <div id="cutsList" style="overflow-x:auto;"></div>
   </div>
 </section>
 
 <!-- LEALTAD Y CAMPAÑAS -->
 <section id="lealtad" class="view hidden">
-  <h1 class="title">⭐ Programa de Lealtad y Clientes</h1>
-  <div class="card" style="background:#f0fdf4; border:1px solid #16a34a; margin-bottom:15px;">
+  <div class="row between">
+    <h1 class="title" style="margin:0">⭐ Programa de Lealtad y Difusión</h1>
+    <button onclick="exportData('loyalty')">📥 Respaldar Clientes (CSV)</button>
+  </div>
+  <div class="card" style="background:#f0fdf4; border:1px solid #16a34a; margin-top:15px;">
     <h2>📢 Campaña Masiva de WhatsApp (Anti-Spam)</h2>
-    <p class="muted" style="margin-bottom:10px;">Escribe tu promoción. El sistema abrirá los chats uno por uno cambiando el saludo inicial y los emojis para proteger tus números.</p>
-    <textarea id="bulkMessage" rows="3" placeholder="Te invitamos este martes a las canchas con 20% de descuento en alimentos..."></textarea>
-    
-    <div id="campaignControls" style="margin-top:15px;">
-        <button class="success" onclick="startCampaign()">🚀 Iniciar Campaña a Todos</button>
-    </div>
+    <textarea id="bulkMessage" rows="3" placeholder="Escribe tu promoción..."></textarea>
+    <div style="margin-top:10px;"><button class="success" onclick="startCampaign()">🚀 Iniciar Envío Guiado</button></div>
     <div id="campaignQueue" class="hidden" style="margin-top:15px; padding:15px; background:#fff; border-radius:12px; border:1px solid #16a34a;">
-        <h3 style="margin:0 0 10px;">Progreso de envíos: <span id="campProgress">0 / 0</span></h3>
-        <p id="campCurrentName" style="font-weight:bold; font-size:18px; margin:0 0 10px;">-</p>
-        <button id="btnSendNext" class="primary" onclick="sendNextCampaign()">💬 Enviar a este cliente</button>
-        <button onclick="cancelCampaign()" style="margin-left:10px;">Detener campaña</button>
+      <h3 id="campProgress" style="margin:0 0 5px;">0 / 0</h3>
+      <p id="campCurrentName" style="font-weight:bold; font-size:18px; margin:0 0 10px;"></p>
+      <button class="primary" id="btnSendNext" onclick="sendNextCampaign()">💬 Enviar a este cliente</button>
+      <button onclick="$('campaignQueue').classList.add('hidden')" style="margin-left:10px;">Detener</button>
     </div>
   </div>
-  <div class="card">
+  <div class="card" style="margin-top:15px;">
     <h2>Base de Datos de Clientes</h2>
     <div id="loyaltyList" style="overflow-x:auto;"></div>
   </div>
@@ -196,51 +199,23 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 
 <!-- INVENTARIO -->
 <section id="inventario" class="view hidden">
-  <h1 class="title">📦 Inventario, Compras y Recetas</h1>
-  
-  <div class="card" style="margin-bottom:15px;">
-    <h2>1. Dar de alta nuevo insumo (Materia Prima)</h2>
+  <div class="row between">
+    <h1 class="title" style="margin:0">📦 Inventario, Compras y Recetas</h1>
+    <button onclick="exportData('inventory')">📥 Respaldar Inventario (CSV)</button>
+  </div>
+  <div class="card" style="margin-top:15px;">
+    <h2>Registrar Compra a Proveedor</h2>
     <div class="grid">
-      <input id="invName" placeholder="Nombre (Ej. Carne molida)">
-      <label>Se compra por:
-          <select id="invUnit">
-              <option value="kg">Kilos (kg)</option>
-              <option value="lt">Litros (lt)</option>
-              <option value="pz">Piezas (pz)</option>
-              <option value="paq">Paquete (paq)</option>
-          </select>
-      </label>
-      <button class="primary" onclick="createInventoryItem()" style="align-self:end;">Crear Insumo</button>
+      <label>Insumo:<select id="purInvSelect"></select></label>
+      <input id="purSupplier" placeholder="Proveedor (Ej. Sam's)">
+      <input id="purRFC" placeholder="RFC (Opcional)">
+      <input type="date" id="purDate">
+      <input type="number" id="purQty" step="0.01" placeholder="Cantidad">
+      <input type="number" id="purCost" step="0.01" placeholder="Costo Total $">
+      <button class="primary" onclick="createPurchase()" style="grid-column:1/-1;">Guardar Compra</button>
     </div>
   </div>
-
-  <div class="card" style="margin-bottom:15px; background:#fff7ed; border-color:#fdba74;">
-    <h2>2. Registrar Compra a Proveedor</h2>
-    <p class="muted">Esto sumará el producto a tu almacén y guardará el ticket en el reporte de gastos.</p>
-    <div class="grid">
-      <label>Insumo comprado:<select id="purInvSelect"></select></label>
-      <input id="purSupplier" placeholder="Nombre Proveedor (Ej. Sam's Club)">
-      <input id="purRFC" placeholder="RFC Proveedor (Opcional)">
-      <label>Fecha de compra:<input type="date" id="purDate"></label>
-      <label>¿Cuántos compraste?<input type="number" id="purQty" step="0.01" placeholder="Ej. 10 (kg)"></label>
-      <label>Costo total pagado:<input type="number" id="purCost" step="0.01" placeholder="$"></label>
-      <button class="primary" onclick="createPurchase()" style="grid-column: 1 / -1;">Registrar Compra</button>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom:15px;">
-    <h2>3. Asignar Receta (Guiado)</h2>
-    <p class="muted">Une el platillo del menú con el insumo para que se descuente al venderse.</p>
-    <div class="grid">
-      <label>Platillo del Menú:<select id="recMenuSelect"></select></label>
-      <label>Insumo que gasta:<select id="recInvSelect"></select></label>
-      <label>¿Cuánto gasta por plato?<input type="number" id="recQty" step="0.001" placeholder="Ej. 0.150 (para 150g) o 1 (pieza)"></label>
-      <button class="primary" onclick="createRecipe()" style="align-self:end;">Agregar a Receta</button>
-    </div>
-    <div id="recipesList" style="margin-top:15px;"></div>
-  </div>
-
-  <div class="card">
+  <div class="card" style="margin-top:15px;">
     <h2>Stock Actual en Almacén</h2>
     <div id="inventoryList" style="overflow-x:auto;"></div>
   </div>
@@ -248,63 +223,70 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 
 <!-- PRODUCTOS Y USUARIOS -->
 <section id="productos" class="view hidden">
-  <h1 class="title">Menú (Catálogo de Ventas)</h1>
-  <div class="card"><div class="grid"><input id="pName" placeholder="Nombre"><input id="pCategory" placeholder="Categoría"><input id="pPrice" type="number" step=".01" placeholder="Precio"><input id="pDesc" placeholder="Descripción"><button class="primary" onclick="createProduct()">Crear producto</button></div></div>
+  <div class="row between">
+    <h1 class="title" style="margin:0">Catálogo de Menú</h1>
+    <button onclick="exportData('menu')">📥 Respaldar Menú (CSV)</button>
+  </div>
+  <div class="card" style="margin-top:15px;">
+    <div class="grid">
+      <input id="pName" placeholder="Nombre">
+      <input id="pCategory" placeholder="Categoría">
+      <input id="pPrice" type="number" step=".01" placeholder="Precio">
+      <input id="pDesc" placeholder="Descripción">
+      <button class="primary" onclick="createProduct()">Crear producto</button>
+    </div>
+  </div>
   <div id="productAdmin" class="grid" style="margin-top:15px"></div>
 </section>
 
 <section id="usuarios" class="view hidden">
-  <h1 class="title">Usuarios</h1>
-  <div class="card"><div class="grid"><input id="uName" placeholder="Nombre completo"><input id="uUsername" placeholder="Usuario"><input id="uPassword" type="password" placeholder="Contraseña"><select id="uRole"><option value="mesero">Mesero</option><option value="cocina">Cocina</option><option value="admin">Administrador</option></select><button class="primary" onclick="createUser()">Crear usuario</button></div></div>
+  <h1 class="title">Gestión de Usuarios y Contraseñas</h1>
+  <div class="card">
+    <div class="grid">
+      <input id="uName" placeholder="Nombre completo">
+      <input id="uUsername" placeholder="Usuario">
+      <input id="uPassword" type="password" placeholder="Contraseña">
+      <select id="uRole">
+        <option value="mesero">Mesero</option>
+        <option value="admin">Administrador</option>
+      </select>
+      <button class="primary" onclick="createUser()">Crear Usuario</button>
+    </div>
+  </div>
   <div id="users" style="margin-top:15px"></div>
 </section>
 </main>
 </section>
 
 <!-- MODALES -->
-<div id="productModal" class="modal hidden">
-  <div class="modalbox">
-    <div class="row between"><div><h2 id="productModalTitle" style="margin:0"></h2><p id="productModalDesc" class="muted"></p></div><button onclick="closeProductModal()">✕</button></div>
-    <div class="card" style="margin-top:12px">
-      <label>Indicaciones / personalización<textarea id="productModalNotes" rows="3" placeholder="Ej. sin azúcar, para llevar..."></textarea></label>
-      <div class="row between" style="margin-top:12px"><b id="productModalPrice"></b><button class="primary" onclick="confirmAddProduct()">Agregar al pedido</button></div>
-    </div>
-  </div>
-</div>
-
 <div id="paymentModal" class="modal hidden">
   <div class="modalbox">
-    <div class="row between"><div><h2 style="margin:0">Cobro de cuenta</h2><p id="payOrderInfo" class="muted" style="margin:5px 0"></p></div><button onclick="closePayment()">✕</button></div>
+    <div class="row between"><h2 style="margin:0">Cobro de cuenta</h2><button onclick="closePayment()">✕</button></div>
     <div id="paymentBody" style="margin-top:14px"></div>
   </div>
 </div>
 
 <div id="chatModal" class="modal hidden">
   <div class="modalbox">
-    <div class="row between"><h2 style="margin:0">Chat de la Orden</h2><button onclick="closeChat()">✕</button></div>
-    <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow-y:auto; padding:12px; background:#f5f5f5; border-radius:12px; border:1px solid #ddd;"></div>
-    <div class="row"><input id="chatInput" placeholder="Escribe duda o nota..." onkeydown="if(event.key==='Enter')sendChat()"><button class="primary" onclick="sendChat()">Enviar</button></div>
+    <div class="row between"><h2 style="margin:0">Chat de Orden</h2><button onclick="closeChat()">✕</button></div>
+    <div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow:auto;"></div>
+    <div class="row"><input id="chatInput" placeholder="Mensaje..."><button class="primary" onclick="sendChat()">Enviar</button></div>
   </div>
 </div>
 
 <div id="historyModal" class="modal hidden">
   <div class="modalbox">
-    <div class="row between"><h2 style="margin:0">Historial del Cliente</h2><button onclick="$('historyModal').classList.add('hidden')">✕</button></div>
-    <div id="historyBody" class="stack" style="margin-top:15px;"></div>
+    <div class="row between"><h2 style="margin:0">Historial</h2><button onclick="$('historyModal').classList.add('hidden')">✕</button></div>
+    <div id="historyBody"></div>
   </div>
 </div>
 
-<div id="printArea"></div>
 <div id="toast" class="toast hidden"></div>
 
 <script>
 const API="/api";
 let token=localStorage.getItem("rush_token");
-let me=null,products=[],tables=[],cart=[], inventoryItems=[];
-let selectedCategory="Todos";
-let pendingProduct=null;
-let paymentState=null;
-
+let me=null, products=[], tables=[], cart=[], inventoryItems=[];
 const $=id=>document.getElementById(id);
 
 function toast(msg){
@@ -318,53 +300,39 @@ async function api(path,opts={}){
   if(token) opts.headers.Authorization="Bearer "+token;
   const r=await fetch(API+path,opts);
   const data=await r.json().catch(()=>({}));
-  if(r.status===401){logout(false);throw new Error(data.error||"Sesión expirada")}
+  if(r.status===401){logout(false);throw new Error("Sesión expirada")}
   if(!r.ok) throw new Error(data.error||"Error");
   return data;
 }
 
 async function login(){
   try{
-    const data=await api("/login",{method:"POST",body:JSON.stringify({username:$("loginUser").value, password:$("loginPass").value})});
-    token=data.token; localStorage.setItem("rush_token",token); me=data.user;
-    showApp(); loadAll(); startPolling();
+    const d=await api("/login",{method:"POST",body:JSON.stringify({username:$("loginUser").value, password:$("loginPass").value})});
+    token=d.token; localStorage.setItem("rush_token",token); me=d.user;
+    showApp(); loadAll();
   }catch(e){toast(e.message)}
 }
 
 async function logout(show=true){
-  try{if(token)await api("/logout",{method:"POST"})}catch{}
-  token=null;me=null; localStorage.removeItem("rush_token");
+  token=null; me=null; localStorage.removeItem("rush_token");
   $("appView").classList.add("hidden"); $("loginView").classList.remove("hidden");
-  if(pollInterval) clearInterval(pollInterval);
   if(show)toast("Sesión cerrada");
 }
 
 async function boot(){
   if(!token)return;
-  try{ const d=await api("/me"); me=d.user; showApp(); loadAll(); startPolling(); }catch{}
+  try{ const d=await api("/me"); me=d.user; showApp(); loadAll(); }catch{}
 }
 
-function isWaiter(){ return ["waiter","mesero"].includes(me?.role); }
-function isKitchen(){ return ["kitchen","cocina"].includes(me?.role); }
 function isAdmin(){ return me?.role==="admin"; }
-function roleName(r){ return r==="admin"?"Administrador":isWaiterRole(r)?"Mesero":isKitchenRole(r)?"Cocina":r; }
-function isWaiterRole(r){return ["waiter","mesero"].includes(r)}
-function isKitchenRole(r){return ["kitchen","cocina"].includes(r)}
 
 function showApp(){
   $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
-  $("userPill").textContent=`● ${me.name} · ${roleName(me.role)}`;
-  $("waiterLabel").textContent=isWaiter()||isAdmin()?`Atiende: ${me.name}`:"";
-
-  const nav=[];
-  if(isAdmin()||isWaiter())nav.push(["venta","🛒 Venta"]);
-  if(isAdmin()||isWaiter())nav.push(["mesas","🪑 Mesas"]);
-  if(isAdmin()||isKitchen())nav.push(["cocina","👨‍🍳 Cocina"]);
-  if(isAdmin()||isWaiter())nav.push(["ordenes","📋 Órdenes"]);
-  if(isAdmin())nav.push(["lealtad","⭐ Lealtad"],["caja","📊 Reportes"],["inventario","📦 Inventario"],["productos","🍔 Menú"],["usuarios","👥 Usuarios"]);
-
+  $("userPill").textContent=`● ${me.name}`;
+  const nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["ordenes","📋 Órdenes"]];
+  if(isAdmin()) nav.push(["caja","📊 Caja"],["lealtad","⭐ Lealtad"],["inventario","📦 Inventario"],["productos","🍔 Menú"],["usuarios","👥 Usuarios"]);
   $("nav").innerHTML=nav.map((x,i)=>`<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`).join("");
-  if(nav[0])view(nav[0][0],$("nav").firstElementChild);
+  view(nav[0][0], $("nav").firstElementChild);
 }
 
 function view(id,btn){
@@ -373,499 +341,301 @@ function view(id,btn){
   document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
   if(btn)btn.classList.add("active");
   
-  if(id==="mesas")renderTables();
-  if(id==="cocina")loadKitchen();
-  if(id==="ordenes")loadOrders();
-  if(id==="caja")loadDashboard();
-  if(id==="lealtad")loadLoyaltyCustomers();
-  if(id==="inventario")loadInventoryData();
-  if(id==="productos")renderProductAdmin();
-  if(id==="usuarios")loadUsers();
-  if(id==="venta"){renderCategoryChips();renderProducts()}
+  if(id==="canchas") loadCanchasData();
+  if(id==="mesas") renderTables();
+  if(id==="cocina") loadKitchen();
+  if(id==="ordenes") loadOrders();
+  if(id==="caja") loadDashboard();
+  if(id==="lealtad") loadLoyaltyCustomers();
+  if(id==="inventario") loadInventoryData();
+  if(id==="productos") renderProductAdmin();
+  if(id==="usuarios") loadUsers();
+  if(id==="venta") { renderProducts(); renderTableSelect(); }
 }
 
 async function loadAll(){
-  try{
-    products=await api("/menu");
-    tables=await api("/tables");
-    renderCategoryChips(); renderProducts(); renderTableSelect(); renderTables(); renderCart();
-    if(isKitchen()||isAdmin())loadKitchen();
-  }catch(e){toast(e.message)}
+  products=await api("/menu");
+  tables=await api("/tables");
+  renderProducts(); renderTableSelect(); renderTables(); renderCart();
 }
 
 // -----------------------------------------------------
-// VENTAS Y MESAS
+// VENTAS Y MENÚ
 // -----------------------------------------------------
-function categoryFor(p){
-  const text=(p.category+" "+p.name).toLowerCase();
-  if(/cafe|café|espresso|latte|americano|bebida|refresco|agua|limonada|smoothie/.test(text))return "Bebidas";
-  if(/desayuno|huevo|chilaquil|hot cake|mollete/.test(text))return "Desayunos";
-  if(/hamburg|burger/.test(text))return "Hamburguesas";
-  if(/ensalada|salad/.test(text))return "Ensaladas";
-  if(/postre|pastel|brownie/.test(text))return "Postres";
-  if(p.category)return p.category; return "Otros";
-}
-
-function categories(){ const arr=products.map(categoryFor); return ["Todos",...new Set(arr)]; }
-function renderCategoryChips(){ $("categoryChips").innerHTML=categories().map(c=>`<button class="chip ${selectedCategory===c?"active":""}" onclick="selectCategory('${escAttr(c)}')">${categoryIcon(c)} ${esc(c)}</button>`).join(""); }
-function selectCategory(c){ selectedCategory=c; renderCategoryChips(); renderProducts(); }
-function categoryIcon(c){ return ({"Todos":"✨","Bebidas":"☕","Desayunos":"🍳","Comida":"🥪","Hamburguesas":"🍔","Ensaladas":"🥗","Postres":"🍰","Extras":"➕"})[c]||"•"; }
-
 function renderProducts(){
-  const q=($("productSearch")?.value||"").trim().toLowerCase();
-  let list=products.filter(p=>{
-    const matchCat=selectedCategory==="Todos"||categoryFor(p)===selectedCategory;
-    const hay=(p.name+" "+(p.description||"")).toLowerCase();
-    return matchCat&&(!q||hay.includes(q));
-  });
-  const grouped={}; list.forEach(p=>{ const cat=categoryFor(p); (grouped[cat] ||= []).push(p); });
-  if(!list.length){ $("products").innerHTML=`<div class="empty">No encontramos productos.</div>`; return; }
-
-  let html="";
-  Object.keys(grouped).forEach(cat=>{
-    if(selectedCategory==="Todos") html+=`<div class="section-label">${categoryIcon(cat)} ${esc(cat)}</div>`;
-    html+=`<div class="product-grid">` + grouped[cat].map(p=>`
-      <button class="product" onclick="openProduct('${p.id}')">
-        <div><b>${esc(p.name)}</b><div class="desc">${esc(p.description||"")}</div></div>
-        <div><div class="price">$${money(p.price)}</div><div class="add">＋ Agregar</div></div>
-      </button>`).join("") + `</div>`;
-  });
-  $("products").innerHTML=html;
+  $("products").innerHTML=`<div class="product-grid">`+products.map(p=>`
+    <button class="product" onclick="addToCart('${p.id}')">
+      <div><b>${p.name}</b><div class="desc">${p.description||""}</div></div>
+      <div><div class="price">$${p.price}</div><div class="add">＋ Agregar</div></div>
+    </button>`).join("")+`</div>`;
 }
 
-function openProduct(id){
-  const p=products.find(x=>x.id===id); if(!p)return;
-  pendingProduct=p; $("productModalTitle").textContent=p.name; $("productModalDesc").textContent=p.description||""; $("productModalPrice").textContent="$"+money(p.price); $("productModalNotes").value=""; $("productModal").classList.remove("hidden");
-}
-function closeProductModal(){ pendingProduct=null; $("productModal").classList.add("hidden"); }
-function confirmAddProduct(){
-  if(!pendingProduct)return; const p=pendingProduct; const notes=$("productModalNotes").value.trim();
-  const existing=cart.find(x=>x.menu_item_id===p.id&&x.notes===notes);
-  if(existing) existing.qty++; else cart.push({menu_item_id:p.id, name:p.name, qty:1, unit_price:Number(p.price), modifiers:[], notes});
-  closeProductModal(); renderCart(); toast(`${p.name} agregado`);
-}
-
-function renderTableSelect(){
-  $("tableSelect").innerHTML="<option value=''>Sin mesa (Mostrador)</option>"+tables.map(t=>`<option value="${escAttr(t.id)}">${esc(t.name||"Mesa "+t.number)}</option>`).join("");
-}
-
-function renderTables(){
-  // Filtramos para no mostrar las de delivery en el mapa físico de mesas
-  const physicalTables = tables.filter(t => t.type === 'mesa');
-  $("tables").innerHTML = physicalTables.map(t=>`
-    <div class="card">
-      <div class="row between"><h2>${esc(t.name||"Mesa "+t.number)}</h2><span class="status">${esc(t.status)}</span></div>
-      <p>Capacidad: ${t.capacity||"-"}</p>
-      ${isAdmin()||isWaiter()?`<button onclick="setTable('${escAttr(t.id)}','available')">Disponible</button> <button onclick="setTable('${escAttr(t.id)}','reserved')">Reservar</button>`:""}
-    </div>
-  `).join("");
-}
-
-async function setTable(id,status){
-  try{ await api("/tables/"+id,{method:"PATCH",body:JSON.stringify({status})}); tables=await api("/tables"); renderTables(); renderTableSelect(); }catch(e){toast(e.message)}
+function addToCart(id){
+  const p=products.find(x=>x.id===id);
+  const ex=cart.find(x=>x.menu_item_id===id);
+  if(ex) ex.qty++; else cart.push({menu_item_id:id, name:p.name, qty:1, unit_price:p.price});
+  renderCart();
 }
 
 function renderCart(){
-  const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0); const count=cart.reduce((s,x)=>s+x.qty,0);
+  const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
   $("cart").innerHTML=cart.length?cart.map((x,i)=>`
     <div class="order-item">
-      <div><b>${x.qty} × ${esc(x.name)}</b>${x.notes?`<div class="muted" style="font-size:12px">📝 ${esc(x.notes)}</div>`:""}<div class="muted">$${money(x.unit_price)} c/u</div></div>
-      <div style="text-align:right"><b>$${money(x.qty*x.unit_price)}</b><div class="qty-controls"><button onclick="changeQty(${i},-1)">−</button><span>${x.qty}</span><button onclick="changeQty(${i},1)">＋</button></div></div>
+      <div>${x.qty} × ${x.name}</div>
+      <div class="row"><b>$${x.qty*x.unit_price}</b><button onclick="cart.splice(${i},1);renderCart()">✕</button></div>
     </div>
-  `).join(""):"<p class='muted'>Agrega productos arriba.</p>";
-  $("cartTotal").textContent="$"+money(total);
-  if(count){ $("stickyCart").classList.remove("hidden"); $("stickyCount").textContent=`${count} productos`; $("stickyTotal").textContent="$"+money(total); }
-  else { $("stickyCart").classList.add("hidden"); }
+  `).join(""):"<p class='muted'>Carrito vacío</p>";
+  $("cartTotal").textContent="$"+total;
 }
-function changeQty(i,d){ if(!cart[i])return; cart[i].qty+=d; if(cart[i].qty<=0)cart.splice(i,1); renderCart(); }
+
+function renderTableSelect(){
+  $("tableSelect").innerHTML="<option value=''>Mostrador / General</option>" + tables.map(t=>`<option value="${t.id}">${t.name||"Mesa "+t.number}</option>`).join("");
+}
 
 async function sendOrder(){
-  if(!cart.length)return toast("Agrega al menos un producto.");
-  const phone = $("customerPhone").value.trim(); const cName = $("customerName").value.trim();
+  if(!cart.length) return toast("Agrega productos al carrito.");
   try{
     await api("/orders",{
       method:"POST",
       body:JSON.stringify({
-        table_id:$("tableSelect").value||null, customer_name:cName, customer_phone:phone,
-        notes:$("notes").value, items:cart
+        table_id: $("tableSelect").value||null,
+        customer_name: $("customerName").value,
+        customer_phone: $("customerPhone").value,
+        notes: $("notes").value,
+        items: cart
       })
     });
-    toast(`Orden enviada a cocina · ${me.name}`);
-    cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("customerBirthday").value=""; $("notes").value="";
-    tables=await api("/tables"); renderTableSelect(); pollNotifications();
+    toast("Orden enviada exitosamente");
+    cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("notes").value="";
+    loadAll();
   }catch(e){toast(e.message)}
 }
 
 // -----------------------------------------------------
-// COCINA Y ÓRDENES
+// CANCHAS Y RESERVAS
 // -----------------------------------------------------
-async function loadKitchen(){
+async function loadCanchasData(){
   try{
-    const os=await api("/orders");
-    const open=os.filter(x=>["open","preparing","ready"].includes(x.status));
-    $("kitchenOrders").innerHTML=open.map(o=>`
-      <div class="card">
-        <div class="row between"><h2>${tableName(o.table_id)}</h2><span class="status ${o.status}">${esc(o.status)}</span></div>
-        <p><b>Mesero:</b> ${esc(o.waiter_name||"No asignado")}</p>
-        <p>${esc(o.customer_name||"Sin cliente")} ${o.customer_phone?`(${o.customer_phone})`:""}</p>
-        ${o.estimated_time ? `<p class="muted">⏳ Estimado: <b>${o.estimated_time} min</b></p>` : ''}
-        <label style="display:block; margin-top:15px;">
-          <select onchange="handleKitchenStatus('${escAttr(o.id)}', this.value)" style="background: #f0fdf4; border: 1px solid #16a34a; font-weight: bold;">
-            <option value="open" ${o.status==='open'?'selected':''}>📝 NUEVO</option>
-            <option value="preparing" ${o.status==='preparing'?'selected':''}>👨‍🍳 Preparando...</option>
-            <option value="ready" ${o.status==='ready'?'selected':''}>✅ ¡Listo!</option>
-          </select>
-        </label>
-        <button style="width: 100%; margin-top:12px;" onclick="openChat('${escAttr(o.id)}')">💬 Chat con Mesero</button>
-      </div>
-    `).join("")||"<p class='muted'>No hay pedidos pendientes.</p>";
+    const courts = await api("/courts");
+    $("resCourtSelect").innerHTML = courts.map(c=>`<option value="${c.id}">${c.name} ($${c.hourly_rate}/hr)</option>`).join("");
+    const res = await api("/reservations");
+    $("reservationsList").innerHTML = res.length ? `<table><thead><tr><th>Cancha</th><th>Cliente</th><th>Fecha/Hora</th><th>Total</th><th>Anticipo</th></tr></thead><tbody>${res.map(r=>`<tr><td><b>${r.court_name}</b></td><td>${r.customer_name} (${r.customer_phone})</td><td>${r.date} a las ${r.start_time} (${r.hours}h)</td><td>$${r.total_price}</td><td>$${r.deposit}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>No hay reservas registradas.</p>";
   }catch(e){}
 }
 
-async function handleKitchenStatus(id, newStatus) {
-  if (newStatus === 'preparing') {
-    const mins = prompt("¿En cuántos minutos aprox. estará listo?");
-    if (mins !== null) { await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({status: "preparing", estimated_time: Number(mins)||0}) }); loadKitchen(); pollNotifications(); }
-  } else {
-    await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({status: newStatus}) }); loadKitchen(); pollNotifications();
-  }
+async function createReservation(){
+  const courtId = $("resCourtSelect").value;
+  const courts = await api("/courts");
+  const court = courts.find(c=>c.id===courtId);
+  const hours = Number($("resHours").value);
+  const total = court.hourly_rate * hours;
+
+  try {
+    await api("/reservations", {method:"POST", body:JSON.stringify({
+      court_id: courtId,
+      customer_name: $("resName").value,
+      customer_phone: $("resPhone").value,
+      date: $("resDate").value,
+      start_time: $("resTime").value,
+      hours,
+      total_price: total,
+      deposit: Number($("resDeposit").value||0)
+    })});
+    toast("Reserva agendada y cuenta generada.");
+    loadCanchasData();
+    $("resName").value=""; $("resPhone").value=""; $("resDeposit").value="0";
+  } catch(e) { toast(e.message); }
+}
+
+// -----------------------------------------------------
+// MESAS, COCINA Y ÓRDENES
+// -----------------------------------------------------
+function renderTables(){
+  $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`
+    <div class="card">
+      <div class="row between"><h3>${t.name||"Mesa "+t.number}</h3><span class="status ${t.status}">${t.status}</span></div>
+      <p>Capacidad: ${t.capacity}</p>
+    </div>
+  `).join("");
+}
+
+async function loadKitchen(){
+  const os = await api("/orders");
+  $("kitchenOrders").innerHTML = os.filter(x=>["open","preparing"].includes(x.status)).map(o=>`
+    <div class="card">
+      <h3>Orden #${o.id.slice(0,6)}</h3>
+      <p>Total: $${o.total}</p>
+      <button class="primary" onclick="api('/orders/${o.id}',{method:'PATCH',body:JSON.stringify({status:'ready'})}).then(loadKitchen)">Marcar Lista</button>
+    </div>
+  `).join("")||"<p class='muted'>Sin pedidos pendientes en cocina.</p>";
 }
 
 async function loadOrders(){
-  try{
-    const os=await api("/orders");
-    $("orders").innerHTML=os.map(o=>{
-      let pb = "";
-      if (isAdmin()) {
-          pb = `<button style="background:#eee; border-color:#ccc;" onclick="printTicket('${escAttr(o.id)}')">🖨️ Imprimir</button>`;
-          if(o.customer_phone) pb += ` <button style="background:#dcfce7; color:#16a34a;" onclick="sendReceiptWhatsApp('${escAttr(o.id)}')">💬 WhatsApp Recibo</button>`;
-          if (o.print_requested) pb += ` <span style="color:#b91c1c; font-weight:bold;">⚠️ Solicitud de ticket</span>`;
-      } else if (isWaiterRole(me.role)) {
-          pb = `<button style="background:#eee; border-color:#ccc;" onclick="requestPrint('${escAttr(o.id)}')">🛎️ Solicitar Ticket</button>`;
-      }
-      return `
-      <div class="card" style="${o.print_requested && isAdmin() ? 'border: 2px solid #b91c1c;' : ''}">
-        <div class="row between"><h3>${esc(o.id.slice(0,8))}</h3><span class="status ${o.status}">${esc(o.status)}</span></div>
-        <p>Mesa: ${esc(tableName(o.table_id))}</p>
-        <p>${esc(o.customer_name||"Sin cliente")} ${o.customer_phone?`(${o.customer_phone})`:""}</p>
-        <b>$${money(o.total)}</b>
-        ${Number(o.paid_amount||0)>0?`<div class="payment-summary" style="margin-top:10px"><b>Cobrado: $${money(o.paid_amount)}</b></div>`:""}
-        <div class="row" style="margin-top:10px; gap:8px; flex-wrap:wrap;">
-          ${["waiter","mesero","admin"].includes(me.role)&&["ready","partial","open","preparing"].includes(o.status)?`<button class="primary" onclick="pay('${escAttr(o.id)}')">Cobrar</button>`:""}
-          <button onclick="openChat('${escAttr(o.id)}')">💬 Chat</button> ${pb}
-        </div>
-      </div>`;
-    }).join("");
-  }catch(e){}
+  const os = await api("/orders");
+  $("orders").innerHTML = os.map(o=>`
+    <div class="card">
+      <h3>Orden #${o.id.slice(0,6)}</h3>
+      <p>Cliente: ${o.customer_name||"General"} | Total: <b>$${o.total}</b></p>
+      <span class="status ${o.status}">${o.status}</span>
+      <div class="row" style="margin-top:10px;">
+        <button class="primary" onclick="pay('${o.id}')">Cobrar</button>
+        ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
+      </div>
+    </div>
+  `).join("");
 }
 
-// -----------------------------------------------------
-// PAGOS
-// -----------------------------------------------------
+async function deleteOrder(id){
+  if(confirm("¿Seguro que deseas eliminar esta comanda?")){
+    await api("/orders/"+id, {method:"DELETE"});
+    loadOrders(); toast("Comanda eliminada");
+  }
+}
+
 async function pay(id){
-  try{
-    const d=await api("/orders/"+id);
-    paymentState={ ...d, paid:Number(d.order?.paid_amount||0), payers:[{name:"Cliente 1", alloc:{}, method:"cash", cash:0, card:0, terminal:0, ref:"", tendered:""}] };
-    $("paymentModal").classList.remove("hidden"); renderPaymentModal();
-  }catch(e){toast(e.message)}
-}
-function closePayment(){ paymentState=null; $("paymentModal").classList.add("hidden"); }
-function addPayer(){ paymentState.payers.push({name:"Cliente "+(paymentState.payers.length+1), alloc:{}, method:"cash", cash:0, card:0, terminal:0, ref:"", tendered:""}); renderPaymentModal(); }
-function removePayer(i){ if(paymentState.payers.length<=1)return; paymentState.payers.splice(i,1); renderPaymentModal(); }
-function assignedQty(itemId){ return paymentState.payers.reduce((s,p)=>s+Number(p.alloc[itemId]||0),0); }
-function payerTotal(p){ return paymentState.items.reduce((s,it)=>s+Number(p.alloc[it.id]||0)*Number(it.unit_price||0),0); }
-
-function renderPaymentModal(){
-  const d=paymentState; const remaining=Math.max(0,Number(d.order.total||0)-Number(d.paid||0));
-  $("payOrderInfo").textContent=`Orden ${d.order.id.slice(0,8)} · Total $${money(d.order.total)} · Pendiente $${money(remaining)}`;
-  $("paymentBody").innerHTML=`
-    <div class="row" style="margin:12px 0;flex-wrap:wrap"><button class="primary" onclick="addPayer()">＋ Dividir Cuenta</button></div>
-    <div class="split-grid">${d.payers.map((p,i)=>payerCard(p,i)).join("")}</div>
-    <div class="row" style="justify-content:flex-end;margin-top:14px"><button onclick="closePayment()">Cancelar</button><button class="primary" onclick="submitPayments()">Confirmar Pagos</button></div>
-  `;
-}
-function payerCard(p,i){
-  const total=payerTotal(p); const method=p.method;
-  return `
-    <div class="payer">
-      <div class="row between"><h3>${esc(p.name)}</h3>${paymentState.payers.length>1?`<button onclick="removePayer(${i})">Eliminar</button>`:""}</div>
-      <input value="${escAttr(p.name)}" onchange="paymentState.payers[${i}].name=this.value" placeholder="Nombre">
-      <div style="margin-top:10px"><b>Productos</b></div>
-      ${paymentState.items.map(it=>{
-        const max=Math.max(0,Number(it.qty)-assignedQty(it.id)+Number(p.alloc[it.id]||0)); const q=Number(p.alloc[it.id]||0);
-        return `<div class="alloc"><span>${q?`${q}× `:""}${esc(it.name)}<br><small>$${money(it.unit_price)}</small></span><select onchange="setAlloc(${i},${it.id},this.value)"><option value="0">0</option>${Array.from({length:Math.floor(max)},(_,k)=>`<option value="${k+1}" ${q===k+1?"selected":""}>${k+1}</option>`).join("")}</select><b>$${money(q*Number(it.unit_price||0))}</b></div>`;
-      }).join("")}
-      <div class="big-pay" style="margin-top:10px">Total: $${money(total)}</div>
-      <label style="display:block;margin-top:10px">Forma de pago<select onchange="setMethod(${i},this.value)"><option value="cash" ${method==="cash"?"selected":""}>💵 Efectivo</option><option value="card" ${method==="card"?"selected":""}>💳 Tarjeta</option></select></label>
-      ${methodFields(p,i,total)}
-    </div>`;
-}
-function methodFields(p,i,total){
-  if(!total) return `<p class="muted">Selecciona productos.</p>`;
-  if(p.method==="cash") return `
-    <div style="margin-top:10px; padding:12px; background:#f0fdf4; border:1px solid #16a34a; border-radius:12px;">
-      <label>Efectivo a cobrar<input type="number" step=".01" value="${p.cash||total}" onchange="paymentState.payers[${i}].cash=Number(this.value)"></label>
-      <label style="margin-top:8px; display:block;"><b style="color:#16a34a;">💵 Recibo del cliente (Billete)</b>
-        <input type="number" step=".01" value="${p.tendered||''}" placeholder="Ej. 500" oninput="paymentState.payers[${i}].tendered=this.value; let c=Number(this.value)-(paymentState.payers[${i}].cash||${total}); document.getElementById('change_${i}').innerText=c>=0?'$'+c.toLocaleString('es-MX',{minimumFractionDigits:2}):'---';">
-      </label>
-      <div style="margin-top:8px; font-size:18px; font-weight:900; color:#b91c1c;">Cambio: <span id="change_${i}">${p.tendered && Number(p.tendered) >= (p.cash||total) ? '$' + (Number(p.tendered) - (p.cash||total)).toLocaleString('es-MX',{minimumFractionDigits:2}) : '---'}</span></div>
-    </div>`;
-  return `<div class="terminal" style="margin-top:10px"><b>💳 Tarjeta</b><p>Cargar $${money(total)}</p></div>`;
-}
-function setAlloc(i,itemId,value){ const q=Number(value||0); if(q)paymentState.payers[i].alloc[itemId]=q; else delete paymentState.payers[i].alloc[itemId]; renderPaymentModal(); }
-function setMethod(i,m){ paymentState.payers[i].method=m; paymentState.payers[i].cash=payerTotal(paymentState.payers[i]); renderPaymentModal(); }
-
-async function submitPayments(){
-  const d=paymentState; const remaining=Math.max(0,Number(d.order.total)-Number(d.paid||0));
-  const totalAssigned=d.payers.reduce((s,p)=>s+payerTotal(p),0);
-  if(Math.abs(totalAssigned-remaining)>0.01) {
-    if(!confirm(`Faltan asignar $${money(remaining-totalAssigned)}. ¿Cobrar solo esta parte parcial?`)) return;
-  }
-  for(const p of d.payers){
-    const amount=payerTotal(p); if(!amount)continue;
-    try{ await api(`/orders/${d.order.id}/payments`,{method:"POST",body:JSON.stringify({payer_name:p.name, method:p.method, amount, cash_amount:amount, card_amount:0, terminal_amount:0, allocations:Object.entries(p.alloc).map(([id,qty])=>({order_item_id:Number(id),qty:Number(qty)}))})}); }catch(e){return toast(e.message);}
-  }
-  toast("Cobro registrado"); closePayment(); loadOrders(); if(isAdmin())loadDashboard();
+  await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({amount: 99999, method:"cash"})});
+  toast("Cobro registrado con éxito"); loadOrders();
 }
 
 // -----------------------------------------------------
-// REPORTES FINANCIEROS (Dashboard)
+// REPORTES, CAJA Y RESPALDOS CSV
 // -----------------------------------------------------
 async function loadDashboard(){
   try{
-    const d=await api("/dashboard");
-    const netToday = d.today.sales - d.today.expenses;
-    const netWeek = d.week.sales - d.week.expenses;
-    const netMonth = d.month.sales - d.month.expenses;
-
-    $("dashboard").innerHTML=`
-      <div class="report-box">
-        <h3>Hoy</h3>
-        <div class="report-val">$${money(d.today.sales)}</div>
-        <p class="muted" style="margin:5px 0;">Ventas (${d.today.orders} órdenes)</p>
-        <p class="report-exp">- $${money(d.today.expenses)} Insumos</p>
-        <p class="report-net">= $${money(netToday)} Utilidad</p>
-      </div>
-      <div class="report-box">
-        <h3>Últimos 7 Días</h3>
-        <div class="report-val">$${money(d.week.sales)}</div>
-        <p class="muted" style="margin:5px 0;">Ventas (${d.week.orders} órdenes)</p>
-        <p class="report-exp">- $${money(d.week.expenses)} Insumos</p>
-        <p class="report-net">= $${money(netWeek)} Utilidad</p>
-      </div>
-      <div class="report-box">
-        <h3>Últimos 30 Días</h3>
-        <div class="report-val">$${money(d.month.sales)}</div>
-        <p class="muted" style="margin:5px 0;">Ventas (${d.month.orders} órdenes)</p>
-        <p class="report-exp">- $${money(d.month.expenses)} Insumos</p>
-        <p class="report-net">= $${money(netMonth)} Utilidad</p>
-      </div>
+    const d = await api("/dashboard");
+    $("dashboard").innerHTML = `
+      <div class="report-box"><h3>Ventas de Hoy</h3><div class="report-val">$${d.today.sales}</div><p class="muted">${d.today.orders} órdenes pagadas</p></div>
+      <div class="report-box"><h3>Gastos Insumos</h3><div class="report-val" style="color:#b91c1c;">$${d.today.expenses}</div></div>
+      <div class="report-box"><h3>Órdenes Abiertas</h3><div class="report-val">${d.open.count}</div></div>
     `;
+    const cuts = await api("/cuts");
+    $("cutsList").innerHTML = cuts.length ? `<table><thead><tr><th>Fecha</th><th>Ventas</th><th>Insumos</th><th>Utilidad Neta</th><th>Cerrado por</th></tr></thead><tbody>${cuts.map(c=>`<tr><td>${c.cut_date}</td><td>$${c.total_sales}</td><td>$${c.total_expenses}</td><td><b>$${c.net_profit}</b></td><td>${c.closed_by}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin cortes previos.</p>";
   }catch(e){}
 }
-async function cashIn(){cash("ingreso")} async function cashOut(){cash("egreso")}
-async function cash(type){ const amount=Number($("cashAmount").value); if(!amount)return toast("Monto requerido."); try{ await api("/cash",{method:"POST",body:JSON.stringify({type, amount, concept:$("cashConcept").value})}); toast("Movimiento OK"); $("cashAmount").value=""; $("cashConcept").value=""; }catch(e){toast(e.message)} }
 
-// -----------------------------------------------------
-// LEALTAD Y WHATSAPP MASIVO
-// -----------------------------------------------------
-let campaignList = [];
-let campaignIndex = 0;
-
-async function checkLoyaltyClient(){
-  const phone = $("customerPhone").value.trim(); if(!phone || phone.length < 8) return;
-  try { const c = await api("/loyalty/"+phone); if(c && c.name) { $("customerName").value = c.name; if(c.gender) $("customerGender").value = c.gender; if(c.birthday) $("customerBirthday").value = c.birthday; toast(`⭐ ¡Cliente frecuente: ${c.name}!`); } } catch(e) {}
-}
-
-async function loadLoyaltyCustomers() {
-  try {
-    const list = await api("/loyalty");
-    $("loyaltyList").innerHTML = list.length ? `
-      <table>
-        <thead><tr><th>Cliente</th><th>WhatsApp</th><th>Visitas</th><th>Gastado</th><th>Historial</th></tr></thead>
-        <tbody>
-          ${list.map(c=>`<tr>
-            <td><b>${esc(c.name)}</b></td><td>${esc(c.phone)}</td><td>${c.visits}</td><td>$${money(c.total_spent)}</td>
-            <td><button onclick="viewHistory('${c.phone}', '${escAttr(c.name)}')">Ver compras</button></td>
-          </tr>`).join("")}
-        </tbody>
-      </table>` : "<p class='muted'>Aún no hay clientes registrados.</p>";
-  } catch(e) {}
-}
-
-async function viewHistory(phone, name) {
-    try {
-        const orders = await api(`/loyalty/${phone}/history`);
-        $("historyBody").innerHTML = `<p>Últimos consumos de <b>${name}</b>:</p>` + 
-        (orders.length ? orders.map(o=>`<div class="card" style="padding:10px; margin-bottom:10px;">
-            <div class="row between"><b>${new Date(o.created_at).toLocaleDateString()}</b> <b>$${money(o.total)}</b></div>
-            <div class="muted" style="font-size:12px;">Mesa: ${tableName(o.table_id)}</div>
-        </div>`).join('') : "<p class='muted'>Sin órdenes previas registradas.</p>");
-        $("historyModal").classList.remove("hidden");
-    } catch(e) { toast(e.message); }
-}
-
-async function startCampaign() {
-    const msg = $("bulkMessage").value.trim();
-    if(!msg) return toast("Escribe el mensaje de promoción.");
-    const list = await api("/loyalty");
-    if(!list.length) return toast("No hay clientes.");
-    campaignList = list; campaignIndex = 0;
-    $("campaignControls").classList.add("hidden");
-    $("campaignQueue").classList.remove("hidden");
-    updateCampaignUI();
-}
-
-function updateCampaignUI() {
-    $("campProgress").innerText = `${campaignIndex} / ${campaignList.length}`;
-    if (campaignIndex < campaignList.length) {
-        $("campCurrentName").innerText = `Preparando para: ${campaignList[campaignIndex].name}`;
-        $("btnSendNext").disabled = false;
-    } else {
-        $("campCurrentName").innerText = "¡Campaña finalizada! 🎉";
-        $("btnSendNext").disabled = true;
-    }
-}
-
-function sendNextCampaign() {
-    if (campaignIndex >= campaignList.length) return;
-    const c = campaignList[campaignIndex];
-    const msg = $("bulkMessage").value.trim();
-    
-    // Rotación anti-spam
-    const greetings = ["Hola", "Qué tal", "Saludos", "Hola hola"];
-    const emojis = ['✨', '🔥', '🙌', '👋', '🥳', '😎', '🎾', '🚀'];
-    const rGreet = greetings[Math.floor(Math.random() * greetings.length)];
-    const rEmoj = emojis[Math.floor(Math.random() * emojis.length)];
-    
-    const text = `${rGreet} ${c.name} ${rEmoj}\n\n${msg}`;
-    window.open(`https://wa.me/52${c.phone}?text=${encodeURIComponent(text)}`, '_blank');
-    
-    campaignIndex++;
-    updateCampaignUI();
-    toast("Abriendo WhatsApp... haz clic en el siguiente en 3 segundos.");
-}
-
-function cancelCampaign() {
-    campaignList = []; campaignIndex = 0;
-    $("campaignControls").classList.remove("hidden");
-    $("campaignQueue").classList.add("hidden");
-}
-
-// -----------------------------------------------------
-// INVENTARIO, COMPRAS Y RECETAS
-// -----------------------------------------------------
-async function loadInventoryData() {
-    try {
-        inventoryItems = await api("/inventory");
-        const recipes = await api("/recipes");
-        const products = await api("/menu");
-
-        // Listado de inventario
-        $("inventoryList").innerHTML = `<table>
-            <thead><tr><th>Insumo</th><th>Unidad</th><th>Stock Real</th></tr></thead>
-            <tbody>${inventoryItems.map(i=>`<tr><td><b>${esc(i.name)}</b></td><td>${i.unit}</td><td><b style="${i.stock<=0?'color:red':''}">${i.stock.toFixed(2)}</b></td></tr>`).join('')}</tbody>
-        </table>`;
-
-        // Selects
-        $("purInvSelect").innerHTML = "<option value=''>Selecciona insumo...</option>" + inventoryItems.map(i=>`<option value="${i.id}">${esc(i.name)}</option>`).join('');
-        $("recInvSelect").innerHTML = "<option value=''>Selecciona insumo...</option>" + inventoryItems.map(i=>`<option value="${i.id}">${esc(i.name)} (${i.unit})</option>`).join('');
-        $("recMenuSelect").innerHTML = "<option value=''>Selecciona platillo...</option>" + products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-
-        // Recetas actuales
-        const groupedRecipes = {};
-        recipes.forEach(r => {
-            const p = products.find(x=>x.id === r.menu_item_id);
-            if(p) { (groupedRecipes[p.name] ||= []).push(r); }
-        });
-        
-        $("recipesList").innerHTML = Object.keys(groupedRecipes).map(pName => `
-            <div style="padding:10px; border:1px dashed #ccc; margin-bottom:10px;">
-                <b>${esc(pName)}</b> gasta:
-                <ul style="margin:5px 0; font-size:13px;">
-                    ${groupedRecipes[pName].map(r=>`<li>${r.qty} ${r.unit} de${esc(r.ing_name)} <button style="padding:2px 6px; font-size:10px;" onclick="deleteRecipe('${r.menu_item_id}','${r.inventory_id}')">Quitar</button></li>`).join('')}
-                </ul>
-            </div>
-        `).join('');
-
-    } catch(e) { toast(e.message); }
-}
-
-async function createInventoryItem() {
-    try { await api("/inventory", { method:"POST", body:JSON.stringify({ name: $("invName").value, unit: $("invUnit").value }) }); toast("Insumo creado."); $("invName").value=""; loadInventoryData(); } catch(e){ toast(e.message); }
-}
-
-async function createPurchase() {
-    try {
-        await api("/purchases", { method:"POST", body:JSON.stringify({
-            inventory_id: $("purInvSelect").value, supplier_name: $("purSupplier").value, supplier_rfc: $("purRFC").value,
-            qty: $("purQty").value, total_cost: $("purCost").value, purchase_date: $("purDate").value || nowIso().slice(0,10)
-        })});
-        toast("Compra registrada y stock actualizado."); 
-        $("purSupplier").value=""; $("purQty").value=""; $("purCost").value=""; loadInventoryData();
-    } catch(e){ toast(e.message); }
-}
-
-async function createRecipe() {
-    try { await api("/recipes", { method:"POST", body:JSON.stringify({ menu_item_id: $("recMenuSelect").value, inventory_id: $("recInvSelect").value, qty: $("recQty").value }) }); toast("Receta actualizada."); $("recQty").value=""; loadInventoryData(); } catch(e){ toast(e.message); }
-}
-async function deleteRecipe(mid, iid) { try { await api(`/recipes/${mid}/${iid}`, {method:"DELETE"}); loadInventoryData(); }catch(e){} }
-
-// MENÚ, USUARIOS, UTILIDADES
-function renderProductAdmin(){ $("productAdmin").innerHTML=products.map(p=>`<div class="card"><h3>${esc(p.name)}</h3><p>${esc(p.category)} · $${money(p.price)}</p></div>`).join(""); }
-async function createProduct(){ try{ await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value, category:$("pCategory").value, price:Number($("pPrice").value), description:$("pDesc").value})}); toast("Creado"); ["pName","pCategory","pPrice","pDesc"].forEach(x=>$(x).value=""); products=await api("/menu"); renderCategoryChips(); renderProducts(); renderProductAdmin(); }catch(e){toast(e.message)} }
-async function loadUsers(){ try{ const us=await api("/users"); $("users").innerHTML=`<div class="card"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.username)}</td><td>${roleName(u.role)}</td><td><button class="danger" onclick="deleteUser('${u.id}')">Eliminar</button></td></tr>`).join("")}</tbody></table></div>`; }catch(e){} }
-async function createUser(){ try{ await api("/users",{method:"POST",body:JSON.stringify({name:$("uName").value, username:$("uUsername").value, password:$("uPassword").value, role:$("uRole").value})}); toast("Usuario creado"); ["uName","uUsername","uPassword"].forEach(x=>$(x).value=""); loadUsers(); }catch(e){toast(e.message)} }
-async function deleteUser(id){ if(confirm("¿Borrar usuario?")){ await api("/users/"+id,{method:"DELETE"}); loadUsers(); } }
-
-function tableName(id){ const t=tables.find(x=>x.id===id); return t?t.name||("Mesa "+t.number):(id==="didi-eats"?"Didi Food":id==="uber-eats"?"Uber Eats":id==="takeaway"?"Para Llevar":"Sin mesa"); }
-function money(n){ return Number(n||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function esc(s){ return String(s??"").replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m])); }
-function escAttr(s){ return esc(s); }
-
-// CHAT E IMPRESIÓN
-let currentChatOrder=null;
-async function openChat(id){ currentChatOrder=id; $("chatModal").classList.remove("hidden"); loadChat(); }
-function closeChat(){ $("chatModal").classList.add("hidden"); currentChatOrder=null; }
-async function loadChat(){ if(!currentChatOrder)return; const msgs=await api(`/orders/${currentChatOrder}/comments`); $("chatMessages").innerHTML=msgs.map(m=>`<div style="background:${m.role==='cocina'?'#fff2cc':'#dbeafe'}; padding:8px; border-radius:8px; margin-bottom:6px;"><b>${esc(m.user_name)}:</b> ${esc(m.comment)}</div>`).join("")||"<p class='muted'>Sin mensajes.</p>"; }
-async function sendChat(){ const text=$("chatInput").value.trim(); if(!text)return; await api(`/orders/${currentChatOrder}/comments`,{method:"POST",body:JSON.stringify({comment:text})}); $("chatInput").value=""; loadChat(); }
-async function requestPrint(id) { try { await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({print_requested: 1}) }); toast("Solicitud enviada a Caja."); loadOrders(); pollNotifications(); } catch(e) { toast(e.message); } }
-async function printTicket(id) {
-  try {
-    const d = await api("/orders/"+id); const o = d.order; const items = d.items;
-    let html = `<div class="t-center"><h2 style="margin:0">RUSH CLUB PÁDEL</h2><p style="margin:0">Ticket</p><p style="margin:0; font-size:12px;">Orden: ${o.id.slice(0,8)}</p><p style="margin:0; font-size:12px;">Mesa: ${tableName(o.table_id)}</p>${o.customer_name?`<p style="margin:0; font-size:12px;">Cliente: ${o.customer_name}</p>`:""}</div><hr style="border:1px dashed #000; margin:10px 0;"><table class="t-table"><thead><tr><th>Cant</th><th>Desc</th><th class="right">Imp</th></tr></thead><tbody>${items.map(it => `<tr><td>${it.qty}</td><td>${esc(it.name)}</td><td class="right">$${money(it.qty * it.unit_price)}</td></tr>`).join('')}</tbody></table><hr style="border:1px dashed #000; margin:10px 0;"><div class="t-total">Total: $${money(o.total)}</div><div class="t-center" style="margin-top:15px;"><p>¡Gracias por tu visita!</p></div>`;
-    $("printArea").innerHTML = html; window.print();
-    if(o.print_requested) { await api("/orders/"+id, { method: "PATCH", body: JSON.stringify({print_requested: 0}) }); loadOrders(); }
-  } catch(e) { toast(e.message); }
-}
-async function sendReceiptWhatsApp(id) {
-  try { const d = await api("/orders/"+id); const o = d.order; if(!o.customer_phone) return toast("Esta orden no tiene número."); let text = `*RUSH CLUB PÁDEL - RECIBO*\nOrden: ${o.id.slice(0,8)}\nMesa: ${tableName(o.table_id)}\nTotal: $${money(o.total)}\n¡Gracias por tu visita ${o.customer_name || ""}!`; window.open(`https://wa.me/52${o.customer_phone}?text=${encodeURIComponent(text)}`, '_blank'); } catch(e) { toast(e.message); }
-}
-
-// POLLING & NOTIFICATIONS
-let knownOrders=null, pollInterval=null;
-function startPolling(){ if(pollInterval) clearInterval(pollInterval); pollInterval=setInterval(pollNotifications, 8000); pollNotifications(); }
-function playBeep(type){
-  try{ if(navigator.vibrate) navigator.vibrate(200); const ctx=new (window.AudioContext||window.webkitAudioContext)(); const osc=ctx.createOscillator(); const gain=ctx.createGain(); osc.connect(gain); gain.connect(ctx.destination); osc.frequency.setValueAtTime(type==='kitchen'?500:800, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); osc.start(); osc.stop(ctx.currentTime+0.3); }catch(e){}
-}
-async function pollNotifications(){
-  if(!token||!me)return;
+async function makeCashCut(){
+  if(!confirm("¿Deseas realizar el corte de caja de hoy? Esto calculará las utilidades netas del día.")) return;
   try{
-    const os=await api("/orders");
-    if(knownOrders===null){ knownOrders={}; os.forEach(o=>knownOrders[o.id]={status:o.status, print:o.print_requested}); return; }
-    let reload=false;
-    os.forEach(o=>{
-      const prev=knownOrders[o.id]||{};
-      if(prev.status!==o.status || prev.print!==o.print_requested){
-        reload=true;
-        if(isKitchen() && (!prev.status || prev.status==='undefined') && o.status==='open'){ playBeep('kitchen'); toast("🔔 ¡Nueva orden!"); }
-        if(isWaiterRole(me.role) && prev.status==='preparing' && o.status==='ready'){ playBeep('waiter'); toast("✅ ¡Orden lista!"); }
-        if(isAdmin() && !prev.print && o.print_requested){ playBeep('waiter'); toast("🖨️ ¡Solicitud de ticket!"); }
-      }
-      knownOrders[o.id]={status:o.status, print:o.print_requested};
-    });
-    if(reload){ if(!$("cocina").classList.contains("hidden")) loadKitchen(); if(!$("ordenes").classList.contains("hidden")) loadOrders(); }
-  }catch(e){}
+    const d = await api("/cuts", {method:"POST"});
+    toast(`¡Corte realizado con éxito! Utilidad neta: $${d.net}`);
+    loadDashboard();
+  }catch(e){toast(e.message)}
+}
+
+function exportData(type){
+  api("/"+type).then(data => {
+    if(!data.length) return toast("No hay datos para exportar.");
+    const keys = Object.keys(data[0]);
+    let csv = keys.join(",") + "\n";
+    data.forEach(row => { csv += keys.map(k => `"${String(row[k]||'').replace(/"/g, '""')}"`).join(",") + "\n"; });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('href', url);
+    const dateStr = new Date().toISOString().slice(0,10);
+    a.setAttribute('download', `Respaldo_${type}_${dateStr}.csv`);
+    a.click();
+    toast("Respaldo descargado con éxito.");
+  }).catch(e=>toast(e.message));
+}
+
+// -----------------------------------------------------
+// INVENTARIO Y LEALTAD
+// -----------------------------------------------------
+async function loadInventoryData(){
+  inventoryItems = await api("/inventory");
+  $("inventoryList").innerHTML = `<table><thead><tr><th>Insumo</th><th>Unidad</th><th>Stock Actual</th></tr></thead><tbody>${inventoryItems.map(i=>`<tr><td><b>${i.name}</b></td><td>${i.unit}</td><td>${i.stock}</td></tr>`).join("")}</tbody></table>`;
+  $("purInvSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
+}
+
+async function createPurchase(){
+  try{
+    await api("/purchases", {method:"POST", body:JSON.stringify({
+      inventory_id: $("purInvSelect").value,
+      supplier_name: $("purSupplier").value,
+      supplier_rfc: $("purRFC").value,
+      qty: $("purQty").value,
+      total_cost: $("purCost").value,
+      purchase_date: $("purDate").value || new Date().toISOString().slice(0,10)
+    })});
+    toast("Compra guardada y stock actualizado.");
+    $("purSupplier").value=""; $("purQty").value=""; $("purCost").value="";
+    loadInventoryData();
+  }catch(e){toast(e.message)}
+}
+
+async function loadLoyaltyCustomers(){
+  const list = await api("/loyalty");
+  $("loyaltyList").innerHTML = list.length ? `<table><thead><tr><th>Nombre</th><th>WhatsApp</th><th>Visitas</th><th>Total Gastado</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${c.name}</b></td><td>${c.phone}</td><td>${c.visits}</td><td>$${c.total_spent}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin clientes leales registrados.</p>";
+}
+
+let cList=[], cIdx=0;
+async function startCampaign(){
+  cList = await api("/loyalty");
+  if(!cList.length) return toast("No hay clientes.");
+  cIdx=0; $("campaignQueue").classList.remove("hidden"); updateCamp();
+}
+function updateCamp(){
+  $("campProgress").innerText = `${cIdx} / ${cList.length}`;
+  if(cIdx < cList.length) $("campCurrentName").innerText = `Cliente: ${cList[cIdx].name}`;
+  else { $("campCurrentName").innerText = "¡Campaña finalizada!"; $("btnSendNext").disabled=true; }
+}
+function sendNextCampaign(){
+  if(cIdx>=cList.length) return;
+  const c = cList[cIdx]; const msg = $("bulkMessage").value;
+  window.open(`https://wa.me/52${c.phone}?text=${encodeURIComponent("Hola "+c.name+" 👋\n\n"+msg)}`, '_blank');
+  cIdx++; updateCamp();
+}
+
+// -----------------------------------------------------
+// MENÚ Y USUARIOS
+// -----------------------------------------------------
+function renderProductAdmin(){
+  $("productAdmin").innerHTML = products.map(p=>`
+    <div class="card">
+      <h3>${p.name}</h3><p>$${p.price} · ${p.category}</p>
+      <button class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button>
+    </div>
+  `).join("");
+}
+
+async function createProduct(){
+  try{
+    await api("/menu",{method:"POST",body:JSON.stringify({
+      name: $("pName").value, category: $("pCategory").value, price: Number($("pPrice").value), description: $("pDesc").value
+    })});
+    toast("Producto creado");
+    $("pName").value=""; $("pCategory").value=""; $("pPrice").value=""; $("pDesc").value="";
+    loadAll();
+  }catch(e){toast(e.message)}
+}
+
+async function loadUsers(){
+  const us = await api("/users");
+  $("users").innerHTML = `<table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`
+    <tr><td>${u.username}</td><td>${u.name}</td><td>${u.role}</td><td><button onclick="changePass('${u.id}')">🔑 Cambiar Clave</button></td></tr>
+  `).join("")}</tbody></table>`;
+}
+
+async function changePass(id){
+  const p = prompt("Ingresa la nueva contraseña para este usuario:");
+  if(p){
+    try{
+      await api("/users/"+id, {method:"PATCH", body:JSON.stringify({password:p})});
+      toast("Contraseña actualizada con éxito");
+    }catch(e){toast(e.message)}
+  }
+}
+
+async function createUser(){
+  try{
+    await api("/users",{method:"POST",body:JSON.stringify({
+      name: $("uName").value, username: $("uUsername").value, password: $("uPassword").value, role: $("uRole").value
+    })});
+    toast("Usuario creado");
+    $("uName").value=""; $("uUsername").value=""; $("uPassword").value="";
+    loadUsers();
+  }catch(e){toast(e.message)}
 }
 
 boot();
