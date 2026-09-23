@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v22</title>
+<title>RUSH POS v23</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v22</div>
+      <div class="brand">RUSH POS v23</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -135,7 +135,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <label>Nombre del cliente:<input id="resName" placeholder="Nombre completo"></label>
       <label>WhatsApp:<input id="resPhone" placeholder="10 dígitos"></label>
       <label>Precio Total ($):<input id="resCustomTotal" type="number" step="1"></label>
-      <label>Anticipo / Seña ($):<input id="resDeposit" value="0"></label>
+      <label>Anticipo / Seña ($):<input type="number" id="resDeposit" value="0"></label>
       <button class="success" onclick="createReservation()" style="grid-column:1/-1;">Confirmar Reserva y Generar Cuenta</button>
     </div>
   </div>
@@ -299,7 +299,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </div>
 
-<!-- MODAL DE TICKET (DOBLE COPIA: CLIENTE Y COCINA) -->
+<!-- MODAL DE TICKET -->
 <div id="ticketModal" class="modal hidden">
   <div class="modalbox" style="max-width:420px; text-align:center;">
     <div class="row between"><h2 style="margin:0">Comprobante / Tickets</h2><button onclick="$('ticketModal').classList.add('hidden')">✕</button></div>
@@ -385,10 +385,18 @@ async function api(path,opts={}){
 
 async function login(){
   try{
-    const d=await api("/login",{method:"POST",body:JSON.stringify({username:$("loginUser").value, password:$("loginPass").value})});
+    const u = $("loginUser").value.trim();
+    const p = $("loginPass").value.trim();
+    if(!u || !p) return toast("Ingresa usuario y contraseña.");
+
+    const d=await api("/login",{method:"POST",body:JSON.stringify({username:u, password:p})});
+    if(!d.token) throw new Error("No se recibió token de acceso.");
+
     token=d.token; localStorage.setItem("rush_token",token); me=d.user;
     showApp(); loadAll();
-  }catch(e){toast(e.message)}
+  }catch(e){
+    toast("Error de acceso: " + e.message);
+  }
 }
 
 async function logout(show=true){
@@ -399,7 +407,14 @@ async function logout(show=true){
 
 async function boot(){
   if(!token)return;
-  try{ const d=await api("/me"); me=d.user; showApp(); loadAll(); }catch{}
+  try{ 
+    const d=await api("/me"); 
+    me=d.user; 
+    if(me){ showApp(); loadAll(); } 
+    else { logout(false); }
+  }catch{ 
+    logout(false); 
+  }
 }
 
 function isAdmin(){ return me?.role==="admin"; }
@@ -637,7 +652,7 @@ async function createReservation(){
 function sendReservationWhatsApp(id){
   const r = activeReservations.find(x=>x.id===id);
   if(!r || !r.customer_phone) return toast("Este cliente no tiene número de WhatsApp registrado.");
-  const msg = `Hola *${r.customer_name}* 👋 Te recordamos los datos de tu reserva en *Rush Club Pádel* 🎾:\n\n🏟️ Cancha: ${r.court_name}\n📅 Fecha: ${r.date}\n⏰ Hora: ${r.start_time}\n⏳ Duración: ${r.hours} hrs\n💰 Total: $${r.total_price}\n\n¡Nos vemos en la cancha!`;
+  const msg = `Hola *${r.customer_name}* 👋 Te recordamos los datos de tu reserva en *Rush Club Pádel* 🎾:\n\n🏟️ Cancha: ${r.court_name}\n📅 Fecha: ${r.date}\n⏰ Hora: ${r.start_time}\n⏳ Duración: ${r.hours} hrs\n💰 Total: ${r.total_price}\n\n¡Nos vemos en la cancha!`;
   window.open(`https://wa.me/52${r.customer_phone}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
