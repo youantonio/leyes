@@ -146,7 +146,7 @@ async function hashPassword(password, saltHex) {
       {
         name: "PBKDF2",
         salt: enc.encode(salt),
-        iterations: 120000,
+        iterations: 10000,
         hash: "SHA-256"
       },
       key,
