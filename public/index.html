@@ -1204,7 +1204,23 @@ async function loadUsers(){
     `;
   }catch(e){toast(e.message)}
 }
+async function deleteUser(id, name){
+  if(!confirm(`¿Estás seguro de que deseas eliminar permanentemente al usuario "${name}"?`)){
+    return;
+  }
 
+  try{
+    await api(`/users/${id}`, {
+      method: "DELETE"
+    });
+
+    toast("Usuario eliminado");
+    loadUsers(); // Recargamos la tabla para que desaparezca
+
+  }catch(e){
+    toast(e.message);
+  }
+}
 async function createUser(){
   try{
     await api("/users",{
