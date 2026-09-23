@@ -115,7 +115,6 @@ async function ensureDatabase(env) {
   try { await env.DB.prepare(`ALTER TABLE orders ADD COLUMN print_requested INTEGER DEFAULT 0`).run(); } catch(e) {} 
   try { await env.DB.prepare(`ALTER TABLE orders ADD COLUMN customer_phone TEXT DEFAULT ''`).run(); } catch(e) {} 
 
-  // Limpiar mesas duplicadas por si acaso
   try {
     await env.DB.prepare(`DELETE FROM "tables" WHERE id NOT IN (SELECT MIN(id) FROM "tables" GROUP BY number, type)`).run();
   } catch(e) {}
@@ -127,7 +126,6 @@ async function ensureDatabase(env) {
     await env.DB.prepare(`INSERT INTO users (id, username, name, role, password_hash, password_salt, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`).bind(crypto.randomUUID(), "admin", "Administrador", "admin", hash, salt, t, t).run();
   }
 
-  // Canchas iniciales de Pádel
   const courtCount = await env.DB.prepare(`SELECT COUNT(*) AS count FROM padel_courts`).first();
   if (Number(courtCount?.count || 0) === 0) {
     await env.DB.batch([
@@ -138,7 +136,7 @@ async function ensureDatabase(env) {
 }
 
 function getToken(request) {
-  const h = request.headers.get("Authorization"] || "";
+  const h = request.headers.get("Authorization") || "";
   if (h.toLowerCase().startsWith("bearer ")) return h.slice(7).trim();
   return null;
 }
@@ -183,7 +181,7 @@ async function api(request, env, url) {
   const user = await auth(request, env);
   if (!user) return json({ error: "Sesión no válida o expirada." }, 401);
 
-  /* CANCHAS DE PÁDEL Y RESERVAS */
+  /* CANCHAS Y RESERVAS */
   if (resource === "courts") {
     if (request.method === "GET") {
       const rows = await env.DB.prepare(`SELECT * FROM padel_courts WHERE active=1`).all();
@@ -209,20 +207,16 @@ async function api(request, env, url) {
       
       const subtotal = Number(d.total_price);
       const deposit = Number(d.deposit || 0);
-      const remaining = Math.max(0, subtotal - deposit);
 
-      // Crear orden vinculada para la cancha (permite agregar consumos de restaurante)
       await env.DB.prepare(`
         INSERT INTO orders (id, customer_name, customer_phone, status, subtotal, discount, total, payment_status, created_at, updated_at)
         VALUES (?, ?, ?, 'open', ?, 0, ?, 'pending', ?, ?)
       `).bind(orderId, d.customer_name, d.customer_phone, subtotal, subtotal, nowIso(), nowIso()).run();
 
-      // Item inicial: Renta de Cancha
       await env.DB.prepare(`
         INSERT INTO order_items (order_id, name, qty, unit_price) VALUES (?, ?, 1, ?)
       `).bind(orderId, `Renta Cancha (${d.date} ${d.start_time})`, subtotal).run();
 
-      // Si dejó anticipo, registrar en caja
       if (deposit > 0) {
         await env.DB.prepare(`
           INSERT INTO cash_movements (id, type, amount, concept, order_id, created_at)
@@ -230,7 +224,6 @@ async function api(request, env, url) {
         `).bind(crypto.randomUUID(), deposit, `Anticipo Reserva Cancha (${d.customer_name})`, orderId, nowIso()).run();
       }
 
-      // Guardar Reserva
       await env.DB.prepare(`
         INSERT INTO padel_reservations (id, court_id, customer_name, customer_phone, date, start_time, hours, total_price, deposit, status, order_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)
@@ -323,7 +316,7 @@ async function api(request, env, url) {
     }
     if (request.method === "PATCH" && id) {
       if (!requireRole(user, ["admin"])) return json({ error: "Solo administrador." }, 403);
-      await env.DB.prepare(`UPDATE menu_items SET active=0 WHERE id=?`).bind(id).run(); // Borrado lógico (Papelera)
+      await env.DB.prepare(`UPDATE menu_items SET active=0 WHERE id=?`).bind(id).run();
       return json({ ok: true });
     }
   }
@@ -395,7 +388,6 @@ async function api(request, env, url) {
         if (ordInfo?.customer_phone) {
           await env.DB.prepare(`UPDATE loyalty_customers SET visits = visits + 1, total_spent = total_spent + ? WHERE phone = ?`).bind(ordInfo.total, ordInfo.customer_phone).run();
         }
-        // Descuento de stock
         const orderItems = await env.DB.prepare(`SELECT menu_item_id, qty FROM order_items WHERE order_id=?`).bind(id).all();
         for (const item of orderItems.results) {
           if (!item.menu_item_id) continue;
@@ -408,7 +400,6 @@ async function api(request, env, url) {
       return json({ ok: true, isFullyPaid });
     }
 
-    // ELIMINAR COMANDA (Solo Admin)
     if (request.method === "DELETE" && id) {
       if (!requireRole(user, ["admin"])) return json({ error: "Solo administrador." }, 403);
       const ord = await env.DB.prepare(`SELECT table_id FROM orders WHERE id=?`).bind(id).first();
@@ -448,7 +439,7 @@ async function api(request, env, url) {
     return json({ today: { sales: s.sales, orders: s.orders, expenses: e.expenses }, open, kitchen });
   }
 
-  /* USUARIOS (CON CAMBIO DE CONTRASEÑA) */
+  /* USUARIOS */
   if (resource === "users") {
     if (!requireRole(user, ["admin"])) return json({ error: "Solo administrador." }, 403);
     if (request.method === "GET" && !id) return json((await env.DB.prepare(`SELECT id, username, name, role, active, created_at FROM users`).all()).results);
