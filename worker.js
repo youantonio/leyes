@@ -2215,7 +2215,7 @@ async function api(
         .toLowerCase();
 
 
-      /* VALIDACIÓN */
+    /* VALIDACIÓN */
 
       if (
         !username ||
@@ -2230,12 +2230,10 @@ async function api(
 
         return json({
           error:
-            "Nombre, usuario, contraseña y rol son obligatorios."
+            `Debug - Recibido: nombre='${name}', usuario='${username}', pass='${password ? "OK" : "FALTA"}', rol='${role}'`
         }, 400);
 
       }
-
-
       /* COMPROBAR USUARIO EXISTENTE */
 
       const exists =
