@@ -942,10 +942,6 @@ async function api(
 
     const d =
       await body(request);
-console.log("
-            DATOS CREAR USUARIO:",
-  d
-  );
 
     const username =
       String(
