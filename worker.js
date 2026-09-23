@@ -297,9 +297,25 @@ async function ensureDatabase(env) {
         order_id TEXT,
         created_at TEXT NOT NULL
       )
+    `),
+    
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS order_comments (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        user_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        comment TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
     `)
 
   ]);
+
+  try {
+    // Añadir columna de tiempo estimado si no existe
+    await env.DB.prepare(`ALTER TABLE orders ADD COLUMN estimated_time INTEGER DEFAULT 0`).run();
+  } catch(e) {} 
 
 
   /* =======================================================
@@ -940,8 +956,7 @@ async function api(
     resource === "login"
   ) {
 
-    const d =
-      await body(request);
+    const d = await body(request);
 
     const username =
       String(
@@ -1439,7 +1454,7 @@ async function api(
   if (
     request.method === "GET" &&
     resource === "orders" &&
-    id
+    id && !action
   ) {
 
     const order =
@@ -1490,7 +1505,8 @@ async function api(
 
   if (
     request.method === "GET" &&
-    resource === "orders"
+    resource === "orders" && 
+    !id
   ) {
 
     const status =
@@ -1540,7 +1556,8 @@ async function api(
 
   if (
     request.method === "POST" &&
-    resource === "orders"
+    resource === "orders" && 
+    !id
   ) {
 
     if (
@@ -1803,7 +1820,8 @@ async function api(
       "payment_status",
       "payment_method",
       "notes",
-      "discount"
+      "discount",
+      "estimated_time"
     ];
 
 
@@ -1919,6 +1937,30 @@ async function api(
 
   }
 
+  /* =======================================================
+     COMENTARIOS DE ORDEN (CHAT)
+  ======================================================= */
+
+  if (request.method === "GET" && resource === "orders" && id && action === "comments") {
+    const comments = await env.DB
+      .prepare(`SELECT * FROM order_comments WHERE order_id=? ORDER BY created_at ASC`)
+      .bind(id)
+      .all();
+    return json(comments.results);
+  }
+
+  if (request.method === "POST" && resource === "orders" && id && action === "comments") {
+    const d = await body(request);
+    const newId = crypto.randomUUID();
+    await env.DB
+      .prepare(`
+        INSERT INTO order_comments (id, order_id, user_name, role, comment, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `)
+      .bind(newId, id, user.name, user.role, d.comment || "", nowIso())
+      .run();
+    return json({ ok: true, id: newId });
+  }
 
   /* =======================================================
      DASHBOARD
@@ -2215,7 +2257,7 @@ async function api(
         .toLowerCase();
 
 
-    /* VALIDACIÓN */
+      /* VALIDACIÓN */
 
       if (
         !username ||
@@ -2234,6 +2276,8 @@ async function api(
         }, 400);
 
       }
+
+
       /* COMPROBAR USUARIO EXISTENTE */
 
       const exists =
@@ -2489,8 +2533,7 @@ async function api(
 
     }
 
-  }
-/* =====================================================
+    /* =====================================================
        ELIMINAR USUARIO
     ===================================================== */
 
@@ -2499,7 +2542,6 @@ async function api(
       id
     ) {
 
-      // Evitar que el admin se borre a sí mismo por accidente
       if (id === user.id) {
         return json({
           error: "No puedes eliminar tu propio usuario en uso."
@@ -2530,7 +2572,6 @@ async function api(
         .bind(id)
         .run();
 
-      // Borramos también sus sesiones activas por seguridad
       await env.DB
         .prepare(`
           DELETE FROM sessions
@@ -2545,6 +2586,9 @@ async function api(
       });
 
     }
+
+  }
+
 
   /* =======================================================
      RUTA NO ENCONTRADA
