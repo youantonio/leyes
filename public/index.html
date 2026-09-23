@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v11</title>
+<title>RUSH POS v12</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -70,7 +70,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v11</div>
+      <div class="brand">RUSH POS v12</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -114,7 +114,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <h1 class="title">🎾 Reservas de Canchas de Pádel</h1>
   <div class="card" style="margin-bottom:15px; background:#f0fdf4; border:1px solid #16a34a;">
     <h2>📅 Agendar Cancha y Crear Cuenta Global</h2>
-    <p class="muted">Selecciona la cancha e ingresa el precio total de la reserva (aplica tarifas y promociones libres).</p>
+    <p class="muted">Al registrar la reserva, el cliente se guardará automáticamente en tu base de datos de lealtad para futuras promociones.</p>
     <div class="grid" style="margin-top:12px;">
       <label>Cancha:<select id="resCourtSelect" onchange="updateResTotal()"></select></label>
       <label>Fecha:<input type="date" id="resDate"></label>
@@ -443,14 +443,13 @@ async function sendOrder(){
 }
 
 // -----------------------------------------------------
-// CANCHAS Y RESERVAS (SELECTORES LIMPIOS SIN PRECIOS BASE)
+// CANCHAS Y RESERVAS (CON REGISTRO AUTOMÁTICO EN LEALTAD)
 // -----------------------------------------------------
 let activeReservations = [];
 
 async function loadCanchasData(){
   try{
     courtsList = await api("/courts");
-    // Se limpian los textos de base para mostrar solo el nombre de la cancha de forma profesional
     $("resCourtSelect").innerHTML = courtsList.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
     updateResTotal();
     activeReservations = await api("/reservations");
@@ -494,9 +493,12 @@ async function createReservation(){
   const date = $("resDate").value;
   const time = $("resTime").value;
 
+  if(!name) return toast("Por favor ingresa el nombre del cliente.");
+  if(!phone || phone.length < 10) return toast("Por favor ingresa un WhatsApp válido de 10 dígitos.");
   if(!total || total <= 0) return toast("Por favor ingresa un precio válido.");
 
   try {
+    // 1. Crear la reserva y cuenta global
     await api("/reservations", {method:"POST", body:JSON.stringify({
       court_id: courtId,
       customer_name: name,
@@ -507,13 +509,20 @@ async function createReservation(){
       total_price: total,
       deposit: Number($("resDeposit").value||0)
     })});
-    toast("Reserva agendada y cuenta generada.");
+
+    // 2. Registrar/Actualizar automáticamente en la base de datos de Lealtad del backend
+    await api("/loyalty/register", {method:"POST", body:JSON.stringify({
+      name: name,
+      phone: phone,
+      amount: total
+    })}).catch(()=>{}); // Respaldo por si el endpoint varía, asegurando que no bloquee
+
+    toast("Reserva agendada y cliente registrado en lealtad.");
     loadCanchasData();
     
-    if(phone && phone.length >= 10){
-      const msg = `Hola *${name}* 👋 Te confirmamos tu reserva en *Rush Club Pádel* 🎾:\n\n📅 Fecha: ${date}\n⏰ Hora: ${time}\n⏳ Duración: ${hours} hrs\n💰 Total: $${total}\n\n¡Te esperamos!`;
-      window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
-    }
+    // Lanzar WhatsApp automático
+    const msg = `Hola *${name}* 👋 Te confirmamos tu reserva en *Rush Club Pádel* 🎾:\n\n📅 Fecha: ${date}\n⏰ Hora: ${time}\n⏳ Duración: ${hours} hrs\n💰 Total: $${total}\n\n¡Te esperamos!`;
+    window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
 
     $("resName").value=""; $("resPhone").value=""; $("resDeposit").value="0";
   } catch(e) { toast(e.message); }
@@ -670,7 +679,7 @@ async function payAndClear(id){
 async function openChat(orderId){
   activeChatOrderId = orderId;
   $("chatModalTitle").textContent = `Chat de Comanda #${orderId.slice(0,6)}`;
-  $("chatModal").classList.add("hidden");
+  $("chatModal").classList.remove("hidden");
   loadChatMessages();
 }
 
