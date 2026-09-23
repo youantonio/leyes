@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v19</title>
+<title>RUSH POS v20</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v19</div>
+      <div class="brand">RUSH POS v20</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -465,7 +465,7 @@ async function sendOrder(){
 
   const total = cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
 
-  // Generar folio interno basado en Día/Mes/Año/Hora (Ej. 230926-1637)
+  // Folio basado en Día/Mes/Año/Hora (Ej. 230926-1700)
   const now = new Date();
   const dd = String(now.getDate()).padStart(2,'0');
   const mm = String(now.getMonth()+1).padStart(2,'0');
@@ -706,25 +706,42 @@ async function updateOrderStatus(id, newStatus){
 }
 
 // -----------------------------------------------------
-// ÓRDENES, TICKET DETALLADO Y WHATSAPP ULTRA BLINDADO
+// CONTROL DE ÓRDENES CON RESUMEN COMPLETO Y TOTALES
 // -----------------------------------------------------
 async function loadOrders(){
   try{
     allOrdersCache = await api("/orders");
-    $("orders").innerHTML = allOrdersCache.map(o=>`
-      <div class="card">
-        <h3>Orden #${o.custom_folio || o.id.slice(0,6)}</h3>
-        <p><b>Destino:</b> ${o.table_name || o.customer_name || "General"} | <b>Mesero:</b> ${o.user_name || "Personal"} | Total: <b>$${o.total}</b></p>
-        <span class="status ${o.status}">${o.status}</span>
-        <div class="row" style="margin-top:10px; flex-wrap:wrap;">
-          <button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ver / Imprimir Ticket</button>
-          <button class="success" style="flex:1;" onclick="payAndClear('${o.id}')">💵 Finalizar Cuenta</button>
-          <button onclick="openChat('${o.id}')">💬 Chat</button>
-          ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
+    $("orders").innerHTML = allOrdersCache.map(o=>{
+      let itemsSummary = "Sin artículos registrados";
+      if(o.items && o.items.length){
+        itemsSummary = o.items.map(it=>`${it.qty || 1}x ${it.name || 'Art.'}`).join(", ");
+      }
+
+      let computedTotal = o.total;
+      if((!computedTotal || computedTotal == 0) && o.items && o.items.length){
+        computedTotal = o.items.reduce((acc, it) => acc + ((it.qty || 1) * (it.unit_price || it.price || 0)), 0);
+      }
+
+      return `
+        <div class="card" style="border-left: 6px solid #111;">
+          <div class="row between">
+            <h3 style="margin:0;">Orden #${o.custom_folio || o.id.slice(0,6)}</h3>
+            <span class="status ${o.status}">${o.status}</span>
+          </div>
+          <p style="margin:8px 0; font-size:15px;"><b>👤 Cliente / Destino:</b> ${o.customer_name || "General"}</p>
+          <p style="margin:4px 0; font-size:14px; color:#555;"><b>🛒 Detalle de lo pedido:</b> ${itemsSummary}</p>
+          <p style="margin:4px 0; font-size:15px;"><b>👤 Mesero:</b> ${o.user_name || "Personal"} | <b>💰 Total cuenta:</b> <b style="color:#16a34a; font-size:17px;">$${computedTotal || o.total}</b></p>
+          
+          <div class="row" style="margin-top:12px; flex-wrap:wrap;">
+            <button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ver / Imprimir Ticket</button>
+            <button class="success" style="flex:1;" onclick="payAndClear('${o.id}')">💵 Finalizar Cuenta</button>
+            <button onclick="openChat('${o.id}')">💬 Chat</button>
+            ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️ Eliminar</button>`:""}
+          </div>
         </div>
-      </div>
-    `).join("") || "<p class='muted'>No hay órdenes activas.</p>";
-  }catch(e){}
+      `;
+    }).join("") || "<p class='muted'>No hay órdenes activas.</p>";
+  }catch(e){toast("Error al cargar órdenes: "+e.message)}
 }
 
 async function previewTicket(id){
@@ -792,7 +809,6 @@ function sendTicketWhatsApp(){
   if(!currentTicketData) return;
   const o = currentTicketData;
   
-  // Extracción ultra blindada de 10 dígitos escaneando todo el objeto
   let phone = o.customer_phone;
   if(!phone || String(phone).length < 10) {
     const fullText = JSON.stringify(o);
@@ -832,7 +848,7 @@ async function payAndClear(id){
 async function openChat(orderId){
   activeChatOrderId = orderId;
   $("chatModalTitle").textContent = `Chat de Comanda #${orderId.slice(0,6)}`;
-  $("chatModal").classList.remove("hidden");
+  $("chatModal").classList.add("hidden");
   loadChatMessages();
 }
 
