@@ -215,9 +215,8 @@ th,td{text-align:left;padding:11px;border-bottom:1px solid #eee}
       <input id="uUsername" placeholder="Usuario">
       <input id="uPassword" type="password" placeholder="Contraseña">
       <select id="uRole">
-        <option value="waiter">Mesero</option>
-        <option value="kitchen">Cocina</option>
-        <option value="cashier">Caja</option>
+        <option value="mesero">Mesero</option>
+        <option value="cocina">Cocina</option>
         <option value="admin">Administrador</option>
       </select>
       <button class="primary" onclick="createUser()">Crear usuario</button>
@@ -667,9 +666,7 @@ async function loadOrders(){
 
         ${Number(o.paid_amount||0)>0?
           `<div class="payment-summary" style="margin-top:10px">
-            <b>Cobrado: $${money(o.paid_amount)}</b><br>
-            <small>Efectivo $${money(o.paid_cash)} · Tarjeta $${money(o.paid_card)} · Terminal $${money(o.terminal_amount)}</small>
-            ${o.paid_amount<o.total?`<br><small class="muted">Pendiente $${money(o.total-o.paid_amount)}</small>`:""}
+            <b>Cobrado: $${money(o.paid_amount)}</b><br>             <small>Efectivo $${money(o.paid_cash)} · Tarjeta $${money(o.paid_card)} · Terminal $${money(o.terminal_amount)}</small>${o.paid_amount<o.total?`<br><small class="muted">Pendiente $${money(o.total-o.paid_amount)}</small>`:""}
           </div>`:""}
 
         ${["waiter","mesero","admin"].includes(me.role)&&["ready","partial"].includes(o.status)?
@@ -828,9 +825,7 @@ function payerCard(p,i){
         return `
           <div class="alloc">
             <span>
-              ${q?`${q} × `:""}${esc(it.name)}
-              <br>
-              <small class="muted">$${money(it.unit_price)} c/u · disponibles ${max}</small>
+              ${q?`${q} × `:""}${esc(it.name)}               <br>               <small class="muted">$${money(it.unit_price)} c/u · disponibles ${max}</small>
             </span>
 
             <select onchange="setAlloc(${i},${it.id},this.value)">
