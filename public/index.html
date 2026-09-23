@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v14</title>
+<title>RUSH POS v15</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v14</div>
+      <div class="brand">RUSH POS v15</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -687,19 +687,29 @@ async function loadOrders(){
 
 async function previewTicket(id){
   try{
-    // Buscamos la orden completa desde la API o caché
-    const o = await api("/orders/" + id);
+    let o = null;
+    try {
+      o = await api("/orders/" + id);
+    } catch(err) {
+      o = allOrdersCache.find(x => x.id === id);
+    }
+
+    if(!o) throw new Error("No se encontró la información de esta orden.");
     currentTicketData = o;
 
     let itemsHtml = "";
     if(o.items && o.items.length){
       itemsHtml = o.items.map(it=>`
         <div style="display:flex; justify-content:space-between; margin:4px 0; font-size:14px;">
-          <span>${it.qty}x ${it.name}</span>
-          <span>$${it.qty * it.unit_price}</span>
+          <span>${it.qty || 1}x ${it.name || 'Artículo'}</span>
+          <span>$${(it.qty || 1) * (it.unit_price || it.price || 0)}</span>
         </div>
       `).join("");
+    } else {
+      itemsHtml = `<div style="font-size:13px; color:#555;">Orden registrada en sistema</div>`;
     }
+
+    const safeId = o.id ? String(o.id).slice(0,6) : id.slice(0,6);
 
     $("ticketContent").innerHTML = `
       <div class="ticket-preview">
@@ -707,21 +717,21 @@ async function previewTicket(id){
         <small>Punto de Venta · Comprobante</small>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="text-align:left; font-size:13px;">
-          <b>Folio:</b> #${o.id.slice(0,6)}<br>
-          <b>Destino:</b> ${o.table_name || 'Mostrador / General'}<br>
+          <b>Folio:</b> #${safeId}<br>
+          <b>Destino:</b> ${o.table_name || o.customer_name || 'Mostrador / General'}<br>
           <b>Cliente:</b> ${o.customer_name || 'General'}<br>
-          <b>Atendió (Mesero):</b> ${o.user_name || 'Personal'}<br>
+          <b>Atendió (Mesero):</b> ${o.user_name || me?.name || 'Personal'}<br>
           <b>Fecha:</b> ${new Date().toLocaleString()}
         </div>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="text-align:left;">
           <b>Consumo detallado:</b>
-          ${itemsHtml || '<small>Sin artículos registrados</small>'}
+          ${itemsHtml}
         </div>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold;">
           <span>TOTAL:</span>
-          <span>$${o.total}</span>
+          <span>$${o.total || 0}</span>
         </div>
         <hr style="border:0; border-top:1px dashed #333; margin:8px 0;">
         <small>¡Gracias por su visita!<br>Rush Club Pádel</small>
@@ -739,10 +749,13 @@ function sendTicketWhatsApp(){
 
   let itemsText = "";
   if(o.items && o.items.length){
-    itemsText = o.items.map(it=>`- ${it.qty}x ${it.name} ($${it.qty * it.unit_price})`).join("\n");
+    itemsText = o.items.map(it=>`- ${it.qty || 1}x ${it.name || 'Artículo'} ($${(it.qty || 1) * (it.unit_price || it.price || 0)})`).join("\n");
+  } else {
+    itemsText = "- Consumo general registrado";
   }
 
-  const msg = `Hola *${o.customer_name || 'Cliente'}* 👋 Aquí tienes el resumen de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${o.id.slice(0,6)}\n🏟️ *Destino:* ${o.table_name || 'General'}\n👤 *Atendió:* ${o.user_name || 'Personal'}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${o.total}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
+  const safeId = o.id ? String(o.id).slice(0,6) : '000000';
+  const msg = `Hola *${o.customer_name || 'Cliente'}* 👋 Aquí tienes el resumen de tu consumo en *Rush Club Pádel* 🎾:\n\n📋 *Folio:* #${safeId}\n🏟️ *Destino:* ${o.table_name || 'General'}\n👤 *Atendió:* ${o.user_name || 'Personal'}\n\n${itemsText}\n\n--------------------\n💰 *TOTAL:* $${o.total || 0}\n\n¡Gracias por tu visita! Te esperamos pronto.`;
   window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
