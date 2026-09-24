@@ -60,9 +60,9 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <h1 style="font-size:36px;margin:0">RUSH POS</h1>
     <p class="muted">Sistema de Gestión · Rush Club Pádel</p>
     <div class="stack">
-      <label>Usuario<input id="loginUser" placeholder="Usuario"></label>
-      <label>Contraseña<input id="loginPass" type="password" placeholder="Contraseña"></label>
-      <button class="primary" style="width:100%; margin-top:10px;" onclick="login()">Iniciar sesión</button>
+      <label>Usuario<input id="loginUser" placeholder="Usuario" value="admin"></label>
+      <label>Contraseña<input id="loginPass" type="password" placeholder="Contraseña" value="admin"></label>
+      <button class="primary" style="width:100%; margin-top:10px;" onclick="login()">Iniciar sesión (Entrada Directa)</button>
     </div>
   </div>
 </section>
@@ -279,7 +279,6 @@ function toast(msg){
   setTimeout(()=>$("toast").classList.add("hidden"),3000);
 }
 
-// Envoltorio de API con captura de errores
 async function api(path,opts={}){
   opts.headers={...(opts.headers||{}),"Content-Type":"application/json"};
   if(token && token !== "bypass") opts.headers.Authorization="Bearer "+token;
@@ -292,29 +291,16 @@ async function api(path,opts={}){
   return data;
 }
 
-// LOGIN SEGURO CON BYPASS LOCAL
+// ==========================================
+// BYPASS TOTAL: ENTRADA DIRECTA AUTOMÁTICA
+// ==========================================
 async function login(){
-  try{
-    const u = $("loginUser").value.trim();
-    const p = $("loginPass").value.trim();
-    if(!u || !p) return toast("Ingresa usuario y contraseña.");
-
-    // BYPASS: SI ES ADMIN/ADMIN ENTRA DIRECTO
-    if(u === "admin" && p === "admin") {
-      token = "bypass"; localStorage.setItem("rush_token", token);
-      me = { id: "1", name: "Administrador", username: "admin", role: "admin" };
-      showApp(); loadAll(); toast("Acceso local concedido");
-      return;
-    }
-
-    const d = await api("/login",{method:"POST",body:JSON.stringify({username:u, password:p})});
-    if(!d.token) throw new Error("Credenciales incorrectas");
-    
-    token=d.token; localStorage.setItem("rush_token",token); me=d.user;
-    showApp(); loadAll();
-  }catch(e){
-    toast(e.message);
-  }
+  token = "bypass_absoluto"; 
+  localStorage.setItem("rush_token", token);
+  me = { id: "1", name: "Administrador Supremo", username: "admin", role: "admin" };
+  showApp(); 
+  loadAll();
+  toast("✅ Acceso concedido por Bypass");
 }
 
 function logout(show=true){
@@ -324,9 +310,12 @@ function logout(show=true){
 }
 
 async function boot(){
-  if(!token)return;
-  if(token === "bypass"){ me = { id: "1", name: "Administrador", username: "admin", role: "admin" }; showApp(); loadAll(); return; }
-  try{ const d=await api("/me"); me=d.user; showApp(); loadAll(); }catch{ logout(false); }
+  token = "bypass_absoluto";
+  me = { id: "1", name: "Administrador Supremo", username: "admin", role: "admin" };
+  const loginSection = document.getElementById("loginView");
+  if(loginSection) loginSection.style.display = "none";
+  showApp(); 
+  loadAll();
 }
 
 function isAdmin(){ return me?.role==="admin"; }
@@ -335,11 +324,19 @@ function showApp(){
   $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
   $("userPill").textContent=`● ${me.name} (${me.role})`;
   
-  let nav=[];
-  if(me.role==="cocina") nav=[["cocina","👨‍🍳 Cocina"]];
-  else if(me.role==="barra") nav=[["barra","☕ Barra"]];
-  else if(me.role==="mesero") nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["barra","☕ Barra"],["ordenes","📋 Órdenes"]];
-  else nav=[["venta","🛒 Venta"],["canchas","🎾 Canchas"],["mesas","🪑 Mesas"],["cocina","👨‍🍳 Cocina"],["barra","☕ Barra"],["ordenes","📋 Órdenes"],["caja","📊 Caja"],["lealtad","⭐ Lealtad"],["inventario","📦 Inventario"],["productos","🍔 Menú"],["usuarios","👥 Usuarios"]];
+  let nav=[
+    ["venta","🛒 Venta"],
+    ["canchas","🎾 Canchas"],
+    ["mesas","🪑 Mesas"],
+    ["cocina","👨‍🍳 Cocina"],
+    ["barra","☕ Barra"],
+    ["ordenes","📋 Órdenes"],
+    ["caja","📊 Caja"],
+    ["lealtad","⭐ Lealtad"],
+    ["inventario","📦 Inventario"],
+    ["productos","🍔 Menú"],
+    ["usuarios","👥 Usuarios"]
+  ];
 
   $("nav").innerHTML=nav.map((x,i)=>`<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`).join("");
   view(nav[0][0], $("nav").firstElementChild);
@@ -522,6 +519,7 @@ async function createUser(){ await api("/users",{method:"POST",body:JSON.stringi
 
 function openChat(){ toast("Chat interno abriendo..."); } function closeChat(){ $("chatModal").classList.add("hidden"); } function exportData(){ toast("Exportando..."); } function loadLoyaltyCustomers(){} function startCampaign(){} function sendNextCampaign(){}
 
+// Inicialización automática al cargar la página
 boot();
 </script>
 </body>
