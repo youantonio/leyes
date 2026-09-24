@@ -1,7 +1,0 @@
-# 1) Reemplaza REPLACE_WITH_YOUR_D1_DATABASE_ID en wrangler.toml
-# 2) Desde esta carpeta:
-npx wrangler d1 create rush-pos
-# Copia el database_id que te entregue y pégalo en wrangler.toml.
-npx wrangler d1 execute rush-pos --remote --file=schema.sql
-npx wrangler d1 execute rush-pos --remote --file=seed.sql
-npx wrangler deploy
