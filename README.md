@@ -1,4 +1,4 @@
-RUSH POS v24.3
+RUSH POS v24.3.1
 Fecha: 23 de septiembre de 2026
 Proyecto: Punto de venta de Rush Club Pádel
 Plataforma: Cloudflare Workers + D1 (`rush-pos-db`)
@@ -6,7 +6,8 @@ Estado de las versiones
 Versión	Estado
 v24.1	Login y creación de órdenes funcionando (confirmado).
 v24.2	Cocina/Barra con "listo" separado, ticket 80 mm. Sustituida por v24.3.
-v24.3	Candidata a estable. Probada de extremo a extremo con una simulación (frontend + Worker + SQLite con el esquema real). Falta confirmarla en producción.
+v24.3	Falló al iniciar sesión: la base ya tenía una tabla `sessions` de otro sistema con distintas columnas.
+v24.3.1	Candidata a estable. Usa su propia tabla `pos_sessions` (la tabla `sessions` vieja no se toca). Probada de extremo a extremo con una simulación (frontend + Worker + SQLite con el esquema real). Falta confirmarla en producción.
 No hay versión marcada como estable todavía. Pasa a estable cuando funcione en Cloudflare:
 Login -> Usuarios -> Venta por personas -> Cocina/Barra -> Órdenes -> Cobrar -> Lealtad.
 Cambios en v24.3
@@ -18,7 +19,7 @@ No se puede eliminar a uno mismo ni al único administrador.
 Contraseñas con PBKDF2-SHA256 y sal aleatoria.
 Usuarios anteriores: no se puede leer su contraseña vieja. Aparecen con "⚠️ Falta contraseña nueva": el admin les pone una con 🔑.
 El acceso de respaldo `admin/admin` se apaga solo en cuanto exista un admin con contraseña nueva.
-Sesiones reales guardadas en D1 (tabla `sessions`, se crea sola). El servidor rechaza cualquier petición sin sesión (401).
+Sesiones reales guardadas en D1 (tabla `pos_sessions`, se crea sola; no toca la tabla `sessions` anterior). El servidor rechaza cualquier petición sin sesión (401).
 Menús por rol: admin ve todo; mesero: Venta, Canchas, Mesas, Órdenes; cocina: Cocina; barra: Barra.
 2. Notas de cocina y barra
 Las notas ahora se guardan estructuradas (`{type, cocina, barra}`), ya no como texto que había que interpretar.
