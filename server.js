@@ -61,7 +61,7 @@ export default {
         }
 
         const token = btoa(
-          JSON.stringify({ id: user.id, username: user.username, role: user.role, exp: Date.now() + 86400000 })
+          JSON.stringify({ id: user.id, username: user.username, name: user.name, role: user.role, exp: Date.now() + 86400000 })
         );
         return json({ token, user });
       }
@@ -165,23 +165,31 @@ export default {
           return o ? json(parseOrder(o)) : json({ error: "No encontrada" }, 404);
         }
 
-        // Actualizar (status y/o items)
+        // Actualizar (status, items, notes) y marcar listo por estación
         if (id && !sub && request.method === "PATCH") {
           const b = await request.json();
-          if (b.status) {
-            await db
-              .prepare("UPDATE orders SET status=?, updated_at=datetime('now') WHERE id=?")
-              .bind(b.status, id)
-              .run();
+          const cur = await db.prepare("SELECT * FROM orders WHERE id = ?").bind(id).first();
+          if (!cur) return json({ error: "No encontrada" }, 404);
+          let items = JSON.parse(cur.items || "[]");
+          let itemsChanged = false;
+          if (Array.isArray(b.items)) { items = b.items; itemsChanged = true; }
+          // b.ready = "cocina" | "barra": marca solo los productos de esa estación
+          if (b.ready === "cocina" || b.ready === "barra") {
+            items = items.map((i) => ((i.destination || "cocina") === b.ready ? { ...i, done: true } : i));
+            itemsChanged = true;
           }
-          if (b.items) {
-            const t = calcTotal(b.items);
-            await db
-              .prepare("UPDATE orders SET items=?, subtotal=?, total=?, updated_at=datetime('now') WHERE id=?")
-              .bind(JSON.stringify(b.items), t, t, id)
-              .run();
+          let status = b.status || cur.status;
+          if (itemsChanged && !b.status) {
+            const allDone = items.length > 0 && items.every((i) => i.done);
+            status = allDone ? "ready" : items.some((i) => i.done) ? "preparing" : "open";
           }
-          return json({ ok: true });
+          const total = calcTotal(items);
+          const notes = typeof b.notes === "string" ? b.notes : cur.notes;
+          await db
+            .prepare("UPDATE orders SET status=?, items=?, subtotal=?, total=?, notes=?, updated_at=datetime('now') WHERE id=?")
+            .bind(status, JSON.stringify(items), total, total, notes, id)
+            .run();
+          return json({ ok: true, status });
         }
 
         // Borrar
