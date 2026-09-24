@@ -1,20 +1,28 @@
-INSERT OR IGNORE INTO menu_items (id,name,category,price,description,sort_order) VALUES
-('cafe-americano','Café americano','Café',55,'Café espresso con agua caliente',1),
-('cafe-latte','Café latte','Café',75,'Espresso con leche vaporizada',2),
-('cappuccino','Cappuccino','Café',78,'Espresso, leche y espuma',3),
-('matcha','Matcha latte','Bebidas',85,'Matcha ceremonial con leche',4),
-('te-chai','Chai latte','Bebidas',82,'Chai especiado con leche',5),
-('croissant','Croissant','Alimentos',65,'Croissant de mantequilla',6),
-('toast','Toast de aguacate','Alimentos',125,'Pan artesanal, aguacate y semillas',7),
-('huevos','Huevos al gusto','Desayunos',120,'Huevos preparados al gusto',8),
-('hotcakes','Hot cakes','Desayunos',135,'Hot cakes con fruta',9),
-('ensalada','Ensalada RUSH','Alimentos',145,'Ensalada fresca de la casa',10);
+-- RUSH POS v24.5 - Base de datos (D1: rush-pos-db)
+-- NO ES OBLIGATORIO correr nada: el Worker crea todo automáticamente al primer uso.
+-- Estas consultas son solo para VERIFICAR (consola SQL del dashboard, una a la vez).
 
-INSERT OR IGNORE INTO tables (id,number,type,capacity,status) VALUES
-('m1','M1','mesa',4,'available'),
-('m2','M2','mesa',4,'available'),
-('m3','M3','mesa',2,'available'),
-('m4','M4','mesa',6,'available'),
-('c1','C1','cancha',4,'available'),
-('c2','C2','cancha',4,'available'),
-('barra','BARRA','barra',6,'available');
+-- 1) Deben aparecer pos_menu_sections, pos_menu_categories (y pos_sessions):
+SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'pos_%';
+
+-- 2) Debe aparecer la columna category_id:
+PRAGMA table_info(menu_items);
+
+-- 3) Estructura del menú:
+SELECT s.name AS seccion, s.destination AS estacion, c.name AS categoria
+  FROM pos_menu_categories c JOIN pos_menu_sections s ON s.id = c.section_id
+ ORDER BY s.sort_order, c.sort_order;
+
+-- 4) Productos sin clasificar:
+SELECT name, category FROM menu_items WHERE active=1 AND (category_id IS NULL OR category_id='');
+
+-- ---- Solo si el Worker no pudo crearlas (poco probable): equivalentes manuales ----
+-- CREATE TABLE IF NOT EXISTS pos_menu_sections (id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT DEFAULT '', destination TEXT NOT NULL DEFAULT 'cocina', sort_order INTEGER DEFAULT 0);
+-- CREATE TABLE IF NOT EXISTS pos_menu_categories (id TEXT PRIMARY KEY, section_id TEXT NOT NULL, name TEXT NOT NULL, sort_order INTEGER DEFAULT 0);
+-- ALTER TABLE menu_items ADD COLUMN category_id TEXT;
+-- CREATE TABLE IF NOT EXISTS pos_sessions (token TEXT PRIMARY KEY, user_id TEXT, username TEXT, name TEXT, role TEXT, expires_at INTEGER);
+
+-- Históricos (ya ejecutados en versiones anteriores):
+-- ALTER TABLE orders ADD COLUMN items TEXT DEFAULT '[]';
+-- ALTER TABLE orders ADD COLUMN custom_folio TEXT;
+-- ALTER TABLE menu_items ADD COLUMN destination TEXT DEFAULT 'cocina';
