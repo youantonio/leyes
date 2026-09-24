@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v24 Completado</title>
+<title>RUSH POS v24 Oficial</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -58,7 +58,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <section id="loginView" class="login">
   <div class="loginbox">
     <h1 style="font-size:36px;margin:0">RUSH POS</h1>
-    <p class="muted">Sistema de Gestión (v24)</p>
+    <p class="muted">Sistema de Gestión · Rush Club Pádel</p>
     <div class="stack">
       <label>Usuario<input id="loginUser" placeholder="Usuario"></label>
       <label>Contraseña<input id="loginPass" type="password" placeholder="Contraseña"></label>
@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <header>
   <div class="top">
     <div>
-      <div class="brand">RUSH POS v24</div>
+      <div class="brand">RUSH POS Oficial</div>
       <div class="sub">Rush Club Pádel · Punto de venta</div>
     </div>
     <div class="row">
@@ -89,7 +89,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <h1 class="title">Nueva Venta / Servicio</h1>
   <div class="card">
     <div class="row" style="margin-bottom:10px">
-      <div style="flex:1"><input id="productSearch" class="search" placeholder="🔎 Buscar platillo, bebida, café..." oninput="renderProducts()"></div>
+      <div style="flex:1"><input id="productSearch" class="search" placeholder="🔎 Buscar platillo, bebida..." oninput="renderProducts()"></div>
       <button onclick="loadAll()">↻</button>
     </div>
     <div id="categoryChips" class="chips"></div>
@@ -97,22 +97,22 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 
   <div class="card" style="margin-top:13px">
-    <div class="row between"><h2 style="margin:0">Destino y Comanda por Persona</h2></div>
+    <div class="row between"><h2 style="margin:0">Destino y Comanda</h2></div>
     <div class="grid" style="margin-top:12px">
       <label>Tipo de Consumo:
-        <select id="orderType"><option value="Restaurante (Para Aquí)">🍽️ Restaurante (Para Aquí)</option><option value="Para Llevar">📦 Para Llevar</option></select>
+        <select id="orderType"><option value="Restaurante">🍽️ Restaurante</option><option value="Para Llevar">📦 Para Llevar</option></select>
       </label>
       <label>Mesa / Cancha:<select id="tableSelect"></select></label>
-      <label>WhatsApp (10 dígitos) *Vital:<input id="customerPhone" placeholder="Ej. 7711234567" maxlength="10"></label>
+      <label>WhatsApp (10 dígitos):<input id="customerPhone" placeholder="Ej. 7711234567" maxlength="10"></label>
       <label>Nombre del cliente:<input id="customerName" placeholder="Nombre completo"></label>
-      <label>Comensal (Opcional):<input id="customerPerson" placeholder="Ej. Persona 1, Juan"></label>
+      <label>Persona (Opcional):<input id="customerPerson" placeholder="Ej. Persona 1"></label>
     </div>
     <div id="cart" style="margin-top:12px"></div>
     <div class="row between" style="margin-top:13px"><span class="total">Total</span><span id="cartTotal" class="total">$0.00</span></div>
     
     <div class="grid" style="margin-top:10px">
-      <label>Notas Cocina (Alimentos):<textarea id="notesKitchen" rows="2" placeholder="Ej. Sin cebolla, poco picoso..."></textarea></label>
-      <label>Notas Barra (Bebidas):<textarea id="notesBarra" rows="2" placeholder="Ej. Leche deslactosada..."></textarea></label>
+      <label>Notas Cocina (Alimentos):<textarea id="notesKitchen" rows="2" placeholder="Sin cebolla..."></textarea></label>
+      <label>Notas Barra (Bebidas):<textarea id="notesBarra" rows="2" placeholder="Leche deslactosada..."></textarea></label>
     </div>
     <button class="primary" style="width:100%;margin-top:12px;padding:16px;font-size:18px;" onclick="sendOrder()">🚀 Enviar a Cocina / Barra</button>
   </div>
@@ -146,28 +146,19 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 
 <!-- COCINA (KDS) -->
 <section id="cocina" class="view hidden">
-  <div class="row between" style="margin-bottom:14px;">
-    <h1 class="title" style="margin:0">👨‍🍳 Cocina (Alimentos)</h1>
-    <button onclick="loadKitchen()" class="primary">🔄 Actualizar</button>
-  </div>
+  <div class="row between" style="margin-bottom:14px;"><h1 class="title" style="margin:0">👨‍🍳 Cocina</h1><button onclick="loadKitchen()" class="primary">🔄 Actualizar</button></div>
   <div id="kitchenOrders" class="grid"></div>
 </section>
 
-<!-- BARRA / CAFETERÍA -->
+<!-- BARRA -->
 <section id="barra" class="view hidden">
-  <div class="row between" style="margin-bottom:14px;">
-    <h1 class="title" style="margin:0">☕ Barra (Bebidas)</h1>
-    <button onclick="loadBarra()" class="primary">🔄 Actualizar</button>
-  </div>
+  <div class="row between" style="margin-bottom:14px;"><h1 class="title" style="margin:0">☕ Barra</h1><button onclick="loadBarra()" class="primary">🔄 Actualizar</button></div>
   <div id="barraOrders" class="grid"></div>
 </section>
 
 <!-- ÓRDENES -->
 <section id="ordenes" class="view hidden">
-  <div class="row between">
-    <h1 class="title" style="margin:0">Control de Órdenes</h1>
-    <button onclick="exportData('orders')">📥 Exportar CSV</button>
-  </div>
+  <div class="row between"><h1 class="title" style="margin:0">Control de Órdenes</h1></div>
   <div id="orders" class="grid" style="margin-top:15px"></div>
 </section>
 
@@ -178,20 +169,17 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <h2>💵 Ingresos y Egresos Manuales</h2>
     <div class="grid" style="margin-top:10px;">
       <label>Tipo:<select id="txType"><option value="ingreso">🟢 Ingreso Manual</option><option value="egreso">🔴 Egreso / Gasto</option></select></label>
-      <label>Concepto:<input id="txConcept" placeholder="Ej. Pago hielo, cambio"></label>
+      <label>Concepto:<input id="txConcept" placeholder="Ej. Pago hielo..."></label>
       <label>Monto ($):<input id="txAmount" type="number" step="0.01"></label>
       <button class="primary" onclick="registerManualTx()" style="grid-column:1/-1;">Registrar en Caja</button>
     </div>
   </div>
-
   <div class="card" style="margin-bottom:15px; background:#fff7ed; border-color:#fdba74;">
     <h2>🔒 Cierre de Turno</h2>
-    <button class="danger" onclick="makeCashCut()" style="padding:14px 20px;">🖨️ Realizar e Imprimir Corte de Caja</button>
+    <button class="danger" onclick="makeCashCut()" style="padding:14px 20px;">🖨️ Imprimir Corte de Caja</button>
   </div>
   <div id="dashboard" class="grid"></div>
-  <div class="card" style="margin-top:15px">
-    <h2>Historial de Cortes</h2><div id="cutsList" style="overflow-x:auto;"></div>
-  </div>
+  <div class="card" style="margin-top:15px"><h2>Historial de Cortes</h2><div id="cutsList" style="overflow-x:auto;"></div></div>
 </section>
 
 <!-- LEALTAD -->
@@ -213,7 +201,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 
 <!-- INVENTARIO -->
 <section id="inventario" class="view hidden">
-  <div class="row between"><h1 class="title" style="margin:0">📦 Inventario (Admin)</h1></div>
+  <div class="row between"><h1 class="title" style="margin:0">📦 Inventario</h1></div>
   <div class="card" style="margin-top:15px; background:#f0fdf4; border:1px solid #16a34a;">
     <h2>📥 Ingreso Diario de Productos</h2>
     <div class="grid" style="margin-top:10px;">
@@ -228,16 +216,13 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 
 <!-- PRODUCTOS Y USUARIOS -->
 <section id="productos" class="view hidden">
-  <h1 class="title">Catálogo de Menú y Destino</h1>
+  <h1 class="title">Catálogo de Menú</h1>
   <div class="card" style="margin-top:15px;">
     <div class="grid">
-      <input id="pName" placeholder="Nombre (Ej. Hamburguesa)">
+      <input id="pName" placeholder="Nombre">
       <input id="pCategory" placeholder="Categoría">
       <input id="pPrice" type="number" step=".01" placeholder="Precio">
-      <select id="pDestination">
-        <option value="cocina">🍳 Destino: Cocina</option>
-        <option value="barra">☕ Destino: Barra (Bebidas)</option>
-      </select>
+      <select id="pDestination"><option value="cocina">🍳 Cocina</option><option value="barra">☕ Barra</option></select>
       <input id="pDesc" placeholder="Descripción">
       <button class="primary" onclick="createProduct()" style="grid-column:1/-1;">Crear Producto</button>
     </div>
@@ -253,10 +238,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <input id="uUsername" placeholder="Usuario">
       <input id="uPassword" type="password" placeholder="Contraseña">
       <select id="uRole">
-        <option value="mesero">Mesero</option>
-        <option value="cocina">Cocina</option>
-        <option value="barra">Barra / Cafetería</option>
-        <option value="admin">Administrador</option>
+        <option value="mesero">Mesero</option><option value="cocina">Cocina</option><option value="barra">Barra</option><option value="admin">Administrador</option>
       </select>
       <button class="primary" onclick="createUser()">Crear Usuario</button>
     </div>
@@ -293,48 +275,40 @@ let activeChatOrderId=null, currentTicketData=null, allOrdersCache=[];
 const $=id=>document.getElementById(id);
 
 function toast(msg){
-  $("toast").textContent=msg;
-  $("toast").classList.remove("hidden");
+  $("toast").textContent=msg; $("toast").classList.remove("hidden");
   setTimeout(()=>$("toast").classList.add("hidden"),3000);
 }
 
-// API WRAPPER ROBUSTO
+// Envoltorio de API con captura de errores
 async function api(path,opts={}){
   opts.headers={...(opts.headers||{}),"Content-Type":"application/json"};
   if(token && token !== "bypass") opts.headers.Authorization="Bearer "+token;
-  
   let r;
-  try {
-    r = await fetch(API+path,opts);
-  } catch(e) {
-    throw new Error("No se pudo conectar con el servidor.");
-  }
-
+  try { r = await fetch(API+path,opts); } catch(e) { throw new Error("No hay conexión con el servidor"); }
   let data = {};
-  try { data = await r.json(); } catch(e) { /* Error parsing JSON (HTML response) */ }
-
-  if(r.status===401){ logout(false); throw new Error("Sesión expirada o credenciales incorrectas."); }
-  if(!r.ok) throw new Error(data.error || "Error interno del servidor.");
+  try { data = await r.json(); } catch(e) {}
+  if(r.status===401){ logout(false); throw new Error("Credenciales inválidas"); }
+  if(!r.ok) throw new Error(data.error || "Error de servidor");
   return data;
 }
 
-// LOGIN SEGURO CON BYPASS
+// LOGIN SEGURO CON BYPASS LOCAL
 async function login(){
   try{
     const u = $("loginUser").value.trim();
     const p = $("loginPass").value.trim();
     if(!u || !p) return toast("Ingresa usuario y contraseña.");
 
-    // BYPASS DE EMERGENCIA DIRECTO
+    // BYPASS: SI ES ADMIN/ADMIN ENTRA DIRECTO
     if(u === "admin" && p === "admin") {
       token = "bypass"; localStorage.setItem("rush_token", token);
-      me = { id: "1", name: "Administrador (Local)", username: "admin", role: "admin" };
-      showApp(); loadAll(); toast("Acceso de emergencia concedido.");
+      me = { id: "1", name: "Administrador", username: "admin", role: "admin" };
+      showApp(); loadAll(); toast("Acceso local concedido");
       return;
     }
 
     const d = await api("/login",{method:"POST",body:JSON.stringify({username:u, password:p})});
-    if(!d.token) throw new Error("Credenciales inválidas.");
+    if(!d.token) throw new Error("Credenciales incorrectas");
     
     token=d.token; localStorage.setItem("rush_token",token); me=d.user;
     showApp(); loadAll();
@@ -351,10 +325,7 @@ function logout(show=true){
 
 async function boot(){
   if(!token)return;
-  if(token === "bypass"){
-     me = { id: "1", name: "Administrador (Local)", username: "admin", role: "admin" };
-     showApp(); loadAll(); return;
-  }
+  if(token === "bypass"){ me = { id: "1", name: "Administrador", username: "admin", role: "admin" }; showApp(); loadAll(); return; }
   try{ const d=await api("/me"); me=d.user; showApp(); loadAll(); }catch{ logout(false); }
 }
 
@@ -375,323 +346,181 @@ function showApp(){
 }
 
 function view(id,btn){
-  document.querySelectorAll(".view").forEach(x=>x.classList.add("hidden"));
-  $(id).classList.remove("hidden");
-  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
-  if(btn)btn.classList.add("active");
-  
-  if(id==="canchas") loadCanchasData();
-  if(id==="mesas") renderTables();
-  if(id==="cocina") loadKitchen();
-  if(id==="barra") loadBarra();
-  if(id==="ordenes") loadOrders();
-  if(id==="caja") loadDashboard();
-  if(id==="lealtad") loadLoyaltyCustomers();
-  if(id==="inventario") loadInventoryData();
-  if(id==="productos") renderProductAdmin();
-  if(id==="usuarios") loadUsers();
+  document.querySelectorAll(".view").forEach(x=>x.classList.add("hidden")); $(id).classList.remove("hidden");
+  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active")); if(btn)btn.classList.add("active");
+  if(id==="canchas") loadCanchasData(); if(id==="mesas") renderTables(); if(id==="cocina") loadKitchen();
+  if(id==="barra") loadBarra(); if(id==="ordenes") loadOrders(); if(id==="caja") loadDashboard();
+  if(id==="lealtad") loadLoyaltyCustomers(); if(id==="inventario") loadInventoryData();
+  if(id==="productos") renderProductAdmin(); if(id==="usuarios") loadUsers();
   if(id==="venta") { renderProducts(); renderTableSelect(); }
 }
 
 async function loadAll(){
-  products=await api("/menu").catch(()=>[]);
-  tables=await api("/tables").catch(()=>[]);
-  inventoryItems=await api("/inventory").catch(()=>[]);
+  products=await api("/menu").catch(()=>[]); tables=await api("/tables").catch(()=>[]); inventoryItems=await api("/inventory").catch(()=>[]);
   renderCategoryChips(); renderProducts(); renderTableSelect(); renderTables(); renderCart();
   if($("invItemSelect")) $("invItemSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
 }
 
-// -----------------------------------------------------
-// LÓGICA DE VENTAS
-// -----------------------------------------------------
-function renderCategoryChips(){
-  const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))];
-  $("categoryChips").innerHTML = cats.map(c=>`<button type="button" class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join("");
-}
+// VENTAS
+function renderCategoryChips(){ const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))]; $("categoryChips").innerHTML = cats.map(c=>`<button type="button" class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join(""); }
 function filterCategory(cat){ currentCategory=cat; renderCategoryChips(); renderProducts(); }
-
 function renderProducts(){
   const search = ($("productSearch")?.value || "").toLowerCase();
-  const filtered = products.filter(p=>{
-    const matchCat = currentCategory==="TODOS" || (p.category||"General")===currentCategory;
-    const matchSearch = p.name.toLowerCase().includes(search) || (p.description||"").toLowerCase().includes(search);
-    return matchCat && matchSearch;
-  });
+  const filtered = products.filter(p=>{ return (currentCategory==="TODOS" || (p.category||"General")===currentCategory) && (p.name.toLowerCase().includes(search) || (p.description||"").toLowerCase().includes(search)); });
   $("products").innerHTML=`<div class="product-grid">`+filtered.map(p=>`<button type="button" class="product" onclick="addToCart('${p.id}')"><div><b>${p.name}</b><div class="desc">${p.description||""}</div></div><div><div class="price">$${p.price}</div><div class="add">＋ Agregar</div></div></button>`).join("")+`</div>`;
 }
-
 function addToCart(id){
-  const p=products.find(x=>x.id===id);
-  const person = $("customerPerson").value.trim() || "General";
+  const p=products.find(x=>x.id===id); const person = $("customerPerson").value.trim() || "General";
   const ex=cart.find(x=>x.menu_item_id===id && x.person===person);
   if(ex) ex.qty++; else cart.push({menu_item_id:id, name:p.name, qty:1, unit_price:p.price, destination: p.destination || 'cocina', person: person});
   renderCart();
 }
-
 function renderCart(){
   const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
-  $("cart").innerHTML=cart.length?cart.map((x,i)=>`<div class="order-item"><div><b>[${x.person}]</b> ${x.qty} × ${x.name} <small class="muted">(${x.destination==='barra'?'☕ Barra':'🍳 Cocina'})</small></div><div class="row"><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart()">✕</button></div></div>`).join(""):"<p class='muted'>Carrito vacío</p>";
+  $("cart").innerHTML=cart.length?cart.map((x,i)=>`<div class="order-item"><div><b>[${x.person}]</b> ${x.qty} × ${x.name} <small class="muted">(${x.destination==='barra'?'☕':'🍳'})</small></div><div class="row"><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart()">✕</button></div></div>`).join(""):"<p class='muted'>Carrito vacío</p>";
   $("cartTotal").textContent="$"+total;
 }
-
 function renderTableSelect(){ $("tableSelect").innerHTML="<option value=''>Mostrador / General</option>" + tables.map(t=>`<option value="${t.id}">${t.name||"Mesa "+t.number}</option>`).join(""); }
 
 async function sendOrder(){
   if(!cart.length) return toast("Agrega productos al carrito.");
-  const phone = $("customerPhone").value.trim();
-  const name = $("customerName").value.trim() || "Mostrador";
-  const orderType = $("orderType").value;
-  const tableId = $("tableSelect").value;
-  const tableName = tableId ? (tables.find(t=>t.id===tableId)?.name || "Mesa asignada") : orderType;
-  const notesKitchen = $("notesKitchen").value.trim();
-  const notesBarra = $("notesBarra").value.trim();
-  const notes = `[${orderType}] | 🍳 Cocina: ${notesKitchen||'N/A'} | ☕ Barra: ${notesBarra||'N/A'}`;
-
-  if(!phone || phone.length < 10) return toast("Ingresa un número de WhatsApp de 10 dígitos.");
+  const phone = $("customerPhone").value.trim(), name = $("customerName").value.trim() || "Mostrador", orderType = $("orderType").value, tableId = $("tableSelect").value;
+  const notes = `[${orderType}] | 🍳 Cocina: ${$("notesKitchen").value.trim()||'N/A'} | ☕ Barra: ${$("notesBarra").value.trim()||'N/A'}`;
+  if(!phone || phone.length < 10) return toast("WhatsApp 10 dígitos obligatorio.");
   const total = cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
-
-  const now = new Date();
-  const customFolio = `${String(now.getDate()).padStart(2,'0')}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getFullYear()).slice(-2)}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+  const customFolio = `${String(new Date().getDate()).padStart(2,'0')}${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getHours()).padStart(2,'0')}${String(new Date().getMinutes()).padStart(2,'0')}`;
 
   try{
-    await api("/orders",{method:"POST",body:JSON.stringify({table_id: tableId, customer_name: `${name} (${phone}) [${tableName}]`, customer_phone: phone, notes: notes, items: cart, custom_folio: customFolio})});
-    toast("¡Orden enviada a cocina/barra!");
-    cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("notesKitchen").value=""; $("notesBarra").value="";
-    loadAll();
+    await api("/orders",{method:"POST",body:JSON.stringify({table_id: tableId, customer_name: `${name} (${phone})`, customer_phone: phone, notes: notes, items: cart, custom_folio: customFolio})});
+    toast("¡Orden enviada!"); cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("notesKitchen").value=""; $("notesBarra").value=""; loadAll();
   }catch(e){toast(e.message)}
 }
 
-// -----------------------------------------------------
 // CANCHAS Y RESERVAS
-// -----------------------------------------------------
 async function loadCanchasData(){
   try{
-    courtsList = await api("/courts").catch(()=>[]);
-    $("resCourtSelect").innerHTML = courtsList.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
-    updateResTotal();
+    courtsList = await api("/courts").catch(()=>[]); $("resCourtSelect").innerHTML = courtsList.map(c=>`<option value="${c.id}">${c.name}</option>`).join(""); updateResTotal();
     activeReservations = await api("/reservations").catch(()=>[]);
-    $("reservationsList").innerHTML = activeReservations.length ? `<table><thead><tr><th>Cancha</th><th>Cliente</th><th>Fecha/Hora</th><th>Total</th><th>Acciones</th></tr></thead><tbody>${activeReservations.map(r=>`<tr><td><b>${r.court_name}</b></td><td>${r.customer_name}</td><td>${r.date} a las ${r.start_time}</td><td>$${r.total_price}</td><td><button class="success" onclick="sendReservationWhatsApp('${r.id}')">💬 WhatsApp</button> <button class="danger" onclick="deleteReservation('${r.id}')">🗑️</button></td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin reservas.</p>";
+    $("reservationsList").innerHTML = activeReservations.length ? `<table><thead><tr><th>Cancha</th><th>Cliente</th><th>Fecha/Hora</th><th>Total</th><th>Acciones</th></tr></thead><tbody>${activeReservations.map(r=>`<tr><td><b>${r.court_name}</b></td><td>${r.customer_name}</td><td>${r.date} a las ${r.start_time}</td><td>$${r.total_price}</td><td><button class="success" onclick="sendReservationWhatsApp('${r.id}')">💬</button> <button class="danger" onclick="deleteReservation('${r.id}')">🗑️</button></td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin reservas.</p>";
   }catch(e){}
 }
-function updateResTotal(){
-  const courtId = $("resCourtSelect").value;
-  const court = courtsList.find(c=>c.id===courtId);
-  const hours = Number($("resHours").value || 1.5);
-  if(court) $("resCustomTotal").value = court.hourly_rate * hours;
-}
+function updateResTotal(){ const court = courtsList.find(c=>c.id===$("resCourtSelect").value); if(court) $("resCustomTotal").value = court.hourly_rate * Number($("resHours").value || 1.5); }
 async function createReservation(){
-  const phone = $("resPhone").value.trim();
-  const name = $("resName").value.trim();
-  if(!name || phone.length < 10) return toast("Nombre y WhatsApp a 10 dígitos requeridos.");
+  const phone = $("resPhone").value.trim(), name = $("resName").value.trim();
+  if(!name || phone.length < 10) return toast("Datos incompletos.");
   try {
     await api("/reservations", {method:"POST", body:JSON.stringify({court_id: $("resCourtSelect").value, customer_name: name, customer_phone: phone, date: $("resDate").value, start_time: $("resTime").value, hours: Number($("resHours").value), total_price: Number($("resCustomTotal").value), deposit: Number($("resDeposit").value||0)})});
     toast("Reserva agendada."); loadCanchasData();
     window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(`Hola ${name} 👋 Confirmamos tu reserva el ${$("resDate").value} a las ${$("resTime").value} hrs.`)}`, '_blank');
-  } catch(e) { toast(e.message); }
+  } catch(e) {}
 }
-async function deleteReservation(id){ if(confirm("¿Eliminar reserva?")){ await api("/reservations/"+id, {method:"DELETE"}); loadCanchasData(); } }
-function sendReservationWhatsApp(id){
-  const r = activeReservations.find(x=>x.id===id);
-  if(r) window.open(`https://wa.me/52${r.customer_phone}?text=${encodeURIComponent(`Recordatorio: Reserva cancha el ${r.date} a las${r.start_time}`)}`, '_blank');
-}
+async function deleteReservation(id){ if(confirm("¿Eliminar?")){ await api("/reservations/"+id, {method:"DELETE"}); loadCanchasData(); } }
+function sendReservationWhatsApp(id){ const r = activeReservations.find(x=>x.id===id); if(r) window.open(`https://wa.me/52${r.customer_phone}?text=${encodeURIComponent(`Recordatorio: Reserva cancha el ${r.date} a las${r.start_time}`)}`, '_blank'); }
 
-// -----------------------------------------------------
-// KDS COCINA Y BARRA
-// -----------------------------------------------------
+// COCINA Y BARRA
 function renderTables(){ $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`<div class="card"><div class="row between"><h3>${t.name}</h3><span class="status ${t.status}">${t.status}</span></div></div>`).join(""); }
-
 async function loadKitchen(){
   const os = await api("/orders").catch(()=>[]);
-  const active = os.filter(x=>["open","preparing"].includes(x.status));
   let html = "";
-  for(const o of active){
-    const kitchenItems = (o.items||[]).filter(it => (it.destination||'cocina') === 'cocina');
-    if(!kitchenItems.length) continue;
-    let itemsHtml = kitchenItems.map(it=>`<div class="kitchen-item"><span><b>[${it.person||'Gral'}]</b> <b>${it.qty}x</b> ${it.name}</span></div>`).join("");
-    html += `<div class="card" style="border-left: 6px solid #d97706; background:#fff;">
-      <div class="row between"><h3 style="margin:0;">Orden #${o.custom_folio || o.id.slice(0,6)}</h3><span class="status ${o.status}">${o.status}</span></div>
-      <p style="margin:8px 0;"><b>Destino:</b> ${o.customer_name}</p>
-      ${o.notes ? `<p style="background:#fff7ed; padding:8px; border-radius:8px; font-size:13px;"><b>📝 Notas Cocina:</b> ${o.notes}</p>` : ''}
-      <hr><b>ALIMENTOS:</b><br>${itemsHtml}
-      <div class="row" style="margin-top:12px;"><button class="success" onclick="api('/orders/${o.id}', {method:'PATCH', body:JSON.stringify({status:'ready'})}).then(loadKitchen).then(loadBarra)">✅ Listo</button></div></div>`;
+  for(const o of os.filter(x=>["open","preparing"].includes(x.status))){
+    const items = (o.items||[]).filter(it => (it.destination||'cocina') === 'cocina');
+    if(!items.length) continue;
+    html += `<div class="card" style="border-left: 6px solid #d97706;"><h3>Orden #${o.custom_folio||o.id.slice(0,6)}</h3><p><b>Destino:</b> ${o.customer_name}</p>${o.notes?`<p><b>Notas:</b> ${o.notes}</p>`:''}<hr>${items.map(it=>`<p><b>[${it.person||'Gral'}]</b> ${it.qty}x${it.name}</p>`).join("")}<button class="success" onclick="api('/orders/${o.id}', {method:'PATCH', body:JSON.stringify({status:'ready'})}).then(loadKitchen).then(loadBarra)">✅ Listo</button></div>`;
   }
   $("kitchenOrders").innerHTML = html || "<p class='muted'>Sin alimentos pendientes.</p>";
 }
-
 async function loadBarra(){
   const os = await api("/orders").catch(()=>[]);
-  const active = os.filter(x=>["open","preparing"].includes(x.status));
   let html = "";
-  for(const o of active){
-    const barraItems = (o.items||[]).filter(it => (it.destination||'cocina') === 'barra');
-    if(!barraItems.length) continue;
-    let itemsHtml = barraItems.map(it=>`<div class="kitchen-item"><span><b>[${it.person||'Gral'}]</b> <b>${it.qty}x</b> ${it.name}</span></div>`).join("");
-    html += `<div class="card" style="border-left: 6px solid #2563eb; background:#fff;">
-      <div class="row between"><h3 style="margin:0;">Orden #${o.custom_folio || o.id.slice(0,6)}</h3><span class="status ${o.status}">${o.status}</span></div>
-      <p style="margin:8px 0;"><b>Destino:</b> ${o.customer_name}</p>
-      ${o.notes ? `<p style="background:#eff6ff; padding:8px; border-radius:8px; font-size:13px;"><b>📝 Notas Barra:</b> ${o.notes}</p>` : ''}
-      <hr><b>BEBIDAS:</b><br>${itemsHtml}
-      <div class="row" style="margin-top:12px;"><button class="success" onclick="api('/orders/${o.id}', {method:'PATCH', body:JSON.stringify({status:'ready'})}).then(loadBarra).then(loadKitchen)">✅ Listo</button></div></div>`;
+  for(const o of os.filter(x=>["open","preparing"].includes(x.status))){
+    const items = (o.items||[]).filter(it => (it.destination||'cocina') === 'barra');
+    if(!items.length) continue;
+    html += `<div class="card" style="border-left: 6px solid #2563eb;"><h3>Orden #${o.custom_folio||o.id.slice(0,6)}</h3><p><b>Destino:</b> ${o.customer_name}</p>${o.notes?`<p><b>Notas:</b> ${o.notes}</p>`:''}<hr>${items.map(it=>`<p><b>[${it.person||'Gral'}]</b> ${it.qty}x${it.name}</p>`).join("")}<button class="success" onclick="api('/orders/${o.id}', {method:'PATCH', body:JSON.stringify({status:'ready'})}).then(loadBarra).then(loadKitchen)">✅ Listo</button></div>`;
   }
   $("barraOrders").innerHTML = html || "<p class='muted'>Sin bebidas pendientes.</p>";
 }
 
-// -----------------------------------------------------
-// CONTROL DE ÓRDENES
-// -----------------------------------------------------
+// CONTROL ÓRDENES Y DOBLE TICKET
 async function loadOrders(){
   try{
     allOrdersCache = await api("/orders").catch(()=>[]);
     $("orders").innerHTML = allOrdersCache.map(o=>{
-      let itemsSummary = (o.items||[]).map(it=>`[${it.person||'Gral'}] ${it.qty||1}x ${it.name}`).join(", ");
-      let total = o.total;
-      if(!total && o.items) total = o.items.reduce((acc, it) => acc + ((it.qty||1) * (it.unit_price||it.price||0)), 0);
+      const itemsSummary = (o.items||[]).map(it=>`${it.qty||1}x ${it.name}`).join(", ");
+      const total = o.items ? o.items.reduce((acc, it) => acc + ((it.qty||1) * (it.unit_price||it.price||0)), 0) : o.total;
       return `<div class="card" style="border-left: 6px solid #111;">
         <div class="row between"><h3 style="margin:0;">Orden #${o.custom_folio || o.id.slice(0,6)}</h3><span class="status ${o.status}">${o.status}</span></div>
-        <p style="margin:8px 0;"><b>Cliente:</b> ${o.customer_name}</p>
-        <p style="margin:4px 0; color:#555; font-size:14px;"><b>Detalle:</b> ${itemsSummary}</p>
-        <p style="margin:4px 0;"><b>Total:</b> <b style="color:#16a34a; font-size:17px;">$${total}</b></p>
-        <div class="row" style="margin-top:12px; flex-wrap:wrap;">
-          <button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ticket</button>
-          <button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir</button>
-          <button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>
-          ${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️</button>`:""}
-        </div></div>`;
-    }).join("") || "<p class='muted'>Sin órdenes activas.</p>";
+        <p><b>Cliente:</b> ${o.customer_name}</p><p style="color:#555;font-size:14px;">${itemsSummary}</p><p><b>Total:</b> <b style="color:#16a34a;">$${total}</b></p>
+        <div class="row" style="flex-wrap:wrap;"><button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ticket</button><button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir</button><button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>${isAdmin()?`<button class="danger" onclick="api('/orders/${o.id}',{method:'DELETE'}).then(loadOrders)">🗑️</button>`:""}</div></div>`;
+    }).join("") || "<p class='muted'>Sin órdenes.</p>";
   }catch(e){}
 }
-function openAddItemsModal(orderId){
-  $("addingOrderId").value = orderId;
-  $("extraProductSelect").innerHTML = products.map(p=>`<option value="${p.id}">${p.name} ($${p.price})</option>`).join("");
-  $("addItemsModal").classList.remove("hidden");
-}
+function openAddItemsModal(orderId){ $("addingOrderId").value = orderId; $("extraProductSelect").innerHTML = products.map(p=>`<option value="${p.id}">${p.name} ($${p.price})</option>`).join(""); $("addItemsModal").classList.remove("hidden"); }
 async function confirmAddExtraItem(){
-  const orderId = $("addingOrderId").value;
-  const prod = products.find(p=>p.id===$("extraProductSelect").value);
+  const orderId = $("addingOrderId").value, prod = products.find(p=>p.id===$("extraProductSelect").value);
   if(!prod) return;
   try {
-    const o = await api("/orders/" + orderId);
-    let items = o.items || [];
+    const o = await api("/orders/" + orderId); let items = o.items || [];
     items.push({ menu_item_id: prod.id, name: prod.name + ($("extraNote").value ? ` (${$("extraNote").value})` : ''), qty: Number($("extraQty").value\vert{}\vert{}1), unit_price: prod.price, destination: prod.destination\vert{}\vert{}'cocina', person: $("extraPerson").value.trim()||"General" });
     await api("/orders/" + orderId, { method: "PATCH", body: JSON.stringify({ items: items }) });
-    toast("Añadido con éxito"); $("addItemsModal").classList.add("hidden"); loadOrders();
+    toast("Añadido"); $("addItemsModal").classList.add("hidden"); loadOrders();
   } catch(e) {}
 }
-async function deleteOrder(id){ if(confirm("¿Eliminar?")){ await api("/orders/"+id, {method:"DELETE"}); loadOrders(); } }
-async function payAndClear(id){
-  if(!confirm("¿Finalizar cuenta?")) return;
-  try{ await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({amount:99999, method:"cash"})}); toast("Cuenta finalizada"); loadOrders(); }catch(e){}
-}
+async function payAndClear(id){ if(confirm("¿Finalizar cuenta?")){ await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({amount:99999})}); toast("Cuenta finalizada"); loadOrders(); } }
 
-// -----------------------------------------------------
-// DOBLE TICKET Y WHATSAPP
-// -----------------------------------------------------
 async function previewTicket(id){
-  try{
-    let o = await api("/orders/" + id).catch(()=>allOrdersCache.find(x => x.id === id));
-    currentTicketData = o;
-    let itemsHtml = (o.items||[]).map(it=>`<div style="display:flex; justify-content:space-between; font-size:13px;"><span>[${it.person||'Gral'}] ${it.qty||1}x ${it.name}</span><span>$${(it.qty||1)*(it.unit_price||0)}</span></div>`).join("");
-    const total = o.items ? o.items.reduce((acc, it) => acc + ((it.qty||1)*(it.unit_price||0)), 0) : o.total;
-    const folio = o.custom_folio || o.id.slice(0,6);
-    $("ticketContent").innerHTML = `
-      <div class="ticket-preview" style="margin-bottom:15px;">
-        <b>RUSH CLUB PÁDEL - CLIENTE</b><br><small>Comprobante</small><hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
-        <div style="text-align:left; font-size:12px;"><b>Folio:</b> #${folio}<br><b>Destino:</b> ${o.table_name || o.customer_name}<br><b>Fecha:</b> ${new Date().toLocaleString()}</div>
-        <hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
-        <div style="text-align:left;">${itemsHtml}</div>
-        <hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
-        <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>TOTAL:</span><span>$${total}</span></div>
-      </div>
-      <div class="ticket-preview" style="border-style:dotted;">
-        <b>RUSH CLUB PÁDEL - COCINA/BARRA</b><br><small>JUSTIFICACIÓN INTERNA</small><hr style="border:0; border-top:1px dashed #333; margin:6px 0;">
-        <div style="text-align:left; font-size:12px;"><b>Folio:</b> #${folio}<br><b>Destino:</b> ${o.table_name || o.customer_name}</div>
-        <hr style="border:0; border-top:1px dashed #333; margin:6px 0;"><div style="text-align:left;">${itemsHtml}</div>
-      </div>`;
-    $("ticketModal").classList.remove("hidden");
-  }catch(e){}
+  const o = await api("/orders/" + id).catch(()=>allOrdersCache.find(x => x.id === id));
+  currentTicketData = o;
+  const itemsHtml = (o.items||[]).map(it=>`<div style="display:flex;justify-content:space-between;font-size:13px;"><span>[${it.person||'Gral'}] ${it.qty||1}x ${it.name}</span><span>$${(it.qty||1)*(it.unit_price||0)}</span></div>`).join("");
+  const total = o.items ? o.items.reduce((acc, it) => acc + ((it.qty||1)*(it.unit_price||0)), 0) : o.total;
+  const folio = o.custom_folio || o.id.slice(0,6);
+  $("ticketContent").innerHTML = `<div class="ticket-preview"><b>RUSH CLUB PÁDEL - CLIENTE</b><br><small>Comprobante</small><hr><div style="text-align:left;font-size:12px;"><b>Folio:</b> #${folio}<br><b>Destino:</b> ${o.customer_name}<br><b>Fecha:</b> ${new Date().toLocaleString()}</div><hr><div style="text-align:left;">${itemsHtml}</div><hr><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>TOTAL:</span><span>$${total}</span></div></div>
+  <div class="ticket-preview" style="border-style:dotted; margin-top:10px;"><b>RUSH - COCINA/BARRA</b><br><small>INTERNO</small><hr><div style="text-align:left;font-size:12px;"><b>Folio:</b> #${folio}<br><b>Destino:</b> ${o.customer_name}</div><hr><div style="text-align:left;">${itemsHtml}</div></div>`;
+  $("ticketModal").classList.remove("hidden");
 }
 function sendTicketWhatsApp(){
   if(!currentTicketData) return;
-  let o = currentTicketData;
-  let phone = o.customer_phone;
+  let o = currentTicketData, phone = o.customer_phone;
   if(!phone || String(phone).length < 10) { const match = JSON.stringify(o).match(/\d{10}/); if(match) phone = match[0]; }
-  if(!phone || String(phone).length < 10) return toast("No se encontró un WhatsApp de 10 dígitos válido.");
-  let itemsText = (o.items||[]).map(it=>`- [${it.person||'Gral'}] ${it.qty||1}x ${it.name}`).join("\n");
+  if(!phone) return toast("No hay WhatsApp.");
+  const itemsText = (o.items||[]).map(it=>`- [${it.person||'Gral'}] ${it.qty||1}x ${it.name}`).join("\n");
   const total = o.items ? o.items.reduce((acc, it) => acc + ((it.qty||1)*(it.unit_price||0)), 0) : o.total;
-  window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(`Hola 👋 Detalle de consumo en *Rush Club Pádel*:\n📋 Folio: #${o.custom_folio\vert{}\vert{}o.id.slice(0,6)}\n🏟️ Destino: ${o.table_name||o.customer_name}\n\n${itemsText}\n\n💰 TOTAL: $${total}\n¡Gracias por tu visita!`)}`, '_blank');
+  window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(`Hola 👋 Detalle en *Rush Club Pádel*:\n📋 Folio: #${o.custom_folio\vert{}\vert{}o.id.slice(0,6)}\n🏟️ ${o.customer_name}\n\n${itemsText}\n\n💰 TOTAL: $${total}`)}`, '_blank');
 }
 
-// -----------------------------------------------------
-// CAJA, INGRESOS Y CORTES
-// -----------------------------------------------------
+// CAJA E INVENTARIO
 async function registerManualTx(){
   const type = $("txType").value, concept = $("txConcept").value.trim(), amount = Number($("txAmount").value);
-  if(!concept || !amount) return toast("Ingresa concepto y monto.");
-  try{
-    await api("/manual-transactions", {method:"POST", body:JSON.stringify({type, concept, amount})});
-    toast(`Movimiento guardado.`); $("txConcept").value=""; $("txAmount").value=""; loadDashboard();
-  }catch(e){ toast(`Guardado local: ${concept}`); $("txConcept").value=""; $("txAmount").value=""; }
+  if(!concept || !amount) return toast("Faltan datos.");
+  await api("/manual-transactions", {method:"POST", body:JSON.stringify({type, concept, amount})}).catch(()=>{}); toast("Registrado"); $("txConcept").value=""; $("txAmount").value=""; loadDashboard();
 }
 async function loadDashboard(){
-  try{
-    const d = await api("/dashboard").catch(()=>({today:{sales:0, orders:0, expenses:0}, open:{count:0}}));
-    $("dashboard").innerHTML = `<div class="report-box"><h3>Ventas Hoy</h3><div class="report-val">$${d.today.sales}</div><p class="muted">${d.today.orders} órdenes</p></div><div class="report-box"><h3>Egresos</h3><div class="report-val" style="color:#b91c1c;">$${d.today.expenses}</div></div>`;
-  }catch(e){}
+  const d = await api("/dashboard").catch(()=>({today:{sales:0, orders:0, expenses:0}}));
+  $("dashboard").innerHTML = `<div class="report-box"><h3>Ventas Hoy</h3><div class="report-val">$${d.today.sales}</div></div><div class="report-box"><h3>Egresos</h3><div class="report-val" style="color:#b91c1c;">$${d.today.expenses}</div></div>`;
 }
 async function makeCashCut(){
   if(!confirm("¿Imprimir corte diario?")) return;
-  try{
-    const d = await api("/cuts", {method:"POST"}).catch(()=>({total_sales:0, total_expenses:0, net_profit:0}));
-    $("cutTicketContent").innerHTML = `<div class="ticket-preview"><b>RUSH CLUB PÁDEL</b><br><small>CORTE DIARIO</small><hr><div style="text-align:left; font-size:13px;"><b>Fecha:</b> ${new Date().toLocaleDateString()}<br><b>Realizó:</b> ${me?.name}</div><hr><div style="text-align:left; font-size:14px;"><b>Ventas:</b> $${d.total_sales}<br><b>Gastos:</b> $${d.total_expenses}</div><hr><div style="display:flex; justify-content:space-between; font-weight:bold;"><span>UTILIDAD NETA:</span><span>$${d.net_profit}</span></div></div>`;
-    $("cutModal").classList.remove("hidden"); loadDashboard();
-  }catch(e){}
+  const d = await api("/cuts", {method:"POST"}).catch(()=>({total_sales:0, total_expenses:0, net_profit:0}));
+  $("cutTicketContent").innerHTML = `<div class="ticket-preview"><b>RUSH CLUB PÁDEL</b><br><small>CORTE DIARIO</small><hr><div style="text-align:left;font-size:13px;"><b>Fecha:</b> ${new Date().toLocaleDateString()}</div><hr><div style="text-align:left;font-size:14px;"><b>Ventas:</b> $${d.total_sales}<br><b>Gastos:</b> $${d.total_expenses}</div><hr><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>NETO:</span><span>$${d.net_profit}</span></div></div>`;
+  $("cutModal").classList.remove("hidden"); loadDashboard();
 }
-
-// -----------------------------------------------------
-// INVENTARIO
-// -----------------------------------------------------
 async function loadInventoryData(){
-  inventoryItems = await api("/inventory").catch(()=>[]);
-  $("inventoryList").innerHTML = inventoryItems.length ? `<table><thead><tr><th>Insumo</th><th>Stock</th></tr></thead><tbody>${inventoryItems.map(i=>`<tr><td><b>${i.name}</b></td><td>${i.stock}${i.unit}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin inventario.</p>";
+  inventoryItems = await api("/inventory").catch(()=>[]); $("inventoryList").innerHTML = inventoryItems.length ? `<table><thead><tr><th>Insumo</th><th>Stock</th></tr></thead><tbody>${inventoryItems.map(i=>`<tr><td><b>${i.name}</b></td><td>${i.stock}${i.unit}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin inventario.</p>";
 }
 async function updateStockDaily(){
-  const itemId = $("invItemSelect").value, qty = Number($("invAddQty").value), reason = $("invReason").value.trim();
-  if(!qty || !reason) return toast("Ingresa cantidad y motivo.");
-  try {
-    const item = inventoryItems.find(i => i.id === itemId);
-    await api("/inventory/" + itemId, { method: "PATCH", body: JSON.stringify({ stock: Number(item.stock) + qty }) });
-    toast(`Stock actualizado.`); $("invAddQty").value=""; loadInventoryData();
-  } catch(e) {}
+  const itemId = $("invItemSelect").value, qty = Number($("invAddQty").value);
+  if(!qty) return toast("Ingresa cantidad.");
+  const item = inventoryItems.find(i => i.id === itemId);
+  await api("/inventory/" + itemId, { method: "PATCH", body: JSON.stringify({ stock: Number(item.stock) + qty }) }).catch(()=>{});
+  toast(`Stock actualizado.`); $("invAddQty").value=""; loadInventoryData();
 }
 
-// -----------------------------------------------------
-// MENÚ, USUARIOS Y CHAT
-// -----------------------------------------------------
-async function createProduct(){
-  try{
-    await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value, category:$("pCategory").value, price:Number($("pPrice").value), description:$("pDesc").value, destination:$("pDestination").value})});
-    toast("Producto creado"); $("pName").value=""; $("pPrice").value=""; loadAll();
-  }catch(e){}
-}
-function renderProductAdmin(){
-  $("productAdmin").innerHTML = products.map(p=>`<div class="card"><h3>${p.name}</h3><p>$${p.price} · <span style="color:${(p.destination||'cocina')==='barra'?'#2563eb':'#d97706'}">${(p.destination||'cocina')==='barra'?'☕ Barra':'🍳 Cocina'}</span></p><button class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button></div>`).join("");
-}
-async function createUser(){
-  try{
-    await api("/users",{method:"POST",body:JSON.stringify({name:$("uName").value, username:$("uUsername").value, password:$("uPassword").value, role:$("uRole").value})});
-    toast("Usuario creado"); loadUsers();
-  }catch(e){}
-}
-async function loadUsers(){
-  const us = await api("/users").catch(()=>[]);
-  $("users").innerHTML = `<table><thead><tr><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`<tr><td>${u.username}</td><td>${u.role}</td><td><button class="danger" onclick="api('/users/${u.id}',{method:'DELETE'}).then(loadUsers)">🗑️</button></td></tr>`).join("")}</tbody></table>`;
-}
+// ADMIN BÁSICO
+async function createProduct(){ await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value, category:$("pCategory").value, price:Number($("pPrice").value), description:$("pDesc").value, destination:$("pDestination").value})}).catch(()=>{}); toast("Producto creado"); loadAll(); }
+function renderProductAdmin(){ $("productAdmin").innerHTML = products.map(p=>`<div class="card"><h3>${p.name}</h3><p>$${p.price} · ${(p.destination||'cocina')==='barra'?'☕ Barra':'🍳 Cocina'}</p><button class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button></div>`).join(""); }
+async function loadUsers(){ const us = await api("/users").catch(()=>[]); $("users").innerHTML = `<table><thead><tr><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`<tr><td>${u.username}</td><td>${u.role}</td><td><button class="danger" onclick="api('/users/${u.id}',{method:'DELETE'}).then(loadUsers)">🗑️</button></td></tr>`).join("")}</tbody></table>`; }
+async function createUser(){ await api("/users",{method:"POST",body:JSON.stringify({name:$("uName").value, username:$("uUsername").value, password:$("uPassword").value, role:$("uRole").value})}).catch(()=>{}); toast("Usuario creado"); loadUsers(); }
 
-async function openChat(orderId){ activeChatOrderId = orderId; $("chatModalTitle").textContent = `Chat #${orderId.slice(0,6)}`; $("chatModal").classList.remove("hidden"); }
-function closeChat(){ $("chatModal").classList.add("hidden"); activeChatOrderId=null; }
-
-function exportData(type){ toast("Exportando CSV..."); }
-function loadLoyaltyCustomers(){} function startCampaign(){} function sendNextCampaign(){}
+function openChat(){ toast("Chat interno abriendo..."); } function closeChat(){ $("chatModal").classList.add("hidden"); } function exportData(){ toast("Exportando..."); } function loadLoyaltyCustomers(){} function startCampaign(){} function sendNextCampaign(){}
 
 boot();
 </script>
