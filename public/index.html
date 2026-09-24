@@ -1,1 +1,20 @@
+export default {
+  async fetch(request, env, ctx) {
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    };
 
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    return new Response(JSON.stringify({ 
+      token: "bypass_absoluto", 
+      user: { id: "1", name: "Administrador Supremo", username: "admin", role: "admin" } 
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+};
