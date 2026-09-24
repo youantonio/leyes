@@ -2,6 +2,29 @@
 const ROLES = ["admin", "mesero", "cocina", "barra"];
 const SESSION_MS = 24 * 60 * 60 * 1000;
 let sessionsReady = false;
+let menuSchemaReady = false;
+
+// Estructura inicial del menú (tipo Starbucks: 2 secciones y categorías por "cómo lo pide el cliente")
+const DEFAULT_SECTIONS = [
+  { id: "sec_alimentos", name: "Alimentos", icon: "🍳", destination: "cocina", sort: 1 },
+  { id: "sec_bebidas", name: "Bebidas", icon: "☕", destination: "barra", sort: 2 },
+];
+const DEFAULT_CATEGORIES = [
+  ["cat_desayunos", "sec_alimentos", "Desayunos", 1],
+  ["cat_tacos", "sec_alimentos", "Tacos y antojitos", 2],
+  ["cat_hamburguesas", "sec_alimentos", "Hamburguesas y sándwiches", 3],
+  ["cat_ensaladas", "sec_alimentos", "Ensaladas y bowls", 4],
+  ["cat_botanas", "sec_alimentos", "Botanas y para compartir", 5],
+  ["cat_postres", "sec_alimentos", "Postres y panadería", 6],
+  ["cat_cafe_caliente", "sec_bebidas", "Café caliente", 1],
+  ["cat_cafe_frio", "sec_bebidas", "Café frío", 2],
+  ["cat_te", "sec_bebidas", "Té e infusiones", 3],
+  ["cat_frappes", "sec_bebidas", "Frappés y licuados", 4],
+  ["cat_jugos", "sec_bebidas", "Jugos y aguas frescas", 5],
+  ["cat_refrescos", "sec_bebidas", "Refrescos, agua e hidratación", 6],
+  ["cat_cervezas", "sec_bebidas", "Cervezas y micheladas", 7],
+  ["cat_cocteles", "sec_bebidas", "Cocteles y licores", 8],
+];
 
 const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 const fromHex = (h) => new Uint8Array(h.match(/.{1,2}/g).map((b) => parseInt(b, 16)));
@@ -69,6 +92,28 @@ export default {
              token TEXT PRIMARY KEY, user_id TEXT, username TEXT, name TEXT, role TEXT, expires_at INTEGER)`
         ).run();
         sessionsReady = true;
+      }
+
+      if (!menuSchemaReady) {
+        // Tablas propias (prefijo pos_) para no chocar con tablas del sistema anterior
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_menu_sections (
+             id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT DEFAULT '', destination TEXT NOT NULL DEFAULT 'cocina', sort_order INTEGER DEFAULT 0)`
+        ).run();
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_menu_categories (
+             id TEXT PRIMARY KEY, section_id TEXT NOT NULL, name TEXT NOT NULL, sort_order INTEGER DEFAULT 0)`
+        ).run();
+        try { await db.prepare("ALTER TABLE menu_items ADD COLUMN category_id TEXT").run(); } catch (e) {}
+        for (const sec of DEFAULT_SECTIONS)
+          await db.prepare("INSERT OR IGNORE INTO pos_menu_sections (id,name,icon,destination,sort_order) VALUES (?,?,?,?,?)")
+            .bind(sec.id, sec.name, sec.icon, sec.destination, sec.sort).run();
+        const have = await db.prepare("SELECT COUNT(*) AS c FROM pos_menu_categories").first();
+        if (!have || !have.c)
+          for (const [id, sid, name, sort] of DEFAULT_CATEGORIES)
+            await db.prepare("INSERT OR IGNORE INTO pos_menu_categories (id,section_id,name,sort_order) VALUES (?,?,?,?)")
+              .bind(id, sid, name, sort).run();
+        menuSchemaReady = true;
       }
 
       const calcTotal = (items) =>
@@ -242,23 +287,13 @@ export default {
       }
 
       // ===== MENÚ =====
-      if (path === "/api/menu" && request.method === "GET") {
-        let items = [];
-        try {
-          const { results } = await db.prepare("SELECT * FROM menu_items WHERE active = 1 ORDER BY sort_order, name").all();
-          items = results || [];
-        } catch (e) {}
-        if (items.length === 0) {
-          items = [
-            { id: "1", name: "Hamburguesa Clásica", category: "Alimentos", price: 120, description: "Con papas", destination: "cocina", active: 1 },
-            { id: "2", name: "Coca-Cola 600ml", category: "Bebidas", price: 35, description: "Fría", destination: "barra", active: 1 },
-          ];
-        }
-        return json(items);
-      }
+      const DESTS = ["cocina", "barra"];
+      const needAdmin = () => (isAdmin ? null : json({ error: "Solo el administrador puede editar el menú" }, 403));
+      const newId = (p) => p + "_" + crypto.randomUUID().slice(0, 8);
 
-      // Al cambiar la estación de un producto, también se mueve en las comandas abiertas
+      // Mueve items de comandas abiertas cuando cambia la estación de un producto
       const moveOpenOrderItems = async (ids, dest) => {
+        if (!ids.length) return;
         const idSet = new Set(ids.map(String));
         const { results } = await db.prepare("SELECT id, items FROM orders WHERE status != 'paid'").all();
         for (const o of results || []) {
@@ -278,51 +313,97 @@ export default {
             .bind(JSON.stringify(items), status, o.id).run();
         }
       };
-      const DESTS = ["cocina", "barra"];
+      // Pone categoría (y por ende estación) a un conjunto de productos
+      const assignCategory = async (productIds, catId) => {
+        const cat = await db.prepare(
+          `SELECT c.id, c.name, s.destination FROM pos_menu_categories c JOIN pos_menu_sections s ON s.id=c.section_id WHERE c.id=?`
+        ).bind(catId).first();
+        if (!cat) return false;
+        for (const pid of productIds)
+          await db.prepare("UPDATE menu_items SET category_id=?, category=?, destination=? WHERE id=?")
+            .bind(cat.id, cat.name, cat.destination, pid).run();
+        await moveOpenOrderItems(productIds, cat.destination);
+        return true;
+      };
+      const idsInCategories = async (catIds) => {
+        if (!catIds.length) return [];
+        const q = catIds.map(() => "?").join(",");
+        const { results } = await db.prepare(`SELECT id FROM menu_items WHERE category_id IN (${q})`).bind(...catIds).all();
+        return (results || []).map((r) => r.id);
+      };
+
+      if (path === "/api/menu" && request.method === "GET") {
+        let items = [];
+        try {
+          const { results } = await db.prepare("SELECT * FROM menu_items WHERE active = 1 ORDER BY sort_order, name").all();
+          items = results || [];
+        } catch (e) {}
+        return json(items);
+      }
+
+      if (path === "/api/menu-structure" && request.method === "GET") {
+        const secs = (await db.prepare("SELECT * FROM pos_menu_sections ORDER BY sort_order, name").all()).results || [];
+        const cats = (await db.prepare("SELECT * FROM pos_menu_categories ORDER BY sort_order, name").all()).results || [];
+        return json({ sections: secs.map((sc) => ({ ...sc, categories: cats.filter((c) => c.section_id === sc.id) })) });
+      }
+
+      // Lo más pedido en los últimos 30 días (como "Destacados" de Starbucks)
+      if (path === "/api/menu-popular" && request.method === "GET") {
+        const { results } = await db.prepare("SELECT items FROM orders WHERE created_at >= datetime('now','-30 day')").all();
+        const tally = {};
+        for (const o of results || []) {
+          let its; try { its = JSON.parse(o.items || "[]"); } catch (e) { continue; }
+          for (const i of its) if (i.menu_item_id) tally[i.menu_item_id] = (tally[i.menu_item_id] || 0) + (Number(i.qty) || 1);
+        }
+        return json(Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id, qty]) => ({ id, qty })));
+      }
 
       if (path === "/api/menu" && request.method === "POST") {
-        if (!isAdmin) return json({ error: "Solo el administrador puede editar el menú" }, 403);
+        const deny = needAdmin(); if (deny) return deny;
         const b = await request.json().catch(() => ({}));
         const name = String(b.name || "").trim();
         const price = Number(b.price);
-        const dest = DESTS.includes(b.destination) ? b.destination : "cocina";
         if (!name) return json({ error: "El nombre es obligatorio" }, 400);
         if (!(price >= 0)) return json({ error: "El precio no es válido" }, 400);
+        const dup = await db.prepare("SELECT id FROM menu_items WHERE active=1 AND lower(trim(name))=lower(?)").bind(name).first();
+        if (dup) return json({ error: "Ya existe un producto con ese nombre" }, 409);
+        let dest = DESTS.includes(b.destination) ? b.destination : "cocina";
+        let catText = String(b.category || "").trim() || "General";
+        let catId = null;
+        if (b.category_id) {
+          const cat = await db.prepare(
+            "SELECT c.id, c.name, s.destination FROM pos_menu_categories c JOIN pos_menu_sections s ON s.id=c.section_id WHERE c.id=?"
+          ).bind(b.category_id).first();
+          if (!cat) return json({ error: "Categoría no encontrada" }, 404);
+          catId = cat.id; catText = cat.name; dest = cat.destination;
+        }
         const id = crypto.randomUUID();
         await db.prepare(
-          "INSERT INTO menu_items (id, name, category, price, description, destination, active, sort_order) VALUES (?,?,?,?,?,?,1,0)"
-        ).bind(id, name, String(b.category || "").trim() || "General", price, String(b.description || ""), dest).run();
+          "INSERT INTO menu_items (id, name, category, category_id, price, description, destination, active, sort_order) VALUES (?,?,?,?,?,?,?,1,0)"
+        ).bind(id, name, catText, catId, price, String(b.description || ""), dest).run();
         return json({ id }, 201);
       }
 
-      // Cambiar la estación de toda una categoría (ej. Bebidas -> barra)
-      if (path === "/api/menu-category" && request.method === "PATCH") {
-        if (!isAdmin) return json({ error: "Solo el administrador puede editar el menú" }, 403);
+      // Clasificar muchos productos a la vez: {assignments:[{id, category_id}]}
+      if (path === "/api/menu-classify" && request.method === "POST") {
+        const deny = needAdmin(); if (deny) return deny;
         const b = await request.json().catch(() => ({}));
-        if (!DESTS.includes(b.destination)) return json({ error: "Estación no válida" }, 400);
-        const cat = String(b.category || "General");
-        const { results } = await db.prepare(
-          "SELECT id FROM menu_items WHERE COALESCE(NULLIF(category,''),'General') = ?"
-        ).bind(cat).all();
-        const ids = (results || []).map((r) => r.id);
-        if (!ids.length) return json({ error: "Categoría no encontrada" }, 404);
-        await db.prepare(
-          "UPDATE menu_items SET destination=? WHERE COALESCE(NULLIF(category,''),'General') = ?"
-        ).bind(b.destination, cat).run();
-        await moveOpenOrderItems(ids, b.destination);
-        return json({ ok: true, updated: ids.length });
+        const byCat = {};
+        for (const a of b.assignments || []) if (a.id && a.category_id) (byCat[a.category_id] ||= []).push(a.id);
+        let n = 0;
+        for (const [catId, ids] of Object.entries(byCat)) if (await assignCategory(ids, catId)) n += ids.length;
+        return json({ ok: true, updated: n });
       }
 
       const mm = path.match(/^\/api\/menu\/([^\/]+)$/);
       if (mm && request.method === "PATCH") {
-        if (!isAdmin) return json({ error: "Solo el administrador puede editar el menú" }, 403);
+        const deny = needAdmin(); if (deny) return deny;
         const pid = decodeURIComponent(mm[1]);
         const cur = await db.prepare("SELECT * FROM menu_items WHERE id=?").bind(pid).first();
         if (!cur) return json({ error: "Producto no encontrado" }, 404);
         const b = await request.json().catch(() => ({}));
         const sets = [], vals = [];
         if (typeof b.name === "string" && b.name.trim()) { sets.push("name=?"); vals.push(b.name.trim()); }
-        if (typeof b.category === "string" && b.category.trim()) { sets.push("category=?"); vals.push(b.category.trim()); }
         if (typeof b.description === "string") { sets.push("description=?"); vals.push(b.description); }
         if (b.price !== undefined && Number(b.price) >= 0) { sets.push("price=?"); vals.push(Number(b.price)); }
         if (b.active !== undefined) { sets.push("active=?"); vals.push(b.active ? 1 : 0); }
@@ -330,9 +411,108 @@ export default {
           if (!DESTS.includes(b.destination)) return json({ error: "Estación no válida" }, 400);
           sets.push("destination=?"); vals.push(b.destination);
         }
-        if (!sets.length) return json({ error: "Nada que actualizar" }, 400);
-        await db.prepare(`UPDATE menu_items SET ${sets.join(", ")} WHERE id=?`).bind(...vals, pid).run();
+        if (sets.length) await db.prepare(`UPDATE menu_items SET ${sets.join(", ")} WHERE id=?`).bind(...vals, pid).run();
         if (b.destination !== undefined) await moveOpenOrderItems([pid], b.destination);
+        if (b.category_id) { if (!(await assignCategory([pid], b.category_id))) return json({ error: "Categoría no encontrada" }, 404); }
+        if (!sets.length && !b.category_id) return json({ error: "Nada que actualizar" }, 400);
+        return json({ ok: true });
+      }
+
+      // ----- Secciones -----
+      if (path === "/api/menu-sections" && request.method === "POST") {
+        const deny = needAdmin(); if (deny) return deny;
+        const b = await request.json().catch(() => ({}));
+        const name = String(b.name || "").trim();
+        if (!name) return json({ error: "El nombre es obligatorio" }, 400);
+        const dest = DESTS.includes(b.destination) ? b.destination : "cocina";
+        const mx = await db.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM pos_menu_sections").first();
+        const id = newId("sec");
+        await db.prepare("INSERT INTO pos_menu_sections (id,name,icon,destination,sort_order) VALUES (?,?,?,?,?)")
+          .bind(id, name, String(b.icon || "🍽️"), dest, (mx?.m || 0) + 1).run();
+        return json({ id }, 201);
+      }
+      const sm = path.match(/^\/api\/menu-sections\/([^\/]+)$/);
+      if (sm && request.method === "PATCH") {
+        const deny = needAdmin(); if (deny) return deny;
+        const sid = decodeURIComponent(sm[1]);
+        const cur = await db.prepare("SELECT * FROM pos_menu_sections WHERE id=?").bind(sid).first();
+        if (!cur) return json({ error: "Sección no encontrada" }, 404);
+        const b = await request.json().catch(() => ({}));
+        const sets = [], vals = [];
+        if (typeof b.name === "string" && b.name.trim()) { sets.push("name=?"); vals.push(b.name.trim()); }
+        if (typeof b.icon === "string" && b.icon.trim()) { sets.push("icon=?"); vals.push(b.icon.trim()); }
+        if (b.destination !== undefined) {
+          if (!DESTS.includes(b.destination)) return json({ error: "Estación no válida" }, 400);
+          sets.push("destination=?"); vals.push(b.destination);
+        }
+        if (!sets.length) return json({ error: "Nada que actualizar" }, 400);
+        await db.prepare(`UPDATE pos_menu_sections SET ${sets.join(", ")} WHERE id=?`).bind(...vals, sid).run();
+        if (b.destination !== undefined && b.destination !== cur.destination) {
+          // toda la sección cambia de estación (ej. Bebidas -> barra)
+          const cats = ((await db.prepare("SELECT id FROM pos_menu_categories WHERE section_id=?").bind(sid).all()).results || []).map((c) => c.id);
+          const ids = await idsInCategories(cats);
+          if (ids.length) {
+            const q = ids.map(() => "?").join(",");
+            await db.prepare(`UPDATE menu_items SET destination=? WHERE id IN (${q})`).bind(b.destination, ...ids).run();
+            await moveOpenOrderItems(ids, b.destination);
+          }
+        }
+        return json({ ok: true });
+      }
+      if (sm && request.method === "DELETE") {
+        const deny = needAdmin(); if (deny) return deny;
+        const sid = decodeURIComponent(sm[1]);
+        const n = await db.prepare("SELECT COUNT(*) AS c FROM pos_menu_categories WHERE section_id=?").bind(sid).first();
+        if (n?.c) return json({ error: "Primero elimina o mueve las categorías de esta sección" }, 400);
+        await db.prepare("DELETE FROM pos_menu_sections WHERE id=?").bind(sid).run();
+        return json({ ok: true });
+      }
+
+      // ----- Categorías -----
+      if (path === "/api/menu-categories" && request.method === "POST") {
+        const deny = needAdmin(); if (deny) return deny;
+        const b = await request.json().catch(() => ({}));
+        const name = String(b.name || "").trim();
+        if (!name) return json({ error: "El nombre es obligatorio" }, 400);
+        const sec = await db.prepare("SELECT id FROM pos_menu_sections WHERE id=?").bind(b.section_id).first();
+        if (!sec) return json({ error: "Sección no encontrada" }, 404);
+        const dup = await db.prepare("SELECT id FROM pos_menu_categories WHERE section_id=? AND lower(trim(name))=lower(?)").bind(sec.id, name).first();
+        if (dup) return json({ error: "Esa categoría ya existe en la sección" }, 409);
+        const mx = await db.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM pos_menu_categories WHERE section_id=?").bind(sec.id).first();
+        const id = newId("cat");
+        await db.prepare("INSERT INTO pos_menu_categories (id,section_id,name,sort_order) VALUES (?,?,?,?)")
+          .bind(id, sec.id, name, (mx?.m || 0) + 1).run();
+        return json({ id }, 201);
+      }
+      const cm = path.match(/^\/api\/menu-categories\/([^\/]+)$/);
+      if (cm && request.method === "PATCH") {
+        const deny = needAdmin(); if (deny) return deny;
+        const cid = decodeURIComponent(cm[1]);
+        const cur = await db.prepare("SELECT * FROM pos_menu_categories WHERE id=?").bind(cid).first();
+        if (!cur) return json({ error: "Categoría no encontrada" }, 404);
+        const b = await request.json().catch(() => ({}));
+        if (typeof b.name === "string" && b.name.trim()) {
+          await db.prepare("UPDATE pos_menu_categories SET name=? WHERE id=?").bind(b.name.trim(), cid).run();
+          await db.prepare("UPDATE menu_items SET category=? WHERE category_id=?").bind(b.name.trim(), cid).run();
+        }
+        if (b.section_id && b.section_id !== cur.section_id) {
+          const sec = await db.prepare("SELECT * FROM pos_menu_sections WHERE id=?").bind(b.section_id).first();
+          if (!sec) return json({ error: "Sección no encontrada" }, 404);
+          await db.prepare("UPDATE pos_menu_categories SET section_id=? WHERE id=?").bind(sec.id, cid).run();
+          const ids = await idsInCategories([cid]);
+          if (ids.length) {
+            await db.prepare("UPDATE menu_items SET destination=? WHERE category_id=?").bind(sec.destination, cid).run();
+            await moveOpenOrderItems(ids, sec.destination);
+          }
+        }
+        return json({ ok: true });
+      }
+      if (cm && request.method === "DELETE") {
+        const deny = needAdmin(); if (deny) return deny;
+        const cid = decodeURIComponent(cm[1]);
+        // los productos quedan "sin clasificar" (no se borran)
+        await db.prepare("UPDATE menu_items SET category_id=NULL WHERE category_id=?").bind(cid).run();
+        await db.prepare("DELETE FROM pos_menu_categories WHERE id=?").bind(cid).run();
         return json({ ok: true });
       }
 
