@@ -1,6 +1,6 @@
 name = "rush-pos"
 main = "server.js"
-compatibility_date = "2026-09-22"
+compatibility_date = "2026-03-01"
 
 [assets]
 directory = "./public"
@@ -9,5 +9,4 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "rush-pos-db"
-database_id = "79ed43c7-40b8-4a8a-bec5-1fd69449774b"
-migrations_dir = "migrations"
+database_id = "tu-id-de-base-de-datos"
