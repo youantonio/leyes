@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v24.3</title>
+<title>RUSH POS v24.4</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -224,14 +224,15 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div class="card" style="margin-top:15px;">
     <div class="grid">
       <input id="pName" placeholder="Nombre">
-      <input id="pCategory" placeholder="Categoría">
+      <input id="pCategory" placeholder="Categoría (elige una o escribe nueva)" list="catList"><datalist id="catList"></datalist>
       <input id="pPrice" type="number" step=".01" placeholder="Precio">
       <select id="pDestination"><option value="cocina">🍳 Cocina</option><option value="barra">☕ Barra</option></select>
       <input id="pDesc" placeholder="Descripción">
       <button class="primary" onclick="createProduct()" style="grid-column:1/-1;">Crear Producto</button>
     </div>
   </div>
-  <div id="productAdmin" class="grid" style="margin-top:15px"></div>
+  <div id="destAlert"></div>
+  <div id="productAdmin" style="margin-top:15px"></div>
 </section>
 
 <section id="usuarios" class="view hidden">
@@ -272,6 +273,7 @@ const API="/api";
 let token=localStorage.getItem("rush_token");
 let me=null, products=[], tables=[], cart=[], inventoryItems=[], courtsList=[], activeReservations=[], currentCategory="TODOS";
 let currentTicketData=null, allOrdersCache=[], currentPerson=1, offsetPeople=0, linkedOrder=null;
+let currentView="venta", catNames=[];
 let usersCache=[], customers=[], selectedPhones=new Set(), campaignQueue=[], campaignIdx=0;
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const $=id=>document.getElementById(id);
@@ -352,6 +354,7 @@ function showApp(){
 }
 
 function view(id,btn){
+  currentView=id;
   document.querySelectorAll(".view").forEach(x=>x.classList.add("hidden")); $(id).classList.remove("hidden");
   document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active")); if(btn)btn.classList.add("active");
   if(id==="canchas") loadCanchasData(); if(id==="mesas") renderTables(); if(id==="cocina") loadKitchen();
@@ -625,8 +628,43 @@ async function updateStockDaily(){
   toast(`Stock actualizado.`); $("invAddQty").value=""; loadInventoryData();
 }
 
-async function createProduct(){ await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value, category:$("pCategory").value, price:Number($("pPrice").value), description:$("pDesc").value, destination:$("pDestination").value})}).catch(()=>{}); toast("Producto creado"); loadAll(); }
-function renderProductAdmin(){ $("productAdmin").innerHTML = products.map(p=>`<div class="card"><h3>${p.name}</h3><p>$${p.price} · ${(p.destination||'cocina')==='barra'?'☕ Barra':'🍳 Cocina'}</p><button class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button></div>`).join(""); }
+async function createProduct(){
+  const name=$("pName").value.trim(), price=Number($("pPrice").value);
+  if(!name) return toast("Escribe el nombre del producto.");
+  if(!(price>=0) || $("pPrice").value==="") return toast("Escribe el precio.");
+  try{
+    await api("/menu",{method:"POST",body:JSON.stringify({name, category:$("pCategory").value.trim(), price, description:$("pDesc").value.trim(), destination:$("pDestination").value})});
+    toast("Producto creado ✅"); ["pName","pCategory","pPrice","pDesc"].forEach(k=>$(k).value="");
+    await loadAll(); renderProductAdmin();
+  }catch(e){ toast(e.message); }
+}
+function renderProductAdmin(){
+  const cats={}; products.forEach((p,i)=>{ const c=p.category||"General"; (cats[c]=cats[c]||[]).push(i); });
+  catNames=Object.keys(cats).sort((a,b)=>a.localeCompare(b,'es'));
+  $("catList").innerHTML=catNames.map(c=>`<option value="${esc(c)}">`).join("");
+  const anyBar=products.some(p=>(p.destination||'cocina')==='barra');
+  $("destAlert").innerHTML = (!anyBar && products.length) ? `<div class="card" style="background:#fef2f2;border-color:#fca5a5;margin-top:15px">⚠️ <b>Ningún producto está asignado a Barra</b>, por eso las bebidas llegan a Cocina. En la categoría de bebidas toca <b>☕ Toda a Barra</b>.</div>` : "";
+  $("productAdmin").innerHTML = catNames.map((c,ci)=>`<div class="card" style="margin-bottom:12px">
+    <div class="row between" style="flex-wrap:wrap"><h3 style="margin:0">${esc(c)}</h3><div class="row"><button onclick="setCategoryDest(${ci},'cocina')">🍳 Toda a Cocina</button><button class="primary" onclick="setCategoryDest(${ci},'barra')">☕ Toda a Barra</button></div></div>
+    <table style="margin-top:8px"><tbody>${cats[c].map(i=>{ const p=products[i], d=(p.destination||'cocina'); return `<tr><td><b>${esc(p.name)}</b><div class="muted" style="font-size:12px">${esc(p.description||"")}</div></td><td>$${p.price}</td><td><select onchange="setProductDest(${i},this.value)"><option value="cocina" ${d==='cocina'?'selected':''}>🍳 Cocina</option><option value="barra" ${d==='barra'?'selected':''}>☕ Barra</option></select></td><td><button class="danger" onclick="deactivateProduct(${i})">Desactivar</button></td></tr>`; }).join("")}</tbody></table></div>`).join("") || "<p class='muted'>Sin productos.</p>";
+}
+async function setCategoryDest(ci,dest){
+  try{
+    const r=await api("/menu-category",{method:"PATCH",body:JSON.stringify({category:catNames[ci],destination:dest})});
+    toast(`${r.updated} producto(s) → ${dest==='barra'?'☕ Barra':'🍳 Cocina'}`); await loadAll(); renderProductAdmin();
+  }catch(e){ toast(e.message); }
+}
+async function setProductDest(i,dest){
+  const p=products[i]; if(!p) return;
+  try{ await api("/menu/"+encodeURIComponent(p.id),{method:"PATCH",body:JSON.stringify({destination:dest})}); toast(`${p.name} → ${dest==='barra'?'☕ Barra':'🍳 Cocina'}`); await loadAll(); renderProductAdmin(); }
+  catch(e){ toast(e.message); }
+}
+async function deactivateProduct(i){
+  const p=products[i]; if(!p) return;
+  if(!confirm(`¿Desactivar "${p.name}"? Dejará de aparecer en Venta.`)) return;
+  try{ await api("/menu/"+encodeURIComponent(p.id),{method:"PATCH",body:JSON.stringify({active:0})}); toast("Producto desactivado"); await loadAll(); renderProductAdmin(); }
+  catch(e){ toast(e.message); }
+}
 const ROLE_LABEL={admin:"Administrador",mesero:"Mesero",cocina:"Cocina",barra:"Barra"};
 async function loadUsers(){
   try{
@@ -705,6 +743,8 @@ function renderCampaignBar(){
   $("campaignBar").innerHTML=`<div class="card" style="margin-top:10px"><b>Enviados ${campaignIdx} de ${campaignQueue.length}</b>${next?`<div class="muted">Siguiente: ${esc(next.name)}</div><button class="primary" style="margin-top:8px" onclick="sendNextCampaign()">➡️ Abrir WhatsApp del siguiente</button>`:`<div style="margin-top:8px"><button class="success" onclick="sendNextCampaign()">✅ Terminar campaña</button></div>`}</div>`;
 }
 
+// Cocina y Barra se refrescan solas cada 8 segundos
+setInterval(()=>{ if(!token) return; if(currentView==="cocina") loadKitchen(); else if(currentView==="barra") loadBarra(); },8000);
 boot();
 </script>
 </body>
