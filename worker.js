@@ -204,7 +204,6 @@ export default {
           return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        // Chat de comandas
         if (orderId && path.includes("comments")) {
           if (request.method === "GET") {
             let comments = [];
