@@ -62,7 +62,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <div class="stack">
       <label>Usuario<input id="loginUser" placeholder="Usuario" value="admin"></label>
       <label>Contraseña<input id="loginPass" type="password" placeholder="Contraseña" value="admin"></label>
-      <button class="primary" style="width:100%; margin-top:10px;" onclick="login()">Iniciar sesión (Entrada Directa)</button>
+      <button class="primary" style="width:100%; margin-top:10px;" onclick="login()">Iniciar sesión</button>
     </div>
   </div>
 </section>
@@ -84,7 +84,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <nav id="nav"></nav>
 
 <main>
-<!-- VENTAS -->
 <section id="venta" class="view">
   <h1 class="title">Nueva Venta / Servicio</h1>
   <div class="card">
@@ -118,7 +117,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
 </section>
 
-<!-- CANCHAS -->
 <section id="canchas" class="view hidden">
   <h1 class="title">🎾 Reservas de Canchas</h1>
   <div class="card" style="margin-bottom:15px; background:#f0fdf4; border:1px solid #16a34a;">
@@ -138,31 +136,26 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div class="card"><h2>Reservas Activas</h2><div id="reservationsList" style="overflow-x:auto;"></div></div>
 </section>
 
-<!-- MESAS -->
 <section id="mesas" class="view hidden">
   <h1 class="title">Mesas en Sala</h1>
   <div id="tables" class="grid"></div>
 </section>
 
-<!-- COCINA (KDS) -->
 <section id="cocina" class="view hidden">
   <div class="row between" style="margin-bottom:14px;"><h1 class="title" style="margin:0">👨‍🍳 Cocina</h1><button onclick="loadKitchen()" class="primary">🔄 Actualizar</button></div>
   <div id="kitchenOrders" class="grid"></div>
 </section>
 
-<!-- BARRA -->
 <section id="barra" class="view hidden">
   <div class="row between" style="margin-bottom:14px;"><h1 class="title" style="margin:0">☕ Barra</h1><button onclick="loadBarra()" class="primary">🔄 Actualizar</button></div>
   <div id="barraOrders" class="grid"></div>
 </section>
 
-<!-- ÓRDENES -->
 <section id="ordenes" class="view hidden">
   <div class="row between"><h1 class="title" style="margin:0">Control de Órdenes</h1></div>
   <div id="orders" class="grid" style="margin-top:15px"></div>
 </section>
 
-<!-- CAJA -->
 <section id="caja" class="view hidden">
   <h1 class="title">Caja y Reportes</h1>
   <div class="card" style="margin-bottom:15px; background:#f8fafc; border:1px solid #cbd5e1;">
@@ -182,24 +175,16 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div class="card" style="margin-top:15px"><h2>Historial de Cortes</h2><div id="cutsList" style="overflow-x:auto;"></div></div>
 </section>
 
-<!-- LEALTAD -->
 <section id="lealtad" class="view hidden">
   <div class="row between"><h1 class="title" style="margin:0">⭐ Lealtad y Difusión</h1></div>
   <div class="card" style="background:#f0fdf4; border:1px solid #16a34a; margin-top:15px;">
     <h2>📢 Campaña Masiva WhatsApp</h2>
     <textarea id="bulkMessage" rows="3" placeholder="Escribe tu promoción..."></textarea>
     <div style="margin-top:10px;"><button class="success" onclick="startCampaign()">🚀 Iniciar Envío</button></div>
-    <div id="campaignQueue" class="hidden" style="margin-top:15px; padding:15px; background:#fff; border-radius:12px; border:1px solid #16a34a;">
-      <h3 id="campProgress">0 / 0</h3>
-      <p id="campCurrentName" style="font-weight:bold; font-size:18px; margin:0 0 10px;"></p>
-      <button class="success" id="btnSendNext" onclick="sendNextCampaign()">💬 Enviar a este cliente</button>
-      <button onclick="$('campaignQueue').classList.add('hidden')" style="margin-left:10px;">Detener</button>
-    </div>
   </div>
   <div class="card" style="margin-top:15px;"><h2>Clientes</h2><div id="loyaltyList" style="overflow-x:auto;"></div></div>
 </section>
 
-<!-- INVENTARIO -->
 <section id="inventario" class="view hidden">
   <div class="row between"><h1 class="title" style="margin:0">📦 Inventario</h1></div>
   <div class="card" style="margin-top:15px; background:#f0fdf4; border:1px solid #16a34a;">
@@ -214,7 +199,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div class="card" style="margin-top:15px;"><h2>Stock Actual</h2><div id="inventoryList" style="overflow-x:auto;"></div></div>
 </section>
 
-<!-- PRODUCTOS Y USUARIOS -->
 <section id="productos" class="view hidden">
   <h1 class="title">Catálogo de Menú</h1>
   <div class="card" style="margin-top:15px;">
@@ -249,10 +233,6 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </section>
 
 <!-- MODALES -->
-<div id="chatModal" class="modal hidden">
-  <div class="modalbox"><div class="row between"><h2 id="chatModalTitle" style="margin:0">Chat</h2><button onclick="closeChat()">✕</button></div><div id="chatMessages" class="stack" style="margin:15px 0; max-height:45vh; overflow:auto; background:#f9fafb; padding:12px; border-radius:12px;"></div><div class="row"><input id="chatInput" placeholder="Mensaje..."><button class="primary" onclick="sendChat()">Enviar</button></div></div>
-</div>
-
 <div id="ticketModal" class="modal hidden">
   <div class="modalbox" style="max-width:420px; text-align:center;"><div class="row between"><h2 style="margin:0">Tickets</h2><button onclick="$('ticketModal').classList.add('hidden')">✕</button></div><div id="ticketContent" style="margin:15px 0;"></div><div class="row" style="margin-top:15px;"><button class="primary" style="flex:1;" onclick="window.print()">🖨️ Imprimir Doble Ticket</button><button class="success" style="flex:1;" onclick="sendTicketWhatsApp()">💬 WhatsApp</button></div></div>
 </div>
@@ -271,7 +251,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 const API="/api";
 let token=localStorage.getItem("rush_token");
 let me=null, products=[], tables=[], cart=[], inventoryItems=[], courtsList=[], currentCategory="TODOS";
-let activeChatOrderId=null, currentTicketData=null, allOrdersCache=[];
+let currentTicketData=null, allOrdersCache=[];
 const $=id=>document.getElementById(id);
 
 function toast(msg){
@@ -291,16 +271,14 @@ async function api(path,opts={}){
   return data;
 }
 
-// ==========================================
-// BYPASS TOTAL: ENTRADA DIRECTA AUTOMÁTICA
-// ==========================================
+// BYPASS DE ENTRADA DIRECTA
 async function login(){
   token = "bypass_absoluto"; 
   localStorage.setItem("rush_token", token);
   me = { id: "1", name: "Administrador Supremo", username: "admin", role: "admin" };
   showApp(); 
   loadAll();
-  toast("✅ Acceso concedido por Bypass");
+  toast("✅ Acceso concedido");
 }
 
 function logout(show=true){
@@ -517,9 +495,8 @@ function renderProductAdmin(){ $("productAdmin").innerHTML = products.map(p=>`<d
 async function loadUsers(){ const us = await api("/users").catch(()=>[]); $("users").innerHTML = `<table><thead><tr><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`<tr><td>${u.username}</td><td>${u.role}</td><td><button class="danger" onclick="api('/users/${u.id}',{method:'DELETE'}).then(loadUsers)">🗑️</button></td></tr>`).join("")}</tbody></table>`; }
 async function createUser(){ await api("/users",{method:"POST",body:JSON.stringify({name:$("uName").value, username:$("uUsername").value, password:$("uPassword").value, role:$("uRole").value})}).catch(()=>{}); toast("Usuario creado"); loadUsers(); }
 
-function openChat(){ toast("Chat interno abriendo..."); } function closeChat(){ $("chatModal").classList.add("hidden"); } function exportData(){ toast("Exportando..."); } function loadLoyaltyCustomers(){} function startCampaign(){} function sendNextCampaign(){}
+function loadLoyaltyCustomers(){} function startCampaign(){} function sendNextCampaign(){}
 
-// Inicialización automática al cargar la página
 boot();
 </script>
 </body>
