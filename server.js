@@ -257,6 +257,85 @@ export default {
         return json(items);
       }
 
+      // Al cambiar la estación de un producto, también se mueve en las comandas abiertas
+      const moveOpenOrderItems = async (ids, dest) => {
+        const idSet = new Set(ids.map(String));
+        const { results } = await db.prepare("SELECT id, items FROM orders WHERE status != 'paid'").all();
+        for (const o of results || []) {
+          let items;
+          try { items = JSON.parse(o.items || "[]"); } catch (e) { continue; }
+          let changed = false;
+          items = items.map((i) => {
+            if (idSet.has(String(i.menu_item_id)) && (i.destination || "cocina") !== dest) {
+              changed = true;
+              return { ...i, destination: dest, done: false };
+            }
+            return i;
+          });
+          if (!changed) continue;
+          const status = items.every((i) => i.done) ? "ready" : items.some((i) => i.done) ? "preparing" : "open";
+          await db.prepare("UPDATE orders SET items=?, status=?, updated_at=datetime('now') WHERE id=?")
+            .bind(JSON.stringify(items), status, o.id).run();
+        }
+      };
+      const DESTS = ["cocina", "barra"];
+
+      if (path === "/api/menu" && request.method === "POST") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede editar el menú" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const name = String(b.name || "").trim();
+        const price = Number(b.price);
+        const dest = DESTS.includes(b.destination) ? b.destination : "cocina";
+        if (!name) return json({ error: "El nombre es obligatorio" }, 400);
+        if (!(price >= 0)) return json({ error: "El precio no es válido" }, 400);
+        const id = crypto.randomUUID();
+        await db.prepare(
+          "INSERT INTO menu_items (id, name, category, price, description, destination, active, sort_order) VALUES (?,?,?,?,?,?,1,0)"
+        ).bind(id, name, String(b.category || "").trim() || "General", price, String(b.description || ""), dest).run();
+        return json({ id }, 201);
+      }
+
+      // Cambiar la estación de toda una categoría (ej. Bebidas -> barra)
+      if (path === "/api/menu-category" && request.method === "PATCH") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede editar el menú" }, 403);
+        const b = await request.json().catch(() => ({}));
+        if (!DESTS.includes(b.destination)) return json({ error: "Estación no válida" }, 400);
+        const cat = String(b.category || "General");
+        const { results } = await db.prepare(
+          "SELECT id FROM menu_items WHERE COALESCE(NULLIF(category,''),'General') = ?"
+        ).bind(cat).all();
+        const ids = (results || []).map((r) => r.id);
+        if (!ids.length) return json({ error: "Categoría no encontrada" }, 404);
+        await db.prepare(
+          "UPDATE menu_items SET destination=? WHERE COALESCE(NULLIF(category,''),'General') = ?"
+        ).bind(b.destination, cat).run();
+        await moveOpenOrderItems(ids, b.destination);
+        return json({ ok: true, updated: ids.length });
+      }
+
+      const mm = path.match(/^\/api\/menu\/([^\/]+)$/);
+      if (mm && request.method === "PATCH") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede editar el menú" }, 403);
+        const pid = decodeURIComponent(mm[1]);
+        const cur = await db.prepare("SELECT * FROM menu_items WHERE id=?").bind(pid).first();
+        if (!cur) return json({ error: "Producto no encontrado" }, 404);
+        const b = await request.json().catch(() => ({}));
+        const sets = [], vals = [];
+        if (typeof b.name === "string" && b.name.trim()) { sets.push("name=?"); vals.push(b.name.trim()); }
+        if (typeof b.category === "string" && b.category.trim()) { sets.push("category=?"); vals.push(b.category.trim()); }
+        if (typeof b.description === "string") { sets.push("description=?"); vals.push(b.description); }
+        if (b.price !== undefined && Number(b.price) >= 0) { sets.push("price=?"); vals.push(Number(b.price)); }
+        if (b.active !== undefined) { sets.push("active=?"); vals.push(b.active ? 1 : 0); }
+        if (b.destination !== undefined) {
+          if (!DESTS.includes(b.destination)) return json({ error: "Estación no válida" }, 400);
+          sets.push("destination=?"); vals.push(b.destination);
+        }
+        if (!sets.length) return json({ error: "Nada que actualizar" }, 400);
+        await db.prepare(`UPDATE menu_items SET ${sets.join(", ")} WHERE id=?`).bind(...vals, pid).run();
+        if (b.destination !== undefined) await moveOpenOrderItems([pid], b.destination);
+        return json({ ok: true });
+      }
+
       // ===== MESAS =====
       if (path === "/api/tables" && request.method === "GET") {
         let tables = [];
