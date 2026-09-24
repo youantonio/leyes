@@ -6,9 +6,8 @@ ALTER TABLE orders ADD COLUMN items TEXT DEFAULT '[]';
 ALTER TABLE orders ADD COLUMN custom_folio TEXT;
 ALTER TABLE menu_items ADD COLUMN destination TEXT DEFAULT 'cocina';
 
--- Opcional: mandar bebidas a barra (ajusta el nombre de la categoría)
--- SELECT DISTINCT category FROM menu_items;
--- UPDATE menu_items SET destination='barra' WHERE category='Bebidas';
+-- v24.4: ya NO hace falta SQL para mandar bebidas a barra.
+-- Se hace desde el sistema: Menú -> categoría -> "Toda a Barra".
 
 -- v24.3: la tabla de sesiones (pos_sessions) la crea el Worker automáticamente.
 -- Si quisieras crearla a mano:
