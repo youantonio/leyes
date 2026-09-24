@@ -65,7 +65,7 @@ export default {
 
       if (!sessionsReady) {
         await db.prepare(
-          `CREATE TABLE IF NOT EXISTS sessions (
+          `CREATE TABLE IF NOT EXISTS pos_sessions (
              token TEXT PRIMARY KEY, user_id TEXT, username TEXT, name TEXT, role TEXT, expires_at INTEGER)`
         ).run();
         sessionsReady = true;
@@ -113,9 +113,9 @@ export default {
           }, 401);
         }
 
-        await db.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(Date.now()).run();
+        await db.prepare("DELETE FROM pos_sessions WHERE expires_at < ?").bind(Date.now()).run();
         const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
-        await db.prepare("INSERT INTO sessions (token,user_id,username,name,role,expires_at) VALUES (?,?,?,?,?,?)")
+        await db.prepare("INSERT INTO pos_sessions (token,user_id,username,name,role,expires_at) VALUES (?,?,?,?,?,?)")
           .bind(token, String(user.id), user.username, user.name, user.role, Date.now() + SESSION_MS).run();
         return json({ token, user: { id: user.id, name: user.name, username: user.username, role: user.role } });
       }
@@ -124,13 +124,13 @@ export default {
       const auth = request.headers.get("Authorization") || "";
       const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
       const sess = token
-        ? await db.prepare("SELECT * FROM sessions WHERE token=? AND expires_at>?").bind(token, Date.now()).first()
+        ? await db.prepare("SELECT * FROM pos_sessions WHERE token=? AND expires_at>?").bind(token, Date.now()).first()
         : null;
       if (!sess) return json({ error: "Sesión expirada. Inicia sesión de nuevo." }, 401);
       const isAdmin = sess.role === "admin";
 
       if (path === "/api/logout" && request.method === "POST") {
-        await db.prepare("DELETE FROM sessions WHERE token=?").bind(token).run();
+        await db.prepare("DELETE FROM pos_sessions WHERE token=?").bind(token).run();
         return json({ ok: true });
       }
 
@@ -206,7 +206,7 @@ export default {
           await db.prepare(`UPDATE users SET ${sets.join(", ")}, updated_at=datetime('now') WHERE id=?`)
             .bind(...vals, uid).run();
           if (passChanged || b.active === false || b.active === 0)
-            await db.prepare("DELETE FROM sessions WHERE user_id=? AND token != ?").bind(uid, token).run();
+            await db.prepare("DELETE FROM pos_sessions WHERE user_id=? AND token != ?").bind(uid, token).run();
           return json({ ok: true });
         }
 
@@ -217,7 +217,7 @@ export default {
           if (target.role === "admin" && target.active && (await otherAdmins(uid)) === 0)
             return json({ error: "No puedes eliminar al único administrador" }, 400);
           await db.prepare("DELETE FROM users WHERE id=?").bind(uid).run();
-          await db.prepare("DELETE FROM sessions WHERE user_id=?").bind(uid).run();
+          await db.prepare("DELETE FROM pos_sessions WHERE user_id=?").bind(uid).run();
           return json({ ok: true });
         }
       }
