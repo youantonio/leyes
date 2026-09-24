@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v24 Oficial</title>
+<title>RUSH POS v24.3</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -104,7 +104,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <div style="flex:1"><input id="productSearch" class="search" placeholder="🔎 Buscar platillo, bebida..." oninput="renderProducts()"></div>
       <button onclick="loadAll()">↻</button>
     </div>
-    <div class="muted" style="font-size:13px;margin-bottom:2px">Agregando para:</div><div id="personChips" class="chips"></div>
+    <div class="muted" style="font-size:13px;margin-bottom:2px">Quién pide ahora (todas las personas van en la misma comanda):</div><div id="personChips" class="chips"></div>
     <div id="categoryChips" class="chips"></div>
     <div id="products"></div>
   </div>
@@ -115,11 +115,12 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <label>Tipo de Consumo:
         <select id="orderType"><option value="Restaurante">🍽️ Restaurante</option><option value="Para Llevar">📦 Para Llevar</option></select>
       </label>
-      <label>Mesa / Cancha:<select id="tableSelect"></select></label>
+      <label>Mesa / Cancha:<select id="tableSelect" onchange="onTableChange()"></select></label>
       <label>WhatsApp (10 dígitos):<input id="customerPhone" placeholder="Ej. 7711234567" maxlength="10"></label>
       <label>Nombre del cliente:<input id="customerName" placeholder="Nombre completo"></label>
-      <label>¿Cuántas personas?:<input id="peopleCount" type="number" min="1" max="20" value="1" oninput="onPeopleChange()"></label>
+      
     </div>
+    <div id="linkBanner"></div>
     <div id="cart" style="margin-top:12px"></div>
     <div class="row between" style="margin-top:13px"><span class="total">Total</span><span id="cartTotal" class="total">$0.00</span></div>
 
@@ -190,13 +191,18 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </section>
 
 <section id="lealtad" class="view hidden">
-  <div class="row between"><h1 class="title" style="margin:0">⭐ Lealtad y Difusión</h1></div>
+  <div class="row between"><h1 class="title" style="margin:0">⭐ Lealtad y Difusión</h1><button onclick="loadLoyaltyCustomers()">↻ Actualizar</button></div>
   <div class="card" style="background:#f0fdf4; border:1px solid #16a34a; margin-top:15px;">
-    <h2>📢 Campaña Masiva WhatsApp</h2>
-    <textarea id="bulkMessage" rows="3" placeholder="Escribe tu promoción..."></textarea>
-    <div style="margin-top:10px;"><button class="success" onclick="startCampaign()">🚀 Iniciar Envío</button></div>
+    <h2>📢 Campaña por WhatsApp</h2>
+    <textarea id="bulkMessage" rows="3" placeholder="Hola {nombre} 👋 Esta semana tenemos promoción en Rush Club Pádel..."></textarea>
+    <div class="muted" style="font-size:13px;margin-top:6px">Usa {nombre} para personalizar. Se abre WhatsApp con el mensaje listo para cada cliente seleccionado; tú solo das enviar.</div>
+    <div style="margin-top:10px;"><button class="success" onclick="startCampaign()">🚀 Iniciar envío a seleccionados (<span id="selCount">0</span>)</button></div>
+    <div id="campaignBar"></div>
   </div>
-  <div class="card" style="margin-top:15px;"><h2>Clientes</h2><div id="loyaltyList" style="overflow-x:auto;"></div></div>
+  <div class="card" style="margin-top:15px;">
+    <div class="row"><input id="loyaltySearch" class="search" placeholder="🔎 Buscar por nombre o teléfono" oninput="renderLoyalty()"><button onclick="toggleAllCustomers()">☑️ Todos</button></div>
+    <div id="loyaltyList" style="overflow-x:auto;margin-top:10px;"></div>
+  </div>
 </section>
 
 <section id="inventario" class="view hidden">
@@ -265,7 +271,9 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 const API="/api";
 let token=localStorage.getItem("rush_token");
 let me=null, products=[], tables=[], cart=[], inventoryItems=[], courtsList=[], activeReservations=[], currentCategory="TODOS";
-let currentTicketData=null, allOrdersCache=[], currentPerson=1;
+let currentTicketData=null, allOrdersCache=[], currentPerson=1, offsetPeople=0, linkedOrder=null;
+let usersCache=[], customers=[], selectedPhones=new Set(), campaignQueue=[], campaignIdx=0;
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const $=id=>document.getElementById(id);
 
 function toast(msg){
@@ -280,7 +288,10 @@ async function api(path,opts={}){
   try { r = await fetch(API+path,opts); } catch(e) { throw new Error("No hay conexión con el servidor"); }
   let data = {};
   try { data = await r.json(); } catch(e) {}
-  if(r.status===401){ if(path!=="/login") logout(false); throw new Error(data.error || "Credenciales inválidas"); }
+  if(r.status===401){
+    if(path!=="/login"){ logout(false); toast("Sesión expirada, inicia sesión de nuevo"); }
+    throw new Error(data.error || "Credenciales inválidas");
+  }
   if(!r.ok) throw new Error(data.error || "Error de servidor");
   return data;
 }
@@ -291,28 +302,24 @@ async function login(){
       username:$("loginUser").value.trim(), password:$("loginPass").value})});
     token=r.token; me=r.user;
     localStorage.setItem("rush_token",token);
+    localStorage.setItem("rush_user",JSON.stringify(me));
     showApp(); loadAll(); toast("✅ Acceso concedido");
   }catch(e){ toast(e.message); }
 }
 
 function logout(show=true){
-  token=null; me=null; localStorage.removeItem("rush_token");
+  if(show && token){ fetch(API+"/logout",{method:"POST",headers:{Authorization:"Bearer "+token}}).catch(()=>{}); }
+  token=null; me=null; localStorage.removeItem("rush_token"); localStorage.removeItem("rush_user");
   $("appView").classList.add("hidden"); $("loginView").classList.remove("hidden");
   if(show)toast("Sesión cerrada");
 }
 
 function boot(){
-  // Restaura la sesión si hay un token válido guardado
+  // Restaura la sesión guardada; si el servidor ya la venció, el primer request regresa al login
   if(token){
-    try{
-      const p = JSON.parse(atob(token));
-      if(p && p.exp > Date.now()){
-        me = { id: p.id, name: p.name || p.username, username: p.username, role: p.role };
-        showApp(); loadAll();
-        return;
-      }
-    }catch(e){}
-    localStorage.removeItem("rush_token"); token=null;
+    try{ me = JSON.parse(localStorage.getItem("rush_user")||"null"); }catch(e){ me=null; }
+    if(me && me.role){ showApp(); loadAll(); return; }
+    token=null; localStorage.removeItem("rush_token");
   }
   $("loginView").classList.remove("hidden");
 }
@@ -321,7 +328,7 @@ function isAdmin(){ return me?.role==="admin"; }
 
 function showApp(){
   $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
-  $("userPill").textContent=`● ${me.name} (${me.role})`;
+  $("userPill").textContent=`● ${me.name||me.username} (${me.role})`;
 
   let nav=[
     ["venta","🛒 Venta"],
@@ -336,6 +343,9 @@ function showApp(){
     ["productos","🍔 Menú"],
     ["usuarios","👥 Usuarios"]
   ];
+  const ROLE_VIEWS={ admin:null, mesero:["venta","canchas","mesas","ordenes"], cocina:["cocina"], barra:["barra"] };
+  const allowed = ROLE_VIEWS[me.role]===undefined ? ["venta","ordenes"] : ROLE_VIEWS[me.role];
+  if(allowed) nav = nav.filter(x=>allowed.includes(x[0]));
 
   $("nav").innerHTML=nav.map((x,i)=>`<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`).join("");
   view(nav[0][0], $("nav").firstElementChild);
@@ -358,31 +368,20 @@ async function loadAll(){
   if($("invItemSelect")) $("invItemSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
 }
 
-function peopleCount(){ return Math.max(1, Math.min(20, Number($("peopleCount").value)||1)); }
-function onPeopleChange(){ if(currentPerson>peopleCount()) currentPerson=peopleCount(); renderPersonChips(); }
-function setPerson(i){ currentPerson=i; renderPersonChips(); }
-function renderPersonChips(){
-  const n=peopleCount(); let h="";
-  for(let i=1;i<=n;i++) h+=`<button type="button" class="chip ${currentPerson===i?'active':''}" onclick="setPerson(${i})">👤 Persona ${i}</button>`;
-  $("personChips").innerHTML=h;
+function cleanName(n){ return String(n||"").replace(/\s*\(\d{10}\)\s*$/,"").trim() || "Mostrador"; }
+function tableLabel(o){
+  if(!o.table_id) return "Mostrador";
+  const t=tables.find(x=>String(x.id)===String(o.table_id));
+  return t ? (t.name||("Mesa "+t.number)) : "Mesa";
 }
 function personNum(p){ const m=String(p||"").match(/\d+/); return m?Number(m[0]):0; }
-function orderPeople(o){
-  const m=(o.notes||"").match(/👥 (\d+)/);
-  const fromItems=Math.max(0,...(o.items||[]).map(it=>personNum(it.person)));
-  return Math.max(m?Number(m[1]):1, fromItems, 1);
-}
+function orderPeople(o){ return Math.max(1,...(o.items||[]).map(it=>personNum(it.person))); }
 function groupByPerson(items){
   const g={}; items.forEach(it=>{ const p=it.person||"Persona 1"; (g[p]=g[p]||[]).push(it); });
   return Object.keys(g).sort((a,b)=>a.localeCompare(b,'es',{numeric:true})).map(p=>({person:p,items:g[p]}));
 }
-function stationNote(o,dest){
-  const key = dest==='barra' ? '☕ Barra:' : '🍳 Cocina:';
-  const p=(o.notes||"").split(" | ").find(s=>s.startsWith(key));
-  const v=p?p.slice(key.length).trim():"";
-  return (v && v!=='N/A') ? v : "";
-}
-function orderTypeLabel(o){ const f=(o.notes||"").split(" | ")[0]; return f.startsWith("[")?f:""; }
+function stationNote(o,dest){ return (o.np && o.np[dest==='barra'?'barra':'cocina']) || ""; }
+function orderTypeLabel(o){ return (o.np && o.np.type) ? `[${o.np.type}]` : ""; }
 function stationBadges(o){
   return ['cocina','barra'].map(d=>{
     const its=(o.items||[]).filter(it=>(it.destination||'cocina')===d);
@@ -390,6 +389,36 @@ function stationBadges(o){
     const ok=its.every(it=>it.done);
     return `<span class="status ${ok?'ready':'open'}">${d==='barra'?'☕':'🍳'} ${ok?'Listo':'Pendiente'}</span>`;
   }).join(" ");
+}
+// ----- personas: la 1a pide, luego "Nueva persona", etc. Todas en la misma comanda -----
+function maxPersonUI(){ return Math.max(1, offsetPeople, currentPerson, ...cart.map(x=>personNum(x.person))); }
+function renderPersonChips(){
+  const P=maxPersonUI(); let h="";
+  for(let i=1;i<=P;i++) h+=`<button type="button" class="chip ${currentPerson===i?'active':''}" onclick="setPerson(${i})">👤 Persona ${i}${i<=offsetPeople?' ✓':''}</button>`;
+  h+=`<button type="button" class="chip" style="background:#dcfce7;color:#166534" onclick="nextPerson()">➕ Nueva persona</button>`;
+  $("personChips").innerHTML=h;
+}
+function setPerson(i){ currentPerson=i; renderPersonChips(); }
+function nextPerson(){
+  const P=maxPersonUI();
+  const hasItems = currentPerson<=offsetPeople || cart.some(x=>personNum(x.person)===currentPerson);
+  if(currentPerson===P && !hasItems) return toast(`Agrega productos a la Persona ${currentPerson} primero`);
+  currentPerson=P+1; renderPersonChips();
+}
+async function onTableChange(){
+  linkedOrder=null; offsetPeople=0;
+  const tid=$("tableSelect").value;
+  if(tid){
+    const os=await api("/orders").catch(()=>[]);
+    linkedOrder=(Array.isArray(os)?os:[]).find(o=>String(o.table_id)===String(tid)) || null;
+    if(linkedOrder) offsetPeople=orderPeople(linkedOrder);
+  }
+  if(!cart.length) currentPerson=offsetPeople+1;
+  renderLinkBanner(); renderPersonChips();
+}
+function unlinkOrder(){ linkedOrder=null; offsetPeople=0; if(!cart.length) currentPerson=1; renderLinkBanner(); renderPersonChips(); }
+function renderLinkBanner(){
+  $("linkBanner").innerHTML = linkedOrder ? `<div class="card" style="background:#eff6ff;border-color:#93c5fd;margin-top:10px">🔗 Esta mesa ya tiene la comanda <b>#${esc(linkedOrder.custom_folio||linkedOrder.id.slice(0,6))}</b> (${offsetPeople} persona(s)). Lo que envíes se agregará a esa misma comanda.<div style="margin-top:8px"><button type="button" onclick="unlinkOrder()">Crear comanda nueva</button></div></div>` : "";
 }
 
 function renderCategoryChips(){ const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))]; $("categoryChips").innerHTML = cats.map(c=>`<button type="button" class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join(""); }
@@ -404,7 +433,7 @@ function addToCart(id){
   const person = "Persona "+currentPerson;
   const ex=cart.find(x=>String(x.menu_item_id)===String(id) && x.person===person);
   if(ex) ex.qty++; else cart.push({menu_item_id:id, name:p.name, qty:1, unit_price:p.price, destination: p.destination || 'cocina', person: person});
-  renderCart();
+  renderCart(); renderPersonChips();
 }
 function renderCart(){
   const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
@@ -412,24 +441,36 @@ function renderCart(){
   const names=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));
   $("cart").innerHTML=cart.length?names.map(p=>{
     const sub=groups[p].reduce((s,r)=>s+r.x.qty*r.x.unit_price,0);
-    return `<div style="margin-top:8px"><div class="row between"><b>👤 ${p}</b><span class="muted">$${sub}</span></div>`+
-      groups[p].map(({x,i})=>`<div class="order-item"><div>${x.qty} × ${x.name} <small class="muted">(${x.destination==='barra'?'☕':'🍳'})</small></div><div class="row"><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart()">✕</button></div></div>`).join("")+`</div>`;
+    return `<div style="margin-top:8px"><div class="row between"><b>👤 ${esc(p)}</b><span class="muted">$${sub}</span></div>`+
+      groups[p].map(({x,i})=>`<div class="order-item"><div>${x.qty} × ${esc(x.name)} <small class="muted">(${x.destination==='barra'?'☕':'🍳'})</small></div><div class="row"><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart();renderPersonChips()">✕</button></div></div>`).join("")+`</div>`;
   }).join(""):"<p class='muted'>Carrito vacío</p>";
   $("cartTotal").textContent="$"+total;
 }
-function renderTableSelect(){ $("tableSelect").innerHTML="<option value=''>Mostrador / General</option>" + tables.map(t=>`<option value="${t.id}">${t.name||"Mesa "+t.number}</option>`).join(""); }
+function renderTableSelect(){
+  const cur=$("tableSelect").value;
+  $("tableSelect").innerHTML="<option value=''>Mostrador / General</option>" + tables.map(t=>`<option value="${esc(t.id)}">${esc(t.name||"Mesa "+t.number)}</option>`).join("");
+  $("tableSelect").value=cur;
+}
 
 async function sendOrder(){
   if(!cart.length) return toast("Agrega productos al carrito.");
-  const phone = $("customerPhone").value.trim(), name = $("customerName").value.trim() || "Mostrador", orderType = $("orderType").value, tableId = $("tableSelect").value;
-  const people = Math.max(peopleCount(), ...cart.map(x=>personNum(x.person)));
-  const notes = `[${orderType}] | 👥 ${people} | 🍳 Cocina: ${$("notesKitchen").value.trim()||'N/A'} | ☕ Barra: ${$("notesBarra").value.trim()||'N/A'}`;
-  if(!phone || phone.length < 10) return toast("WhatsApp 10 dígitos obligatorio.");
-  const customFolio = `${String(new Date().getDate()).padStart(2,'0')}${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getHours()).padStart(2,'0')}${String(new Date().getMinutes()).padStart(2,'0')}`;
-
+  const notes={ type:$("orderType").value, cocina:$("notesKitchen").value.trim(), barra:$("notesBarra").value.trim() };
   try{
-    await api("/orders",{method:"POST",body:JSON.stringify({table_id: tableId, customer_name: `${name} (${phone})`, customer_phone: phone, notes: notes, items: cart, custom_folio: customFolio})});
-    toast("¡Orden enviada!"); cart=[]; renderCart(); $("customerName").value=""; $("customerPhone").value=""; $("notesKitchen").value=""; $("notesBarra").value=""; $("peopleCount").value=1; currentPerson=1; loadAll();
+    if(linkedOrder){
+      await api("/orders/"+linkedOrder.id,{method:"PATCH",body:JSON.stringify({add_items:cart, add_notes:notes})});
+      toast("¡Agregado a la comanda #"+(linkedOrder.custom_folio||linkedOrder.id.slice(0,6))+"!");
+    }else{
+      let phone=$("customerPhone").value.replace(/\D/g,''); if(phone.length>10) phone=phone.slice(-10);
+      if(phone.length<10) return toast("WhatsApp de 10 dígitos obligatorio.");
+      const name=$("customerName").value.trim()||"Mostrador";
+      const d=new Date(), p2=n=>String(n).padStart(2,'0');
+      const customFolio=`${p2(d.getDate())}${p2(d.getMonth()+1)}-${p2(d.getHours())}${p2(d.getMinutes())}`;
+      await api("/orders",{method:"POST",body:JSON.stringify({table_id:$("tableSelect").value, customer_name:name, customer_phone:phone, notes:JSON.stringify(notes), items:cart, custom_folio:customFolio})});
+      toast("¡Orden enviada!");
+    }
+    cart=[]; $("customerName").value=""; $("customerPhone").value=""; $("notesKitchen").value=""; $("notesBarra").value="";
+    $("tableSelect").value=""; linkedOrder=null; offsetPeople=0; currentPerson=1;
+    renderCart(); renderLinkBanner(); renderPersonChips(); loadAll();
   }catch(e){toast(e.message)}
 }
 
@@ -462,9 +503,9 @@ async function loadStation(dest){
   for(const o of (Array.isArray(os)?os:[])){
     const items = (o.items||[]).filter(it => (it.destination||'cocina') === dest && !it.done);
     if(!items.length) continue;
-    const note = stationNote(o,dest), type = orderTypeLabel(o);
-    const groups = groupByPerson(items).map(g=>`<div class="kitchen-item"><b>👤 ${g.person}</b>${g.items.map(it=>`<div>${it.qty}× ${it.name}</div>`).join("")}</div>`).join("");
-    html += `<div class="card" style="border-left: 6px solid ${isBar?'#2563eb':'#d97706'};"><h3>Orden #${o.custom_folio||o.id.slice(0,6)}</h3><p><b>Cliente:</b> ${o.customer_name}</p><p class="muted">${type} · 👥 ${orderPeople(o)} persona(s)</p>${note?`<p><b>Notas:</b> ${note}</p>`:''}<hr>${groups}<button class="success" style="width:100%;margin-top:10px" onclick="markReady('${o.id}','${dest}')">✅ ${isBar?'Bebidas':'Alimentos'} listos</button></div>`;
+    const note = stationNote(o,dest);
+    const groups = groupByPerson(items).map(g=>`<div class="kitchen-item"><b>👤 ${esc(g.person)}</b>${g.items.map(it=>`<div>${it.qty}× ${esc(it.name)}</div>`).join("")}</div>`).join("");
+    html += `<div class="card" style="border-left: 6px solid ${isBar?'#2563eb':'#d97706'};"><h3>Orden #${esc(o.custom_folio||o.id.slice(0,6))} · ${esc(tableLabel(o))}</h3><p><b>Cliente:</b> ${esc(cleanName(o.customer_name))}</p><p class="muted">${esc(orderTypeLabel(o))} · 👥 ${orderPeople(o)} persona(s)</p>${note?`<p style="background:#fff7ed;padding:8px;border-radius:10px"><b>📝 Nota ${isBar?'de barra':'de cocina'}:</b> ${esc(note)}</p>`:''}<hr>${groups}<button class="success" style="width:100%;margin-top:10px" onclick="markReady('${o.id}','${dest}')">✅ ${isBar?'Bebidas':'Alimentos'} listos</button></div>`;
   }
   $(isBar?"barraOrders":"kitchenOrders").innerHTML = html || `<p class='muted'>${isBar?'Sin bebidas pendientes.':'Sin alimentos pendientes.'}</p>`;
 }
@@ -479,39 +520,33 @@ async function loadOrders(){
   try{
     allOrdersCache = await api("/orders").catch(()=>[]); if(!Array.isArray(allOrdersCache)) allOrdersCache=[];
     $("orders").innerHTML = allOrdersCache.map(o=>{
-      const itemsSummary = groupByPerson(o.items||[]).map(g=>`<b>${g.person}:</b> `+g.items.map(it=>`${it.qty||1}x ${it.name}`).join(", ")).join("<br>");
-      const total = o.items ? o.items.reduce((acc, it) => acc + ((it.qty||1) * (it.unit_price||it.price||0)), 0) : o.total;
+      const itemsSummary = groupByPerson(o.items||[]).map(g=>`<b>${esc(g.person)}:</b> `+g.items.map(it=>`${it.qty||1}x ${esc(it.name)}`).join(", ")).join("<br>");
+      const total = (o.items||[]).reduce((acc, it) => acc + ((it.qty||1) * (it.unit_price||it.price||0)), 0);
+      const nc=stationNote(o,'cocina'), nb=stationNote(o,'barra');
       return `<div class="card" style="border-left: 6px solid #111;">
-        <div class="row between"><h3 style="margin:0;">Orden #${o.custom_folio || o.id.slice(0,6)}</h3><span class="status ${o.status}">${o.status}</span></div>
-        <p><b>Cliente:</b> ${o.customer_name} · 👥 ${orderPeople(o)}</p><p>${stationBadges(o)}</p><p style="color:#555;font-size:14px;">${itemsSummary}</p><p><b>Total:</b> <b style="color:#16a34a;">$${total}</b></p>
-        <div class="row" style="flex-wrap:wrap;"><button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ticket</button><button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir</button><button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>${isAdmin()?`<button class="danger" onclick="api('/orders/${o.id}',{method:'DELETE'}).then(loadOrders)">🗑️</button>`:""}</div></div>`;
+        <div class="row between"><h3 style="margin:0;">Orden #${esc(o.custom_folio || o.id.slice(0,6))} · ${esc(tableLabel(o))}</h3><span class="status ${esc(o.status)}">${esc(o.status)}</span></div>
+        <p><b>Cliente:</b> ${esc(cleanName(o.customer_name))}${o.customer_phone?` · 📱 ${esc(o.customer_phone)}`:''} · 👥 ${orderPeople(o)}</p><p>${stationBadges(o)}</p><p style="color:#555;font-size:14px;">${itemsSummary}</p>${nc?`<p class="muted">🍳 Nota: ${esc(nc)}</p>`:''}${nb?`<p class="muted">☕ Nota: ${esc(nb)}</p>`:''}<p><b>Total:</b> <b style="color:#16a34a;">$${total}</b></p>
+        <div class="row" style="flex-wrap:wrap;"><button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ticket</button><button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir</button><button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️</button>`:""}</div></div>`;
     }).join("") || "<p class='muted'>Sin órdenes.</p>";
   }catch(e){}
 }
+async function deleteOrder(id){ if(!confirm("¿Borrar esta orden?")) return; try{ await api('/orders/'+id,{method:'DELETE'}); loadOrders(); }catch(e){ toast(e.message); } }
 function openAddItemsModal(orderId){
-  const o = allOrdersCache.find(x=>x.id===orderId) || {items:[],notes:""};
+  const o = allOrdersCache.find(x=>x.id===orderId) || {items:[]};
   const n = orderPeople(o);
   let opts=""; for(let i=1;i<=n;i++) opts+=`<option value="${i}">Persona ${i}</option>`;
   opts+=`<option value="${n+1}">＋ Persona nueva (Persona ${n+1})</option>`;
   $("extraPerson").innerHTML = opts;
   $("addingOrderId").value = orderId;
-  $("extraProductSelect").innerHTML = products.map(p=>`<option value="${p.id}">${p.name} ($${p.price})</option>`).join("");
+  $("extraProductSelect").innerHTML = products.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} ($${p.price})</option>`).join("");
   $("addItemsModal").classList.remove("hidden");
 }
 async function confirmAddExtraItem(){
   const orderId = $("addingOrderId").value, prod = products.find(p=>String(p.id)===$("extraProductSelect").value);
   if(!prod) return;
   try {
-    const o = await api("/orders/" + orderId); let items = o.items || [];
-    const pNum = Number($("extraPerson").value)||1;
-    const people = orderPeople(o);
-    items.push({ menu_item_id: prod.id, name: prod.name + ($("extraNote").value ? ` (${$("extraNote").value})` : ''), qty: Number($("extraQty").value||1), unit_price: prod.price, destination: prod.destination||'cocina', person: "Persona "+pNum });
-    const body = { items };
-    if(pNum>people){
-      const cur=o.notes||"";
-      body.notes = /👥 \d+/.test(cur) ? cur.replace(/👥 \d+/, "👥 "+pNum) : (cur+" | 👥 "+pNum);
-    }
-    await api("/orders/" + orderId, { method: "PATCH", body: JSON.stringify(body) });
+    const item = { menu_item_id: prod.id, name: prod.name + ($("extraNote").value ? ` (${$("extraNote").value})` : ''), qty: Number($("extraQty").value||1), unit_price: prod.price, destination: prod.destination||'cocina', person: "Persona "+(Number($("extraPerson").value)||1) };
+    await api("/orders/" + orderId, { method: "PATCH", body: JSON.stringify({ add_items: [item] }) });
     toast("Añadido"); $("addItemsModal").classList.add("hidden"); $("extraNote").value=""; loadOrders();
   } catch(e) { toast(e.message); }
 }
@@ -526,7 +561,7 @@ async function payAndClear(id){
 
 function ticketHead(o){
   const folio = o.custom_folio || o.id.slice(0,6);
-  return `<div style="text-align:left;"><b>Folio:</b> #${folio}<br><b>Cliente:</b> ${o.customer_name}<br><b>Personas:</b> ${orderPeople(o)} ${orderTypeLabel(o)}<br><b>Fecha:</b> ${new Date().toLocaleString()}</div>`;
+  return `<div style="text-align:left;"><b>Folio:</b> #${esc(folio)}<br><b>Lugar:</b> ${esc(tableLabel(o))} ${esc(orderTypeLabel(o))}<br><b>Cliente:</b> ${esc(cleanName(o.customer_name))}<br><b>Personas:</b> ${orderPeople(o)}<br><b>Fecha:</b> ${new Date().toLocaleString()}</div>`;
 }
 async function previewTicket(id){
   const o = await api("/orders/" + id).catch(()=>allOrdersCache.find(x => x.id === id));
@@ -536,13 +571,13 @@ async function previewTicket(id){
   const total = items.reduce((acc, it) => acc + ((it.qty||1)*(it.unit_price||0)), 0);
   const custBody = groupByPerson(items).map(g=>{
     const sub=g.items.reduce((s,it)=>s+(it.qty||1)*(it.unit_price||0),0);
-    return `<div class="tk-person">👤 ${g.person}</div>`+g.items.map(it=>`<div class="tk-row"><span>${it.qty||1}x ${it.name}</span><span>$${(it.qty||1)*(it.unit_price||0)}</span></div>`).join("")+`<div class="tk-row"><span>Subtotal</span><span>$${sub}</span></div>`;
+    return `<div class="tk-person">👤 ${esc(g.person)}</div>`+g.items.map(it=>`<div class="tk-row"><span>${it.qty||1}x ${esc(it.name)}</span><span>$${(it.qty||1)*(it.unit_price||0)}</span></div>`).join("")+`<div class="tk-row"><span>Subtotal</span><span>$${sub}</span></div>`;
   }).join("");
   const station = (dest,title)=>{
     const its=items.filter(it=>(it.destination||'cocina')===dest);
     if(!its.length) return "";
     const n=stationNote(o,dest);
-    return `<div style="text-align:center;font-weight:bold;margin-top:6px">${title}</div>`+groupByPerson(its).map(g=>`<div class="tk-person">👤 ${g.person}</div>`+g.items.map(it=>`<div>${it.qty||1}x ${it.name}</div>`).join("")).join("")+(n?`<div>Nota: ${n}</div>`:"")+`<hr>`;
+    return `<div style="text-align:center;font-weight:bold;margin-top:6px">${title}</div>`+groupByPerson(its).map(g=>`<div class="tk-person">👤 ${esc(g.person)}</div>`+g.items.map(it=>`<div>${it.qty||1}x ${esc(it.name)}</div>`).join("")).join("")+(n?`<div><b>NOTA:</b> ${esc(n)}</div>`:"")+`<hr>`;
   };
   $("ticketContent").innerHTML =
    `<div class="ticket-preview"><div style="text-align:center"><b>RUSH CLUB PÁDEL</b><br><small>Comprobante cliente</small></div><hr>${ticketHead(o)}<hr>${custBody}<hr><div class="tk-row" style="font-weight:bold;font-size:14px"><span>TOTAL</span><span>$${total}</span></div><div style="text-align:center;margin-top:8px"><small>¡Gracias por tu visita!</small></div></div>`+
@@ -551,12 +586,13 @@ async function previewTicket(id){
 }
 function sendTicketWhatsApp(){
   if(!currentTicketData) return;
-  let o = currentTicketData, phone = o.customer_phone;
-  if(!phone || String(phone).length < 10) { const match = JSON.stringify(o).match(/\d{10}/); if(match) phone = match[0]; }
+  const o = currentTicketData;
+  let phone = String(o.customer_phone||"").replace(/\D/g,"");
+  if(phone.length<10){ const m=JSON.stringify(o).match(/\d{10}/); if(m) phone=m[0]; }
   if(!phone) return toast("No hay WhatsApp.");
   const itemsText = groupByPerson(o.items||[]).map(g=>`*${g.person}*\n`+g.items.map(it=>`- ${it.qty||1}x ${it.name}`).join("\n")).join("\n");
-  const total = o.items ? o.items.reduce((acc, it) => acc + ((it.qty||1)*(it.unit_price||0)), 0) : o.total;
-  window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(`Hola 👋 Detalle en *Rush Club Pádel*:\n📋 Folio: #${o.custom_folio||o.id.slice(0,6)}\n🏟️ ${o.customer_name}\n\n${itemsText}\n\n💰 TOTAL: $${total}`)}`, '_blank');
+  const total = (o.items||[]).reduce((acc, it) => acc + ((it.qty||1)*(it.unit_price||0)), 0);
+  window.open(`https://wa.me/52${phone.slice(-10)}?text=${encodeURIComponent(`Hola 👋 Detalle en *Rush Club Pádel*:\n📋 Folio: #${o.custom_folio||o.id.slice(0,6)}\n\n${itemsText}\n\n💰 TOTAL: $${total}`)}`, '_blank');
 }
 
 async function registerManualTx(){
@@ -591,10 +627,84 @@ async function updateStockDaily(){
 
 async function createProduct(){ await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value, category:$("pCategory").value, price:Number($("pPrice").value), description:$("pDesc").value, destination:$("pDestination").value})}).catch(()=>{}); toast("Producto creado"); loadAll(); }
 function renderProductAdmin(){ $("productAdmin").innerHTML = products.map(p=>`<div class="card"><h3>${p.name}</h3><p>$${p.price} · ${(p.destination||'cocina')==='barra'?'☕ Barra':'🍳 Cocina'}</p><button class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button></div>`).join(""); }
-async function loadUsers(){ const us = await api("/users").catch(()=>[]); $("users").innerHTML = `<table><thead><tr><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${(Array.isArray(us)?us:[]).map(u=>`<tr><td>${u.username}</td><td>${u.role}</td><td><button class="danger" onclick="api('/users/${u.id}',{method:'DELETE'}).then(loadUsers)">🗑️</button></td></tr>`).join("")}</tbody></table>`; }
-async function createUser(){ await api("/users",{method:"POST",body:JSON.stringify({name:$("uName").value, username:$("uUsername").value, password:$("uPassword").value, role:$("uRole").value})}).catch(()=>{}); toast("Usuario creado"); loadUsers(); }
+const ROLE_LABEL={admin:"Administrador",mesero:"Mesero",cocina:"Cocina",barra:"Barra"};
+async function loadUsers(){
+  try{
+    usersCache = await api("/users");
+    $("users").innerHTML = usersCache.length ? `<div class="card" style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${usersCache.map((u,i)=>`<tr><td>${esc(u.name)}</td><td><b>${esc(u.username)}</b></td><td>${esc(ROLE_LABEL[u.role]||u.role)}</td><td>${u.legacy?'⚠️ Falta contraseña nueva':(u.active?'🟢 Activo':'⚪ Inactivo')}</td><td style="white-space:nowrap"><button class="warning" onclick="changePassword(${i})">🔑 Contraseña</button> <button class="danger" onclick="deleteUser(${i})">🗑️</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Sin usuarios.</p>";
+  }catch(e){ $("users").innerHTML=`<p class="muted">${esc(e.message)}</p>`; }
+}
+async function createUser(){
+  const b={name:$("uName").value.trim(), username:$("uUsername").value.trim(), password:$("uPassword").value, role:$("uRole").value};
+  if(!b.name||!b.username||!b.password) return toast("Completa nombre, usuario y contraseña");
+  try{
+    await api("/users",{method:"POST",body:JSON.stringify(b)});
+    toast("Usuario creado ✅"); $("uName").value=""; $("uUsername").value=""; $("uPassword").value=""; loadUsers();
+  }catch(e){ toast(e.message); }
+}
+async function changePassword(i){
+  const u=usersCache[i]; if(!u) return;
+  const np=prompt(`Nueva contraseña para "${u.username}" (mínimo 4 caracteres):`);
+  if(np===null) return;
+  if(np.length<4) return toast("Mínimo 4 caracteres");
+  try{ await api("/users/"+encodeURIComponent(u.id),{method:"PATCH",body:JSON.stringify({password:np})}); toast("Contraseña actualizada ✅"); loadUsers(); }
+  catch(e){ toast(e.message); }
+}
+async function deleteUser(i){
+  const u=usersCache[i]; if(!u) return;
+  if(!confirm(`¿Eliminar al usuario "${u.username}"? No se puede deshacer.`)) return;
+  try{ await api("/users/"+encodeURIComponent(u.id),{method:"DELETE"}); toast("Usuario eliminado"); loadUsers(); }
+  catch(e){ toast(e.message); }
+}
 
-function loadLoyaltyCustomers(){} function startCampaign(){} function sendNextCampaign(){}
+// ----- Lealtad: clientes salen de las órdenes (nombre + WhatsApp capturados por el mesero) -----
+async function loadLoyaltyCustomers(){
+  try{ customers = await api("/customers"); }catch(e){ customers=[]; toast(e.message); }
+  renderLoyalty();
+}
+function filteredCustomers(){
+  const q=($("loyaltySearch")?.value||"").toLowerCase().trim();
+  return customers.map((c,idx)=>({c,idx})).filter(({c})=>!q || c.name.toLowerCase().includes(q) || String(c.phone).includes(q));
+}
+function renderLoyalty(){
+  const list=filteredCustomers();
+  $("selCount").textContent=selectedPhones.size;
+  $("loyaltyList").innerHTML = list.length ? `<table><thead><tr><th></th><th>Cliente</th><th>WhatsApp</th><th>Visitas</th><th>Gastado</th><th>Última</th><th></th></tr></thead><tbody>${list.map(({c,idx})=>`<tr><td><input type="checkbox" style="width:auto" ${selectedPhones.has(c.phone)?'checked':''} onchange="toggleCustomer(${idx})"></td><td><b>${esc(c.name)}</b></td><td>${esc(c.phone)}</td><td>${c.visits}</td><td>$${Math.round(c.spent)}</td><td>${esc((c.last_visit||"").slice(0,10))}</td><td><button class="success" onclick="messageCustomer(${idx})">💬</button></td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Aún no hay clientes. Aparecen aquí cuando el mesero captura nombre y WhatsApp en una orden.</p>";
+}
+function toggleCustomer(idx){ const p=customers[idx].phone; if(selectedPhones.has(p)) selectedPhones.delete(p); else selectedPhones.add(p); renderLoyalty(); }
+function toggleAllCustomers(){
+  const list=filteredCustomers();
+  const all=list.length && list.every(({c})=>selectedPhones.has(c.phone));
+  list.forEach(({c})=>all?selectedPhones.delete(c.phone):selectedPhones.add(c.phone));
+  renderLoyalty();
+}
+function firstName(n){ return String(n||"").split(" ")[0]||""; }
+function campaignText(c){
+  const t=$("bulkMessage").value.trim() || "Hola {nombre} 👋";
+  return t.replace(/\{nombre\}/gi, firstName(c.name));
+}
+function messageCustomer(idx){ const c=customers[idx]; window.open(`https://wa.me/52${c.phone}?text=${encodeURIComponent(campaignText(c))}`,'_blank'); }
+function startCampaign(){
+  if(!$("bulkMessage").value.trim()) return toast("Escribe el mensaje de la campaña.");
+  const list=customers.filter(c=>selectedPhones.has(c.phone));
+  if(!list.length) return toast("Selecciona al menos un cliente.");
+  campaignQueue=list; campaignIdx=0; sendNextCampaign();
+}
+function sendNextCampaign(){
+  if(campaignIdx>=campaignQueue.length){
+    if(campaignQueue.length) toast("Campaña terminada ✅");
+    campaignQueue=[]; campaignIdx=0; renderCampaignBar(); return;
+  }
+  const c=campaignQueue[campaignIdx++];
+  window.open(`https://wa.me/52${c.phone}?text=${encodeURIComponent(campaignText(c))}`,'_blank');
+  renderCampaignBar();
+}
+function renderCampaignBar(){
+  if(!campaignQueue.length){ $("campaignBar").innerHTML=""; return; }
+  const next=campaignQueue[campaignIdx];
+  $("campaignBar").innerHTML=`<div class="card" style="margin-top:10px"><b>Enviados ${campaignIdx} de ${campaignQueue.length}</b>${next?`<div class="muted">Siguiente: ${esc(next.name)}</div><button class="primary" style="margin-top:8px" onclick="sendNextCampaign()">➡️ Abrir WhatsApp del siguiente</button>`:`<div style="margin-top:8px"><button class="success" onclick="sendNextCampaign()">✅ Terminar campaña</button></div>`}</div>`;
+}
+
 boot();
 </script>
 </body>
