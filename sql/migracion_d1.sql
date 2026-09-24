@@ -9,3 +9,7 @@ ALTER TABLE menu_items ADD COLUMN destination TEXT DEFAULT 'cocina';
 -- Opcional: mandar bebidas a barra (ajusta el nombre de la categoría)
 -- SELECT DISTINCT category FROM menu_items;
 -- UPDATE menu_items SET destination='barra' WHERE category='Bebidas';
+
+-- v24.3: la tabla de sesiones (pos_sessions) la crea el Worker automáticamente.
+-- Si quisieras crearla a mano:
+-- CREATE TABLE IF NOT EXISTS pos_sessions (token TEXT PRIMARY KEY, user_id TEXT, username TEXT, name TEXT, role TEXT, expires_at INTEGER);
