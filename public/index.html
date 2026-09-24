@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111">
-<title>RUSH POS v24.4</title>
+<title>RUSH POS v24.5</title>
 <style>
 :root{ font-family:Inter,Arial,sans-serif; color:#111; background:#f5f5f5; --dark:#111; --muted:#707070; --card:#fff; }
 *{box-sizing:border-box} body{margin:0;background:#f5f5f5} .hidden{display:none!important}
@@ -37,6 +37,7 @@ main{max-width:1180px;margin:auto;padding:16px}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:6px 0 14px;white-space:nowrap;scrollbar-width:thin}
 .chip{display:inline-block;border-radius:999px;padding:10px 18px;background:#e5e7eb;cursor:pointer;border:0;font-weight:700;font-size:14px}
 .chip.active{background:#111;color:#fff}
+.sectab{font-size:16px;padding:12px 22px}
 .product-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .product{ min-height:142px;text-align:left;padding:15px;border-radius:17px; display:flex;flex-direction:column;justify-content:space-between; border:1px solid #e2e2e2;background:#fff }
 .product b{font-size:17px;line-height:1.2} .product .desc{font-size:12px;color:#777;margin-top:5px;line-height:1.3}
@@ -105,6 +106,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <button onclick="loadAll()">↻</button>
     </div>
     <div class="muted" style="font-size:13px;margin-bottom:2px">Quién pide ahora (todas las personas van en la misma comanda):</div><div id="personChips" class="chips"></div>
+    <div id="sectionTabs" class="chips"></div>
     <div id="categoryChips" class="chips"></div>
     <div id="products"></div>
   </div>
@@ -221,18 +223,28 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 
 <section id="productos" class="view hidden">
   <h1 class="title">Catálogo de Menú</h1>
+  <div id="destAlert"></div>
   <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">➕ Nuevo producto</h2>
     <div class="grid">
       <input id="pName" placeholder="Nombre">
-      <input id="pCategory" placeholder="Categoría (elige una o escribe nueva)" list="catList"><datalist id="catList"></datalist>
+      <select id="pCategory"></select>
       <input id="pPrice" type="number" step=".01" placeholder="Precio">
-      <select id="pDestination"><option value="cocina">🍳 Cocina</option><option value="barra">☕ Barra</option></select>
-      <input id="pDesc" placeholder="Descripción">
-      <button class="primary" onclick="createProduct()" style="grid-column:1/-1;">Crear Producto</button>
+      <input id="pDesc" placeholder="Descripción (opcional)">
+      <button class="primary" onclick="createProduct()" style="grid-column:1/-1;">Crear producto</button>
     </div>
+    <div class="muted" style="font-size:13px;margin-top:6px">La estación (Cocina o Barra) se asigna sola según la sección de la categoría.</div>
   </div>
-  <div id="destAlert"></div>
-  <div id="productAdmin" style="margin-top:15px"></div>
+  <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">🗂️ Secciones y categorías</h2>
+    <div id="menuStructure"></div>
+  </div>
+  <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">🏷️ Clasificar productos</h2>
+    <div class="row" style="flex-wrap:wrap"><button class="primary" onclick="autoClassify()">✨ Sugerir clasificación automática</button><button class="success" id="saveClassBtn" onclick="saveClassification()">💾 Guardar (0)</button></div>
+    <div class="row" style="margin-top:10px"><input id="menuFilter" class="search" placeholder="🔎 Buscar producto" oninput="renderClassifyTable()"><select id="classifyMode" onchange="renderClassifyTable()" style="width:auto"><option value="sin">Solo sin clasificar</option><option value="todos">Todos</option></select></div>
+    <div id="classifyTable" style="overflow-x:auto;margin-top:10px"></div>
+  </div>
 </section>
 
 <section id="usuarios" class="view hidden">
@@ -273,7 +285,7 @@ const API="/api";
 let token=localStorage.getItem("rush_token");
 let me=null, products=[], tables=[], cart=[], inventoryItems=[], courtsList=[], activeReservations=[], currentCategory="TODOS";
 let currentTicketData=null, allOrdersCache=[], currentPerson=1, offsetPeople=0, linkedOrder=null;
-let currentView="venta", catNames=[];
+let currentView="venta", currentSection="", chipKeys=[], menuStructure={sections:[]}, popular=[], pendingClass={};
 let usersCache=[], customers=[], selectedPhones=new Set(), campaignQueue=[], campaignIdx=0;
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const $=id=>document.getElementById(id);
@@ -367,7 +379,9 @@ function view(id,btn){
 async function loadAll(){
   products=await api("/menu").catch(()=>[]); tables=await api("/tables").catch(()=>[]); inventoryItems=await api("/inventory").catch(()=>[]);
   if(!Array.isArray(products)) products=[]; if(!Array.isArray(tables)) tables=[]; if(!Array.isArray(inventoryItems)) inventoryItems=[];
-  renderCategoryChips(); renderPersonChips(); renderProducts(); renderTableSelect(); renderTables(); renderCart();
+  const st=await api("/menu-structure").catch(()=>null); menuStructure=(st&&Array.isArray(st.sections))?st:{sections:[]};
+  const pop=await api("/menu-popular").catch(()=>[]); popular=Array.isArray(pop)?pop:[];
+  renderSectionTabs(); renderCategoryChips(); renderPersonChips(); renderProducts(); renderTableSelect(); renderTables(); renderCart();
   if($("invItemSelect")) $("invItemSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
 }
 
@@ -424,12 +438,52 @@ function renderLinkBanner(){
   $("linkBanner").innerHTML = linkedOrder ? `<div class="card" style="background:#eff6ff;border-color:#93c5fd;margin-top:10px">🔗 Esta mesa ya tiene la comanda <b>#${esc(linkedOrder.custom_folio||linkedOrder.id.slice(0,6))}</b> (${offsetPeople} persona(s)). Lo que envíes se agregará a esa misma comanda.<div style="margin-top:8px"><button type="button" onclick="unlinkOrder()">Crear comanda nueva</button></div></div>` : "";
 }
 
-function renderCategoryChips(){ const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))]; $("categoryChips").innerHTML = cats.map(c=>`<button type="button" class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join(""); }
-function filterCategory(cat){ currentCategory=cat; renderCategoryChips(); renderProducts(); }
+const STATION_COLOR={cocina:'#d97706',barra:'#2563eb'};
+function normTxt(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g," ").trim(); }
+function allCats(){ return menuStructure.sections.flatMap(s=>s.categories.map(c=>({...c,section_id:s.id}))); }
+function catById(id){ return id?allCats().find(c=>String(c.id)===String(id)):null; }
+function secById(id){ return menuStructure.sections.find(s=>String(s.id)===String(id)); }
+// A qué sección/categoría pertenece un producto (los que aún no están clasificados caen según su estación)
+function placement(p){
+  const c=catById(p.category_id);
+  if(c) return {sec:secById(c.section_id), key:"c:"+c.id, name:c.name, classified:true};
+  const dest=p.destination||'cocina';
+  const sec=menuStructure.sections.find(s=>s.destination===dest)||menuStructure.sections[0]||null;
+  const nm=p.category&&p.category!=="General"?p.category:"Sin clasificar";
+  return {sec, key:"t:"+nm, name:nm, classified:false};
+}
+function popularProducts(){ return popular.map(x=>products.find(p=>String(p.id)===String(x.id))).filter(Boolean); }
+function renderSectionTabs(){
+  const secs=menuStructure.sections, pops=popularProducts();
+  const valid=secs.map(s=>String(s.id)).concat(pops.length?["POP"]:[]);
+  if(!valid.includes(String(currentSection))) currentSection = secs[0]?secs[0].id:"ALL";
+  let t="";
+  if(pops.length) t+=`<button type="button" class="chip sectab ${currentSection==='POP'?'active':''}" onclick="selectSection('POP')">⭐ Más pedidos</button>`;
+  t+=secs.map(s=>{ const on=String(currentSection)===String(s.id); return `<button type="button" class="chip sectab ${on?'active':''}" ${on?`style="background:${STATION_COLOR[s.destination]||'#111'};color:#fff"`:''} onclick="selectSection('${s.id}')">${esc(s.icon)} ${esc(s.name)}</button>`; }).join("");
+  $("sectionTabs").innerHTML=t;
+}
+function selectSection(id){ currentSection=id; currentCategory="TODOS"; renderSectionTabs(); renderCategoryChips(); renderProducts(); }
+function renderCategoryChips(){
+  const box=$("categoryChips");
+  const sec=secById(currentSection);
+  if(!sec){ box.innerHTML=""; chipKeys=[]; return; }
+  const inSec=products.filter(p=>{ const pl=placement(p); return pl.sec&&String(pl.sec.id)===String(sec.id); });
+  const count=k=>inSec.filter(p=>placement(p).key===k).length;
+  chipKeys=["TODOS"]; const labels=[`Todos (${inSec.length})`];
+  sec.categories.forEach(c=>{ const n=count("c:"+c.id); if(n){ chipKeys.push("c:"+c.id); labels.push(`${c.name} (${n})`); } });
+  const seen={}; inSec.forEach(p=>{ const pl=placement(p); if(!pl.classified&&!seen[pl.key]){ seen[pl.key]=1; chipKeys.push(pl.key); labels.push(`${pl.name} (${count(pl.key)})`); } });
+  if(!chipKeys.includes(currentCategory)) currentCategory="TODOS";
+  box.innerHTML=chipKeys.map((k,i)=>`<button type="button" class="chip ${currentCategory===k?'active':''}" onclick="filterCategory(${i})">${esc(labels[i])}</button>`).join("");
+}
+function filterCategory(i){ currentCategory=chipKeys[i]||"TODOS"; renderCategoryChips(); renderProducts(); }
 function renderProducts(){
-  const search = ($("productSearch")?.value || "").toLowerCase();
-  const filtered = products.filter(p=>{ return (currentCategory==="TODOS" || (p.category||"General")===currentCategory) && (p.name.toLowerCase().includes(search) || (p.description||"").toLowerCase().includes(search)); });
-  $("products").innerHTML=`<div class="product-grid">`+filtered.map(p=>`<button type="button" class="product" onclick="addToCart('${p.id}')"><div><b>${p.name}</b><div class="desc">${p.description||""}</div></div><div><div class="price">$${p.price}</div><div class="add">＋ Agregar</div></div></button>`).join("")+`</div>`;
+  const q=normTxt($("productSearch")?.value||"");
+  let list, showCat=false;
+  if(q){ list=products.filter(p=>normTxt(p.name+" "+(p.description||"")+" "+placement(p).name).includes(q)); showCat=true; }
+  else if(currentSection==="POP"){ list=popularProducts(); showCat=true; }
+  else if(currentSection==="ALL"||!secById(currentSection)) list=products;
+  else list=products.filter(p=>{ const pl=placement(p); return pl.sec&&String(pl.sec.id)===String(currentSection)&&(currentCategory==="TODOS"||pl.key===currentCategory); });
+  $("products").innerHTML = list.length ? `<div class="product-grid">`+list.map(p=>`<button type="button" class="product" style="border-top:4px solid ${STATION_COLOR[p.destination||'cocina']}" onclick="addToCart('${p.id}')"><div><b>${esc(p.name)}</b><div class="desc">${showCat?esc(placement(p).name)+' · ':''}${esc(p.description||"")}</div></div><div><div class="price">$${p.price}</div><div class="add">＋ Agregar</div></div></button>`).join("")+`</div>` : "<p class='muted'>Sin productos aquí.</p>";
 }
 function addToCart(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p) return;
@@ -628,30 +682,100 @@ async function updateStockDaily(){
   toast(`Stock actualizado.`); $("invAddQty").value=""; loadInventoryData();
 }
 
-async function createProduct(){
-  const name=$("pName").value.trim(), price=Number($("pPrice").value);
-  if(!name) return toast("Escribe el nombre del producto.");
-  if(!(price>=0) || $("pPrice").value==="") return toast("Escribe el precio.");
+// ----- Clasificación automática (reglas por palabras; se revisa antes de guardar) -----
+const CLASS_RULES=[
+ {cat:"Cervezas y micheladas", any:["cerveza*","chela*","michelada*","corona","victoria","modelo","indio","tecate","heineken","pacifico","stella","bohemia","lager","ipa","ultra","xx","amstel","carta blanca","cubeta*"]},
+ {cat:"Cocteles y licores", any:["margarita*","mojito*","paloma*","cantarito*","pina colada","tequila*","mezcal*","whisky","whiskey","ron","vodka","ginebra","gin","vino*","sangria*","aperol","spritz","cuba libre","carajillo*","cocktail*","coctel*","shot*","baileys","brandy","licor*"]},
+ {cat:"Frappés y licuados", any:["frappe*","frappuccino*","malteada*","smoothie*","licuado*","batido*","granizado*"]},
+ {cat:"Café frío", any:["cold brew","iced*"]},
+ {cat:"Café frío", all:[["cafe*","latte*","americano*","espresso*","expreso*","capuch*","cappuc*","moka*","mocha*","cortado*","macchiato*"],["frio","fria","helado","helada","hielo"]]},
+ {cat:"Té e infusiones", any:["te","chai","matcha","infusion*","manzanilla","tisana*","earl grey","yerbabuena"]},
+ {cat:"Café caliente", any:["cafe*","espresso*","expreso*","americano*","capuch*","cappuc*","latte*","moka*","mocha*","cortado*","macchiato*","chocolate caliente","flat white","descafeinado*"]},
+ {cat:"Jugos y aguas frescas", any:["jugo*","naranjada*","limonada*","agua fresca","aguas frescas","agua de","zumo*","horchata","jamaica","tamarindo"]},
+ {cat:"Refrescos, agua e hidratación", any:["coca","cocacola","coca cola","pepsi","refresco*","sprite","fanta","sidral*","agua","topo chico","jarritos","boing*","gatorade","powerade","electrolit","suero*","isotonic*","redbull","red bull","monster","soda*","mineral*","mundet","manzanita","squirt","7up","seven up"]},
+ {cat:"Tacos y antojitos", any:["taco*","quesadilla*","gringa*","tostada*","sope*","flauta*","tlacoyo*","alambre*","volcan*","pastor","arrachera*","rachera","suadero","bistec","campechano*","tamal*","enchilada*","burrito*","fajita*","gordita*","pozole","caldo*","sincronizada*","empanada*","cochinita"]},
+ {cat:"Hamburguesas y sándwiches", any:["hamburguesa*","burger*","burguer*","sandwich*","torta*","baguette*","panini*","hot dog","hotdog*","club"]},
+ {cat:"Ensaladas y bowls", any:["ensalada*","bowl*","poke*","wrap*"]},
+ {cat:"Desayunos", any:["desayuno*","huevo*","omelette*","omelet*","chilaquil*","hotcake*","hot cake*","waffle*","mollete*","enfrijolada*","machaca","divorciado*","avena","pancake*","bagel*"]},
+ {cat:"Postres y panadería", any:["pastel*","cheesecake*","brownie*","galleta*","postre*","pan dulce","croissant*","muffin*","dona*","flan","churro*","tarta*","rebanada*","helado*","nieve*","paleta*","tiramisu","gelatina*","crepa*","pay","concha*","cocada*","panque*"]},
+ {cat:"Botanas y para compartir", any:["papas*","nachos","alitas","boneless","dedos","botana*","guacamole","aros","palomitas","esquites","elote*","tabla*","pizza*","hummus","totopos","chicharron*","cacahuate*","frituras","ceviche*","para compartir","charola*"]},
+];
+function kwMatch(text,kw){
+  if(kw.endsWith("*")){ const st=kw.slice(0,-1); return text.split(" ").some(t=>t.startsWith(st)); }
+  return (" "+text+" ").includes(" "+kw+" ");
+}
+function suggestCategoryName(p){
+  const text=normTxt(p.name+" "+(p.category&&p.category!=="General"?p.category:""));
+  for(const r of CLASS_RULES){
+    const okAny=r.any&&r.any.some(k=>kwMatch(text,k));
+    const okAll=r.all&&r.all.every(g=>g.some(k=>kwMatch(text,k)));
+    if(okAny||okAll) return r.cat;
+  }
+  return null;
+}
+function autoClassify(){
+  let ok=0, miss=0;
+  products.forEach(p=>{
+    if(catById(p.category_id)) return;
+    const nm=suggestCategoryName(p);
+    const cat=nm && allCats().find(c=>normTxt(c.name)===normTxt(nm));
+    if(cat){ pendingClass[p.id]=cat.id; ok++; } else miss++;
+  });
+  renderClassifyTable();
+  toast(`✨ ${ok} sugeridas${miss?` · ${miss} sin coincidencia (asígnalas a mano)`:''}. Revisa y toca Guardar.`);
+}
+function updateSaveBtn(){ $("saveClassBtn").textContent=`💾 Guardar (${Object.keys(pendingClass).length})`; }
+function setPending(i,val){
+  const p=products[i]; if(!p) return;
+  if(!val||String(val)===String(p.category_id||"")) delete pendingClass[p.id]; else pendingClass[p.id]=val;
+  updateSaveBtn();
+}
+async function saveClassification(){
+  const assignments=Object.entries(pendingClass).map(([id,category_id])=>({id,category_id}));
+  if(!assignments.length) return toast("No hay cambios por guardar.");
   try{
-    await api("/menu",{method:"POST",body:JSON.stringify({name, category:$("pCategory").value.trim(), price, description:$("pDesc").value.trim(), destination:$("pDestination").value})});
-    toast("Producto creado ✅"); ["pName","pCategory","pPrice","pDesc"].forEach(k=>$(k).value="");
+    const r=await api("/menu-classify",{method:"POST",body:JSON.stringify({assignments})});
+    pendingClass={}; toast(`✅ ${r.updated} producto(s) clasificados`);
     await loadAll(); renderProductAdmin();
   }catch(e){ toast(e.message); }
 }
-function renderProductAdmin(){
-  const cats={}; products.forEach((p,i)=>{ const c=p.category||"General"; (cats[c]=cats[c]||[]).push(i); });
-  catNames=Object.keys(cats).sort((a,b)=>a.localeCompare(b,'es'));
-  $("catList").innerHTML=catNames.map(c=>`<option value="${esc(c)}">`).join("");
-  const anyBar=products.some(p=>(p.destination||'cocina')==='barra');
-  $("destAlert").innerHTML = (!anyBar && products.length) ? `<div class="card" style="background:#fef2f2;border-color:#fca5a5;margin-top:15px">⚠️ <b>Ningún producto está asignado a Barra</b>, por eso las bebidas llegan a Cocina. En la categoría de bebidas toca <b>☕ Toda a Barra</b>.</div>` : "";
-  $("productAdmin").innerHTML = catNames.map((c,ci)=>`<div class="card" style="margin-bottom:12px">
-    <div class="row between" style="flex-wrap:wrap"><h3 style="margin:0">${esc(c)}</h3><div class="row"><button onclick="setCategoryDest(${ci},'cocina')">🍳 Toda a Cocina</button><button class="primary" onclick="setCategoryDest(${ci},'barra')">☕ Toda a Barra</button></div></div>
-    <table style="margin-top:8px"><tbody>${cats[c].map(i=>{ const p=products[i], d=(p.destination||'cocina'); return `<tr><td><b>${esc(p.name)}</b><div class="muted" style="font-size:12px">${esc(p.description||"")}</div></td><td>$${p.price}</td><td><select onchange="setProductDest(${i},this.value)"><option value="cocina" ${d==='cocina'?'selected':''}>🍳 Cocina</option><option value="barra" ${d==='barra'?'selected':''}>☕ Barra</option></select></td><td><button class="danger" onclick="deactivateProduct(${i})">Desactivar</button></td></tr>`; }).join("")}</tbody></table></div>`).join("") || "<p class='muted'>Sin productos.</p>";
+function catOptions(selected){
+  return `<option value="">— Sin clasificar —</option>`+menuStructure.sections.map(s=>`<optgroup label="${esc(s.icon)} ${esc(s.name)}">${s.categories.map(c=>`<option value="${esc(c.id)}" ${String(selected)===String(c.id)?'selected':''}>${esc(c.name)}</option>`).join("")}</optgroup>`).join("");
 }
-async function setCategoryDest(ci,dest){
+function renderProductAdmin(){
+  $("pCategory").innerHTML=catOptions("");
+  const sin=products.filter(p=>!catById(p.category_id)).length;
+  $("destAlert").innerHTML = sin ? `<div class="card" style="background:#fffbeb;border-color:#fcd34d;margin-top:15px">🏷️ <b>${sin} producto(s) sin clasificar.</b> Toca <b>✨ Sugerir clasificación automática</b> en la sección de abajo, revisa y guarda.</div>` : "";
+  renderMenuStructure(); renderClassifyTable();
+}
+function renderMenuStructure(){
+  const count=id=>products.filter(p=>String(p.category_id)===String(id)).length;
+  $("menuStructure").innerHTML = menuStructure.sections.map(s=>`<div class="card" style="margin-bottom:12px;border-left:6px solid ${STATION_COLOR[s.destination]||'#111'}">
+    <div class="row between" style="flex-wrap:wrap"><h3 style="margin:0">${esc(s.icon)} ${esc(s.name)}</h3>
+      <div class="row"><select onchange="setSectionDest('${s.id}',this.value)" style="width:auto"><option value="cocina" ${s.destination==='cocina'?'selected':''}>🍳 Va a Cocina</option><option value="barra" ${s.destination==='barra'?'selected':''}>☕ Va a Barra</option></select><button onclick="renameSection('${s.id}')">✏️</button><button class="danger" onclick="deleteSection('${s.id}')">🗑️</button></div></div>
+    <div style="margin-top:8px">${s.categories.map(c=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid #eee"><span>${esc(c.name)} <small class="muted">(${count(c.id)})</small></span><span class="row"><button onclick="renameCategory('${c.id}')">✏️</button><button class="danger" onclick="deleteCategory('${c.id}')">🗑️</button></span></div>`).join("")||"<p class='muted'>Sin categorías.</p>"}</div>
+    <button style="margin-top:8px" onclick="addCategory('${s.id}')">➕ Nueva categoría</button></div>`).join("")+`<button class="primary" onclick="addSection()">➕ Nueva sección</button>`;
+}
+function renderClassifyTable(){
+  const mode=$("classifyMode")?.value||"sin", q=normTxt($("menuFilter")?.value||"");
+  const list=products.map((p,i)=>({p,i})).filter(({p})=>{
+    if(mode==="sin"&&catById(p.category_id)) return false;
+    return !q||normTxt(p.name+" "+(p.category||"")).includes(q);
+  });
+  updateSaveBtn();
+  $("classifyTable").innerHTML = list.length ? `<table><thead><tr><th>Producto</th><th>Categoría</th><th>Estación</th><th></th></tr></thead><tbody>${list.map(({p,i})=>{
+    const cur=pendingClass[p.id]!==undefined?pendingClass[p.id]:(p.category_id||""), d=p.destination||'cocina';
+    return `<tr><td><b>${esc(p.name)}</b> <span class="muted">$${p.price}</span>${catById(p.category_id)?'':`<div class="muted" style="font-size:12px">Antes: ${esc(p.category||'—')}</div>`}</td><td><select onchange="setPending(${i},this.value)" style="min-width:190px">${catOptions(cur)}</select></td><td><select onchange="setProductDest(${i},this.value)" style="width:auto"><option value="cocina" ${d==='cocina'?'selected':''}>🍳</option><option value="barra" ${d==='barra'?'selected':''}>☕</option></select></td><td><button class="danger" onclick="deactivateProduct(${i})">✕</button></td></tr>`;
+  }).join("")}</tbody></table>` : `<p class="muted">${mode==='sin'?'✅ Todo está clasificado.':'Sin productos.'}</p>`;
+}
+async function createProduct(){
+  const name=$("pName").value.trim(), price=$("pPrice").value;
+  if(!name) return toast("Escribe el nombre del producto.");
+  if(price===""||!(Number(price)>=0)) return toast("Escribe el precio.");
   try{
-    const r=await api("/menu-category",{method:"PATCH",body:JSON.stringify({category:catNames[ci],destination:dest})});
-    toast(`${r.updated} producto(s) → ${dest==='barra'?'☕ Barra':'🍳 Cocina'}`); await loadAll(); renderProductAdmin();
+    await api("/menu",{method:"POST",body:JSON.stringify({name, category_id:$("pCategory").value||null, price:Number(price), description:$("pDesc").value.trim()})});
+    toast("Producto creado ✅"); ["pName","pPrice","pDesc"].forEach(k=>$(k).value="");
+    await loadAll(); renderProductAdmin();
   }catch(e){ toast(e.message); }
 }
 async function setProductDest(i,dest){
@@ -665,6 +789,23 @@ async function deactivateProduct(i){
   try{ await api("/menu/"+encodeURIComponent(p.id),{method:"PATCH",body:JSON.stringify({active:0})}); toast("Producto desactivado"); await loadAll(); renderProductAdmin(); }
   catch(e){ toast(e.message); }
 }
+async function menuAction(method,path,body,okMsg){
+  try{ await api(path,{method,body:body?JSON.stringify(body):undefined}); if(okMsg) toast(okMsg); await loadAll(); renderProductAdmin(); }
+  catch(e){ toast(e.message); }
+}
+function addSection(){
+  const name=prompt("Nombre de la nueva sección (ej. Postres):"); if(!name||!name.trim()) return;
+  const icon=prompt("Emoji para la sección (ej. 🍰):","🍽️")||"🍽️";
+  const bar=confirm("¿Esta sección va a Barra?\nAceptar = Barra · Cancelar = Cocina");
+  return menuAction("POST","/menu-sections",{name:name.trim(),icon:icon.trim(),destination:bar?"barra":"cocina"},"Sección creada ✅");
+}
+function renameSection(id){ const s=secById(id); const n=prompt("Nuevo nombre de la sección:",s?s.name:""); if(n&&n.trim()) return menuAction("PATCH","/menu-sections/"+encodeURIComponent(id),{name:n.trim()},"Sección renombrada"); }
+function setSectionDest(id,dest){ return menuAction("PATCH","/menu-sections/"+encodeURIComponent(id),{destination:dest},`Toda la sección → ${dest==='barra'?'☕ Barra':'🍳 Cocina'}`); }
+function deleteSection(id){ if(confirm("¿Eliminar esta sección? (debe estar sin categorías)")) return menuAction("DELETE","/menu-sections/"+encodeURIComponent(id),null,"Sección eliminada"); }
+function addCategory(sid){ const n=prompt("Nombre de la nueva categoría:"); if(n&&n.trim()) return menuAction("POST","/menu-categories",{section_id:sid,name:n.trim()},"Categoría creada ✅"); }
+function renameCategory(id){ const c=catById(id); const n=prompt("Nuevo nombre de la categoría:",c?c.name:""); if(n&&n.trim()) return menuAction("PATCH","/menu-categories/"+encodeURIComponent(id),{name:n.trim()},"Categoría renombrada"); }
+function deleteCategory(id){ if(confirm("¿Eliminar la categoría? Sus productos quedarán 'sin clasificar' (no se borran).")) return menuAction("DELETE","/menu-categories/"+encodeURIComponent(id),null,"Categoría eliminada"); }
+
 const ROLE_LABEL={admin:"Administrador",mesero:"Mesero",cocina:"Cocina",barra:"Barra"};
 async function loadUsers(){
   try{
