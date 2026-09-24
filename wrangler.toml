@@ -1,4 +1,4 @@
-name = "rush-pos"
+name = "rush"
 main = "server.js"
 compatibility_date = "2026-03-01"
 
@@ -9,4 +9,4 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "rush-pos-db"
-database_id = "tu-id-de-base-de-datos"
+database_id = "79ed43c7-40b8-4a8a-bec5-1fd69449774b"
