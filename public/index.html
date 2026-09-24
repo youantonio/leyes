@@ -215,6 +215,10 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </section>
 
 <section id="usuarios" class="view hidden">
+  <div class="report-box" style="margin-bottom:15px; background:#fef2f2; border-color:#fecaca;">
+    <h3 style="color:#b91c1c; margin:0;">🔒 Gestión de Usuarios (Requiere Rol Admin)</h3>
+    <p style="margin:5px 0 0; font-size:13px; color:#555;">Sección restringida para la administración interna del club.</p>
+  </div>
   <h1 class="title">Gestión de Usuarios</h1>
   <div class="card">
     <div class="grid">
@@ -271,7 +275,6 @@ async function api(path,opts={}){
   return data;
 }
 
-// BYPASS DE ENTRADA DIRECTA AUTOMÁTICA
 async function login(){
   token = "bypass_absoluto"; 
   localStorage.setItem("rush_token", token);
@@ -336,7 +339,6 @@ async function loadAll(){
   if($("invItemSelect")) $("invItemSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
 }
 
-// VENTAS
 function renderCategoryChips(){ const cats = ["TODOS", ...new Set(products.map(p=>p.category||"General"))]; $("categoryChips").innerHTML = cats.map(c=>`<button type="button" class="chip ${currentCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join(""); }
 function filterCategory(cat){ currentCategory=cat; renderCategoryChips(); renderProducts(); }
 function renderProducts(){
@@ -371,7 +373,6 @@ async function sendOrder(){
   }catch(e){toast(e.message)}
 }
 
-// CANCHAS Y RESERVAS
 async function loadCanchasData(){
   try{
     courtsList = await api("/courts").catch(()=>[]); $("resCourtSelect").innerHTML = courtsList.map(c=>`<option value="${c.id}">${c.name}</option>`).join(""); updateResTotal();
@@ -392,7 +393,6 @@ async function createReservation(){
 async function deleteReservation(id){ if(confirm("¿Eliminar?")){ await api("/reservations/"+id, {method:"DELETE"}); loadCanchasData(); } }
 function sendReservationWhatsApp(id){ const r = activeReservations.find(x=>x.id===id); if(r) window.open(`https://wa.me/52${r.customer_phone}?text=${encodeURIComponent(`Recordatorio: Reserva cancha el ${r.date} a las${r.start_time}`)}`, '_blank'); }
 
-// COCINA Y BARRA
 function renderTables(){ $("tables").innerHTML = tables.filter(t=>t.type==='mesa').map(t=>`<div class="card"><div class="row between"><h3>${t.name}</h3><span class="status ${t.status}">${t.status}</span></div></div>`).join(""); }
 async function loadKitchen(){
   const os = await api("/orders").catch(()=>[]);
@@ -415,7 +415,6 @@ async function loadBarra(){
   $("barraOrders").innerHTML = html || "<p class='muted'>Sin bebidas pendientes.</p>";
 }
 
-// CONTROL ÓRDENES Y DOBLE TICKET
 async function loadOrders(){
   try{
     allOrdersCache = await api("/orders").catch(()=>[]);
@@ -435,7 +434,7 @@ async function confirmAddExtraItem(){
   if(!prod) return;
   try {
     const o = await api("/orders/" + orderId); let items = o.items || [];
-    items.push({ menu_item_id: prod.id, name: prod.name + ($("extraNote").value ? ` (${$("extraNote").value})` : ''), qty: Number($("extraQty").value\vert{}\vert{}1), unit_price: prod.price, destination: prod.destination\vert{}\vert{}'cocina', person: $("extraPerson").value.trim()||"General" });
+    items.push({ menu_item_id: prod.id, name: prod.name + ($("extraNote").value ? ` (${$("extraNote").value})` : ''), qty: Number($("extraQty").value \vert{}\vert{} 1), unit_price: prod.price, destination: prod.destination \vert{}\vert{} 'cocina', person: $("extraPerson").value.trim() || "General" });
     await api("/orders/" + orderId, { method: "PATCH", body: JSON.stringify({ items: items }) });
     toast("Añadido"); $("addItemsModal").classList.add("hidden"); loadOrders();
   } catch(e) {}
@@ -459,10 +458,9 @@ function sendTicketWhatsApp(){
   if(!phone) return toast("No hay WhatsApp.");
   const itemsText = (o.items||[]).map(it=>`- [${it.person||'Gral'}] ${it.qty||1}x ${it.name}`).join("\n");
   const total = o.items ? o.items.reduce((acc, it) => acc + ((it.qty||1)*(it.unit_price||0)), 0) : o.total;
-  window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(`Hola 👋 Detalle en *Rush Club Pádel*:\n📋 Folio: #${o.custom_folio\vert{}\vert{}o.id.slice(0,6)}\n🏟️ ${o.customer_name}\n\n${itemsText}\n\n💰 TOTAL: $${total}`)}`, '_blank');
+  window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(`Hola 👋 Detalle en *Rush Club Pádel*:\n📋 Folio: #${o.custom_folio \vert{}\vert{} o.id.slice(0,6)}\n🏟️ ${o.customer_name}\n\n${itemsText}\n\n💰 TOTAL: $${total}`)}`, '_blank');
 }
 
-// CAJA E INVENTARIO
 async function registerManualTx(){
   const type = $("txType").value, concept = $("txConcept").value.trim(), amount = Number($("txAmount").value);
   if(!concept || !amount) return toast("Faltan datos.");
@@ -489,14 +487,12 @@ async function updateStockDaily(){
   toast(`Stock actualizado.`); $("invAddQty").value=""; loadInventoryData();
 }
 
-// ADMIN BÁSICO
 async function createProduct(){ await api("/menu",{method:"POST",body:JSON.stringify({name:$("pName").value, category:$("pCategory").value, price:Number($("pPrice").value), description:$("pDesc").value, destination:$("pDestination").value})}).catch(()=>{}); toast("Producto creado"); loadAll(); }
 function renderProductAdmin(){ $("productAdmin").innerHTML = products.map(p=>`<div class="card"><h3>${p.name}</h3><p>$${p.price} · ${(p.destination||'cocina')==='barra'?'☕ Barra':'🍳 Cocina'}</p><button class="danger" onclick="api('/menu/${p.id}',{method:'PATCH'}).then(loadAll)">Desactivar</button></div>`).join(""); }
 async function loadUsers(){ const us = await api("/users").catch(()=>[]); $("users").innerHTML = `<table><thead><tr><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>${us.map(u=>`<tr><td>${u.username}</td><td>${u.role}</td><td><button class="danger" onclick="api('/users/${u.id}',{method:'DELETE'}).then(loadUsers)">🗑️</button></td></tr>`).join("")}</tbody></table>`; }
 async function createUser(){ await api("/users",{method:"POST",body:JSON.stringify({name:$("uName").value, username:$("uUsername").value, password:$("uPassword").value, role:$("uRole").value})}).catch(()=>{}); toast("Usuario creado"); loadUsers(); }
 
 function loadLoyaltyCustomers(){} function startCampaign(){} function sendNextCampaign(){}
-
 boot();
 </script>
 </body>
