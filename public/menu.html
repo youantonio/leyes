@@ -6,87 +6,128 @@
 <meta name="theme-color" content="#0f2f26">
 <title>The Rush · Club, Café & Cocina</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;800&family=Inter:wght@400;600;700;800&display=swap');
 :root{
-  --ink:#0f2f26; --cream:#faf6ee; --card:#fff; --line:#e7e0d2;
-  --cocina:#c1440e; --barra:#0e6b5c; --accent:#f2a71b; --muted:#7a6f5c;
+  --ink:#0f2f26; --ink2:#123b30; --cream:#fbf5e9; --card:#fff; --line:#eee2cd;
+  --cocina:#d9480f; --barra:#0e7c66; --gold:#f2a71b; --muted:#8a7c62; --danger:#c0392b;
 }
-*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--cream);color:var(--ink)}
-header{background:var(--ink);color:#fff;padding:18px 16px 14px;position:sticky;top:0;z-index:20}
-.brand{font-size:22px;font-weight:900;letter-spacing:.3px;display:flex;align-items:center;gap:8px}
-.brand small{display:block;font-size:12px;font-weight:500;color:#cfe3dc;letter-spacing:.5px;margin-top:2px}
-main{max-width:640px;margin:auto;padding:14px 14px 100px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-top:14px}
-h2{margin:0 0 10px}
-.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch}
-.chip{flex:none;padding:10px 16px;border-radius:999px;background:#fff;border:1px solid var(--line);font-weight:700;font-size:14px;cursor:pointer}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--cream);color:var(--ink)}
+h1,h2,.serif{font-family:Fraunces,serif}
+.hero{background:radial-gradient(120% 140% at 20% -10%,#1c4a3b 0%,var(--ink) 55%,#081a15 100%);color:#fff;padding:22px 18px 26px;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(242,167,27,.35),transparent 70%)}
+.hero .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;letter-spacing:1.5px;opacity:.9}
+.hero h1{font-size:30px;margin:10px 0 2px;line-height:1.05}
+.hero p{margin:0;color:#cfe3dc;font-size:14px}
+main{max-width:680px;margin:auto;padding:0 14px 110px}
+.stepcard{background:var(--card);border-radius:20px;padding:16px;margin-top:-18px;box-shadow:0 14px 30px rgba(15,47,38,.12);position:relative;z-index:2}
+.opt2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opt3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.opt{border:2px solid var(--line);border-radius:16px;padding:14px 8px;text-align:center;cursor:pointer;font-weight:700;font-size:14px;transition:.15s;background:#fffdf7}
+.opt span{display:block;font-size:24px;margin-bottom:4px}
+.opt.active{border-color:var(--gold);background:#fff6df;box-shadow:0 4px 10px rgba(242,167,27,.25)}
+.sectionbar{position:sticky;top:0;background:var(--cream);z-index:15;padding:12px 0 8px;margin-top:16px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:10px 18px;border-radius:999px;background:#fff;border:1px solid var(--line);font-weight:700;font-size:14px;cursor:pointer}
 .chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
-.product-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.product{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;min-height:120px;position:relative}
-.product b{font-size:15px;line-height:1.25}
-.product .desc{font-size:12px;color:var(--muted);margin-top:4px}
-.product .price{font-weight:800;margin-top:8px}
-.tag{position:absolute;top:8px;right:8px;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;color:#fff}
-.opt{border:2px solid var(--line);border-radius:16px;padding:16px;text-align:center;cursor:pointer;font-weight:700}
-.opt.active{border-color:var(--accent);background:#fff8e8}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.search{width:100%;padding:13px 14px;border-radius:14px;border:1px solid var(--line);background:#fff;font-size:15px;margin-top:10px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.pcard{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 3px 10px rgba(15,47,38,.06);cursor:pointer;display:flex;flex-direction:column;border:1px solid #f1e9d8}
+.pcard .ph{aspect-ratio:4/3;width:100%;position:relative;display:flex;align-items:center;justify-content:center;font-size:40px;color:#fff}
+.pcard .ph img{width:100%;height:100%;object-fit:cover}
+.pcard .badge{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.45);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px}
+.pcard .pop{position:absolute;top:8px;right:8px;background:var(--gold);color:#3a2600;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px}
+.pcard .info{padding:10px 12px 12px}
+.pcard b{font-size:14.5px;line-height:1.25;display:block}
+.pcard .desc{font-size:11.5px;color:var(--muted);margin-top:3px;min-height:14px}
+.pcard .bottom{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.pcard .price{font-weight:800;font-size:15px}
+.pcard .add{width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700}
+.pcard.sold{opacity:.45;pointer-events:none}
 input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;font:inherit;background:#fff}
+label{font-size:13px;font-weight:700;color:var(--ink2)}
 button.big{width:100%;padding:15px;border:0;border-radius:14px;background:var(--ink);color:#fff;font-weight:800;font-size:16px;cursor:pointer}
 button.big:disabled{opacity:.4}
-.cartbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));display:flex;justify-content:space-between;align-items:center;gap:12px}
-.cartbar b{font-size:17px}
-.qty{display:flex;align-items:center;gap:8px}
-.qty button{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:18px}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;z-index:50}
-.sheet{background:#fff;width:100%;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px}
+button.ghost{width:100%;padding:13px;border:1px solid var(--line);border-radius:14px;background:#fff;font-weight:700;cursor:pointer}
+.cartbar{position:fixed;bottom:0;left:0;right:0;background:var(--ink);color:#fff;padding:13px 16px calc(13px + env(safe-area-inset-bottom,0px));display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 -6px 18px rgba(0,0,0,.15)}
+.cartbar b{font-size:16px}
+.cartbar button{background:var(--gold);color:#3a2600;border:0;padding:12px 20px;border-radius:12px;font-weight:800}
+.modal{position:fixed;inset:0;background:rgba(15,20,17,.55);display:flex;align-items:flex-end;z-index:50}
+.sheet{background:#fbf5e9;width:100%;max-height:90vh;overflow:auto;border-radius:22px 22px 0 0;padding:20px}
 .hidden{display:none!important}
-.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 16px;border-radius:12px;z-index:80}
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 18px;border-radius:12px;z-index:80;font-size:14px}
+.qty{display:flex;align-items:center;gap:10px}
+.qty button{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:#fff;font-size:17px}
+.row{display:flex;align-items:center}
+.between{justify-content:space-between}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:2fr 1fr;gap:10px}
+.stamp-strip{display:flex;justify-content:center;padding:10px 0 4px;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">🎾 THE RUSH<small id="bizSub">CLUB DE PÁDEL · CAFÉ · COCINA</small></div>
-</header>
+<div class="hero">
+  <div class="logo">🎾 THE RUSH</div>
+  <h1 class="serif" id="bizTitle">Club de Pádel · Café · Cocina</h1>
+  <p id="bizSub">Antójate y pide en segundos</p>
+</div>
 <main>
-  <div class="card" id="stepChannel">
-    <h2>¿Cómo quieres tu pedido?</h2>
-    <div class="grid2">
-      <div class="opt active" id="optRestaurante" onclick="setChannel('restaurante')">🍽️<br>Estoy en el club</div>
-      <div class="opt" id="optDomicilio" onclick="setChannel('domicilio')">🛵<br>A domicilio</div>
+  <div class="stepcard" id="stepChannel">
+    <div class="row between"><b class="serif" style="font-size:17px">¿Cómo quieres tu pedido?</b></div>
+    <div class="opt2" style="margin-top:10px">
+      <div class="opt active" id="optRestaurante" onclick="setChannel('restaurante')"><span>🍽️</span>Estoy en el club</div>
+      <div class="opt" id="optDomicilio" onclick="setChannel('domicilio')"><span>🛵</span>A domicilio</div>
     </div>
-    <div id="domicilioOpts" class="grid3 hidden" style="margin-top:10px">
-      <div class="opt" onclick="setDomicilio('directo')">📱<br><small>Directo (WhatsApp)</small></div>
-      <div class="opt" onclick="setDomicilio('rappi')">🛵<br><small>Rappi</small></div>
-      <div class="opt" onclick="setDomicilio('uber')">🚗<br><small>Uber Eats</small></div>
+    <div id="domicilioOpts" class="opt3 hidden" style="margin-top:8px">
+      <div class="opt" onclick="setDomicilio('directo')"><span>📱</span>Directo</div>
+      <div class="opt" onclick="setDomicilio('rappi')"><span>🛵</span>Rappi</div>
+      <div class="opt" onclick="setDomicilio('uber')"><span>🚗</span>Uber Eats</div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="chips" id="sectionTabs"></div>
-    <div class="chips" id="categoryChips"></div>
-    <input id="search" placeholder="🔎 Buscar en el menú" oninput="renderProducts()" style="margin-bottom:10px">
-    <div id="products" class="product-grid"></div>
+  <div id="menuArea">
+    <div class="sectionbar">
+      <div class="chips" id="sectionTabs"></div>
+      <div class="chips" id="categoryChips"></div>
+      <input class="search" id="search" placeholder="🔎 Buscar algo rico..." oninput="renderProducts()">
+    </div>
+    <div id="products" class="pgrid"></div>
   </div>
 </main>
 
-<div class="cartbar" id="cartbar" style="display:none">
-  <div>🛒 <b id="cartCount">0</b> · <b id="cartTotal">$0</b></div>
-  <button class="big" style="width:auto;padding:12px 22px" onclick="openCheckout()">Continuar</button>
+<div class="cartbar hidden" id="cartbar">
+  <div>🛒 <b id="cartCount">0</b> producto(s) · <b id="cartTotal">$0</b></div>
+  <button onclick="openCheckout()">Continuar</button>
+</div>
+
+<div id="productModal" class="modal hidden">
+  <div class="sheet" style="max-width:480px;margin:auto">
+    <div id="pmContent"></div>
+  </div>
 </div>
 
 <div id="checkoutModal" class="modal hidden">
   <div class="sheet">
-    <h2 id="checkoutTitle">Tu pedido</h2>
-    <div id="checkoutCart"></div>
-    <div style="margin-top:14px" id="rappiUberBox"></div>
+    <div class="row between"><h2 class="serif" style="margin:0" id="checkoutTitle">Tu pedido</h2><button onclick="$('checkoutModal').classList.add('hidden')" style="border:0;background:none;font-size:22px">✕</button></div>
+    <div id="checkoutCart" style="margin-top:8px"></div>
+    <div id="rappiUberBox"></div>
     <div id="formBox">
-      <label>Tu nombre<input id="cName"></label>
-      <label style="margin-top:8px">WhatsApp (10 dígitos)<input id="cPhone" maxlength="10" inputmode="numeric"></label>
-      <div id="addressBox" class="hidden" style="margin-top:8px"><label>Dirección de entrega<textarea id="cAddress" rows="2"></textarea></label></div>
-      <div style="margin-top:8px"><label>Notas para cocina (opcional)<input id="cNotes" placeholder="Sin cebolla, término medio..."></label></div>
-      <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="cConsent" style="width:auto" checked> Quiero mi tarjeta de lealtad (1 sello por compra, cada <span id="goalTxt">10</span> = <span id="rewardTxt">un premio</span> 🎁)</label>
-      <button class="big" style="margin-top:14px" onclick="sendOrder()">Enviar pedido por WhatsApp</button>
+      <div class="grid2" style="margin-top:6px">
+        <label>Tu nombre<input id="cName"></label>
+        <label>WhatsApp (10 dígitos)<input id="cPhone" maxlength="10" inputmode="numeric"></label>
+      </div>
+      <div id="addressBox" class="hidden" style="margin-top:10px">
+        <b style="font-size:14px">📍 Dirección de entrega</b>
+        <div class="grid3" style="margin-top:8px"><label>Calle<input id="aStreet"></label><label>Número<input id="aNumber"></label></div>
+        <label style="margin-top:8px;display:block">Colonia<input id="aNeighborhood"></label>
+        <label style="margin-top:8px;display:block">Referencia (por si nos perdemos)<input id="aReference" placeholder="Portón negro, frente a la farmacia..."></label>
+        <label style="margin-top:8px;display:block">Nombre de quien recibe<input id="aReceiver"></label>
+        <button type="button" class="ghost" style="margin-top:10px" onclick="locateAddress()">📍 Ubicar mi dirección en el mapa (para calcular el envío)</button>
+        <div id="shipQuote" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
+      </div>
+      <label style="display:block;margin-top:10px">Notas para cocina (opcional)<input id="cNotes" placeholder="Sin cebolla, término medio..."></label>
+      <label class="row" style="gap:8px;margin-top:12px;font-weight:600"><input type="checkbox" id="cConsent" style="width:auto" checked> Quiero mi tarjeta de lealtad 🎾 (1 sello por compra)</label>
+      <button class="big" style="margin-top:14px" onclick="sendOrder()">Confirmar y enviar por WhatsApp</button>
     </div>
   </div>
 </div>
@@ -94,15 +135,14 @@ button.big:disabled{opacity:.4}
 <div id="toast" class="toast hidden"></div>
 <script>
 const $=id=>document.getElementById(id);
-let settings={}, structure={sections:[]}, items=[], cart=[], channel='restaurante', domicilioMode='directo', currentSection='ALL', currentCat='TODOS';
-function toast(m){ $('toast').textContent=m; $('toast').classList.remove('hidden'); setTimeout(()=>$('toast').classList.add('hidden'),2500); }
+let settings={}, structure=[], items=[], cart=[], channel='restaurante', domicilioMode='directo', currentSection=null, currentCat='TODOS', geoPoint=null;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(m){ $('toast').textContent=m; $('toast').classList.remove('hidden'); clearTimeout(window._t); window._t=setTimeout(()=>$('toast').classList.add('hidden'),2600); }
 async function boot(){
   try{ settings=await (await fetch('/api/public-settings')).json(); }catch(e){ settings={}; }
-  $('bizSub').textContent=(settings.business_name||'THE RUSH · CLUB · CAFÉ · COCINA').toUpperCase();
-  $('goalTxt').textContent=settings.loyalty_goal||10; $('rewardTxt').textContent=settings.loyalty_reward||'un premio';
-  try{ const r=await (await fetch('/api/public-menu')).json(); items=r.items||[]; structure=r.structure||{sections:[]}; }catch(e){ items=[]; }
-  currentSection = structure.sections[0] ? structure.sections[0].id : 'ALL';
+  document.getElementById('bizTitle').textContent=settings.business_name||'Club de Pádel · Café · Cocina';
+  try{ const r=await (await fetch('/api/public-menu')).json(); items=r.items||[]; structure=r.structure||[]; }catch(e){ items=[]; }
+  currentSection = structure[0] ? structure[0].id : null;
   renderSectionTabs(); renderCategoryChips(); renderProducts(); renderCart();
 }
 function setChannel(c){
@@ -111,85 +151,125 @@ function setChannel(c){
   $('optDomicilio').classList.toggle('active',c==='domicilio');
   $('domicilioOpts').classList.toggle('hidden',c!=='domicilio');
   document.querySelectorAll('#domicilioOpts .opt').forEach(o=>o.classList.remove('active'));
+  if(c==='restaurante'){
+    // Ir directo al menú: el usuario ya no tiene que hacer nada más
+    document.getElementById('menuArea').scrollIntoView({behavior:'smooth', block:'start'});
+  }
 }
 function setDomicilio(m){
   domicilioMode=m;
   document.querySelectorAll('#domicilioOpts .opt').forEach(o=>o.classList.remove('active'));
   event.currentTarget.classList.add('active');
-  if(m==='rappi'){ if(settings.rappi_link) window.open(settings.rappi_link,'_blank'); else toast('Aún no se configuró el link de Rappi.'); }
-  if(m==='uber'){ if(settings.uber_link) window.open(settings.uber_link,'_blank'); else toast('Aún no se configuró el link de Uber Eats.'); }
+  if(m==='rappi'){ if(settings.rappi_link) window.open(settings.rappi_link,'_blank'); else toast('Aún no se configuró el link de Rappi.'); return; }
+  if(m==='uber'){ if(settings.uber_link) window.open(settings.uber_link,'_blank'); else toast('Aún no se configuró el link de Uber Eats.'); return; }
+  document.getElementById('menuArea').scrollIntoView({behavior:'smooth', block:'start'});
 }
 function placement(p){
-  const cats=structure.sections.flatMap(s=>s.categories.map(c=>({...c,section_id:s.id})));
+  const cats=structure.flatMap(s=>s.categories.map(c=>({...c,section_id:s.id})));
   const c=p.category_id?cats.find(x=>String(x.id)===String(p.category_id)):null;
-  if(c) return {sec:structure.sections.find(s=>s.id===c.section_id), name:c.name, key:'c:'+c.id};
-  const sec=structure.sections.find(s=>s.destination===(p.destination||'cocina'))||structure.sections[0];
+  if(c) return {sec:structure.find(s=>s.id===c.section_id), name:c.name, key:'c:'+c.id};
+  const sec=structure.find(s=>s.destination===(p.destination||'cocina'))||structure[0];
   return {sec, name:p.category||'Otros', key:'t:'+(p.category||'Otros')};
 }
-function renderSectionTabs(){
-  $('sectionTabs').innerHTML = structure.sections.map(s=>`<button type="button" class="chip ${currentSection===s.id?'active':''}" onclick="selSection('${s.id}')">${esc(s.icon)} ${esc(s.name)}</button>`).join('');
-}
+function renderSectionTabs(){ $('sectionTabs').innerHTML = structure.map(s=>`<button type="button" class="chip ${currentSection===s.id?'active':''}" onclick="selSection('${s.id}')">${esc(s.icon)} ${esc(s.name)}</button>`).join(''); }
 function selSection(id){ currentSection=id; currentCat='TODOS'; renderSectionTabs(); renderCategoryChips(); renderProducts(); }
 function renderCategoryChips(){
-  const sec=structure.sections.find(s=>s.id===currentSection);
+  const sec=structure.find(s=>s.id===currentSection);
   if(!sec){ $('categoryChips').innerHTML=''; return; }
   const inSec=items.filter(p=>placement(p).sec&&placement(p).sec.id===sec.id);
-  const cats=[...new Set(inSec.map(p=>placement(p).key))];
-  $('categoryChips').innerHTML = `<button type="button" class="chip ${currentCat==='TODOS'?'active':''}" onclick="selCat('TODOS')">Todos</button>`+
-    sec.categories.filter(c=>cats.includes('c:'+c.id)).map(c=>`<button type="button" class="chip ${currentCat==='c:'+c.id?'active':''}" onclick="selCat('c:${c.id}')">${esc(c.name)}</button>`).join('');
+  const present=new Set(inSec.map(p=>placement(p).key));
+  $('categoryChips').innerHTML = `<button type="button" class="chip ${currentCat==='TODOS'?'active':''}" onclick="selCat('TODOS')">Todo</button>`+
+    sec.categories.filter(c=>present.has('c:'+c.id)).map(c=>`<button type="button" class="chip ${currentCat==='c:'+c.id?'active':''}" onclick="selCat('c:${c.id}')">${esc(c.name)}</button>`).join('');
 }
 function selCat(k){ currentCat=k; renderCategoryChips(); renderProducts(); }
+function ph(p){
+  const dest=p.destination||'cocina', color = dest==='barra'?'linear-gradient(135deg,#0e7c66,#0a5a4b)':'linear-gradient(135deg,#d9480f,#a8360a)';
+  if(p.image) return `<div class="ph"><img src="${p.image}" alt=""><span class="badge">${dest==='barra'?'☕ Barra':'🍳 Cocina'}</span></div>`;
+  return `<div class="ph" style="background:${color}"><span class="badge">${dest==='barra'?'☕ Barra':'🍳 Cocina'}</span>${dest==='barra'?'☕':'🍽️'}</div>`;
+}
 function renderProducts(){
   const q=($('search').value||'').toLowerCase();
   let list = q ? items.filter(p=>(p.name+' '+(p.description||'')).toLowerCase().includes(q))
-    : items.filter(p=>{ const pl=placement(p); return pl.sec&&pl.sec.id===currentSection&&(currentCat==='TODOS'||pl.key===currentCat); });
-  $('products').innerHTML = list.length ? list.map(p=>{
-    const dest=p.destination||'cocina', color = dest==='barra'?'var(--barra)':'var(--cocina)';
-    return `<div class="product" onclick="addItem('${p.id}')"><span class="tag" style="background:${color}">${dest==='barra'?'☕':'🍳'}</span><div><b>${esc(p.name)}</b><div class="desc">${esc(p.description||'')}</div></div><div class="price">$${p.price}</div></div>`;
-  }).join('') : "<p style='grid-column:1/-1;color:var(--muted)'>Sin productos aquí.</p>";
+    : items.filter(p=>{ const pl=placement(p); return pl.sec&&currentSection&&pl.sec.id===currentSection&&(currentCat==='TODOS'||pl.key===currentCat); });
+  $('products').innerHTML = list.length ? list.map(p=>`
+    <div class="pcard ${p.sold_out?'sold':''}" onclick="openProduct('${p.id}')">
+      ${ph(p)}
+      <div class="info"><b>${esc(p.name)}</b><div class="desc">${esc(p.description||'')}</div>
+        <div class="bottom"><span class="price">$${p.price}</span><span class="add">${p.sold_out?'—':'+'}</span></div>
+      </div>
+    </div>`).join('') : "<p style='grid-column:1/-1;color:var(--muted);text-align:center;padding:30px 0'>No encontramos nada con eso. Prueba otra palabra 🔎</p>";
 }
-function addItem(id){
+function openProduct(id){
   const p=items.find(x=>String(x.id)===id); if(!p) return;
+  if(p.sold_out) return toast('😕 Se nos acabó por hoy.');
+  $('pmContent').innerHTML = `${ph(p)}<div style="padding:16px 4px 4px"><h2 class="serif" style="margin:0 0 4px">${esc(p.name)}</h2><p style="color:var(--muted);margin:0 0 10px">${esc(p.description||'')}</p>
+    <div class="row between"><span style="font-size:22px;font-weight:800">$${p.price}</span><div class="qty"><button onclick="pmQty(-1)">−</button><b id="pmQty">1</b><button onclick="pmQty(1)">+</button></div></div>
+    <button class="big" style="margin-top:16px" onclick="confirmAdd('${p.id}')">Agregar al pedido</button></div>`;
+  window._pmQty=1;
+  $('productModal').classList.remove('hidden');
+}
+function pmQty(d){ window._pmQty=Math.max(1,(window._pmQty||1)+d); $('pmQty').textContent=window._pmQty; }
+function confirmAdd(id){
+  const p=items.find(x=>String(x.id)===id); if(!p) return;
+  const qty=window._pmQty||1;
   const ex=cart.find(x=>x.menu_item_id===id);
-  if(ex) ex.qty++; else cart.push({menu_item_id:id,name:p.name,qty:1,unit_price:p.price,destination:p.destination||'cocina'});
-  renderCart(); toast(p.name+' agregado');
+  if(ex) ex.qty+=qty; else cart.push({menu_item_id:id,name:p.name,qty,unit_price:p.price,destination:p.destination||'cocina'});
+  renderCart(); $('productModal').classList.add('hidden'); toast(`${p.name} agregado 🎉`);
 }
 function renderCart(){
   const n=cart.reduce((s,x)=>s+x.qty,0), total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
-  $('cartbar').style.display = n?'flex':'none';
+  $('cartbar').classList.toggle('hidden', n===0);
   $('cartCount').textContent=n; $('cartTotal').textContent='$'+total;
 }
 function openCheckout(){
   if(!cart.length) return;
-  $('checkoutTitle').textContent = channel==='restaurante' ? 'Confirmar pedido · En el club' : (domicilioMode==='directo'?'Confirmar pedido · A domicilio':'Este pedido se hace en la app externa');
-  $('checkoutCart').innerHTML = cart.map((x,i)=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)"><span>${x.qty} × ${esc(x.name)}</span><span>$${x.qty*x.unit_price} <button onclick="cart.splice(${i},1);renderCart();openCheckout()" style="border:0;background:none;color:#b91c1c;font-weight:800">✕</button></span></div>`).join('')
-    + `<div style="display:flex;justify-content:space-between;padding:10px 0;font-weight:800"><span>Total</span><span>$${cart.reduce((s,x)=>s+x.qty*x.unit_price,0)}</span></div>`;
+  $('checkoutTitle').textContent = channel==='restaurante' ? 'Confirmar pedido' : (domicilioMode==='directo'?'Confirmar pedido a domicilio':'Pedido externo');
+  $('checkoutCart').innerHTML = cart.map((x,i)=>`<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${x.qty} × ${esc(x.name)}</span><span class="row" style="gap:8px">$${x.qty*x.unit_price} <button onclick="cart.splice(${i},1);renderCart();openCheckout()" style="border:0;background:none;color:var(--danger);font-weight:800;font-size:16px">✕</button></span></div>`).join('')
+    + `<div class="row between" style="padding:10px 0;font-weight:800"><span>Subtotal</span><span>$${cart.reduce((s,x)=>s+x.qty*x.unit_price,0)}</span></div>`;
   const externalRappiUber = channel==='domicilio' && domicilioMode!=='directo';
   $('formBox').classList.toggle('hidden', externalRappiUber);
-  $('rappiUberBox').innerHTML = externalRappiUber ? `<p>Este pedido se realiza directo en ${domicilioMode==='rappi'?'Rappi':'Uber Eats'}. Te llevamos allá — el carrito de aquí es solo tu guía.</p><button class="big" onclick="window.open('${domicilioMode==='rappi'?(settings.rappi_link||'#'):(settings.uber_link||'#')}','_blank')">Abrir ${domicilioMode==='rappi'?'Rappi':'Uber Eats'}</button>` : '';
-  $('addressBox').classList.toggle('hidden', channel!=='domicilio' || domicilioMode!=='directo');
+  $('rappiUberBox').innerHTML = externalRappiUber ? `<p>Este pedido se hace directo en ${domicilioMode==='rappi'?'Rappi':'Uber Eats'}.</p><button class="big" onclick="window.open('${domicilioMode==='rappi'?(settings.rappi_link||'#'):(settings.uber_link||'#')}','_blank')">Abrir ${domicilioMode==='rappi'?'Rappi':'Uber Eats'}</button>` : '';
+  $('addressBox').classList.toggle('hidden', !(channel==='domicilio' && domicilioMode==='directo'));
+  $('goalTxt') && ($('goalTxt').textContent=settings.loyalty_goal||10);
   $('checkoutModal').classList.remove('hidden');
+}
+async function locateAddress(){
+  const street=$('aStreet').value.trim(), num=$('aNumber').value.trim(), col=$('aNeighborhood').value.trim();
+  if(!street||!num||!col) return toast('Escribe calle, número y colonia primero.');
+  const q=encodeURIComponent(`${street} ${num}, ${col}, Pachuca de Soto, Hidalgo, México`);
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`);
+    const d=await r.json();
+    if(!d.length){ $('shipQuote').textContent='No encontramos esa dirección exacta — no hay problema, el costo de envío se confirma por WhatsApp.'; geoPoint=null; return; }
+    geoPoint={lat:Number(d[0].lat), lng:Number(d[0].lon)};
+    const q2=await (await fetch('/api/shipping-quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(geoPoint)})).json();
+    $('shipQuote').innerHTML=`📍 Ubicado · ~${q2.km} km · Envío estimado: <b>$${q2.cost}</b>`;
+  }catch(e){ $('shipQuote').textContent='No pudimos calcular el envío automático; se confirma por WhatsApp.'; }
 }
 async function sendOrder(){
   const phone=$('cPhone').value.replace(/\\D/g,'');
   if(phone.length!==10) return toast('WhatsApp a 10 dígitos.');
   if(!$('cName').value.trim()) return toast('Escribe tu nombre.');
-  if(channel==='domicilio' && domicilioMode==='directo' && !$('cAddress').value.trim()) return toast('Escribe tu dirección.');
+  const isDomicilio = channel==='domicilio' && domicilioMode==='directo';
+  if(isDomicilio && (!$('aStreet').value.trim()||!$('aNumber').value.trim()||!$('aNeighborhood').value.trim())) return toast('Escribe calle, número y colonia.');
+  if(isDomicilio && !$('aReceiver').value.trim()) return toast('Escribe el nombre de quien recibe.');
   const body={
     items:cart, customer_name:$('cName').value.trim(), customer_phone:phone,
-    channel: channel==='domicilio' ? 'domicilio_directo' : 'restaurante',
-    notes:($('cNotes').value.trim()+(channel==='domicilio'?(' | Dirección: '+$('cAddress').value.trim()):'')),
-    loyalty_consent: $('cConsent').checked?1:0,
+    channel: isDomicilio ? 'domicilio_directo' : 'restaurante',
+    notes:$('cNotes').value.trim(), loyalty_consent: $('cConsent').checked?1:0,
+    receiver_name: isDomicilio ? $('aReceiver').value.trim() : undefined,
+    address: isDomicilio ? { street:$('aStreet').value.trim(), number:$('aNumber').value.trim(), neighborhood:$('aNeighborhood').value.trim(), reference:$('aReference').value.trim(), lat:geoPoint?.lat, lng:geoPoint?.lng } : undefined,
   };
   try{
     const r=await fetch('/api/public-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json(); if(!r.ok) throw new Error(d.error||'Error al enviar');
     const lines=cart.map(x=>`- ${x.qty}x ${x.name}`).join('\\n');
-    const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
+    const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0)+(d.shipping||0);
     const waNum=settings.whatsapp_order_number;
-    const msg=`Hola 👋 Quiero hacer un pedido en *The Rush* (folio #${d.folio}):\\n${lines}\\n\\n💰 Total: $${total}\\n📍 ${channel==='domicilio'?('Domicilio: '+$('cAddress').value.trim()):'Lo recojo/como en el club'}\\n📝 ${$('cNotes').value.trim()||'Sin notas'}`;
+    const dirTxt=isDomicilio?`\\n📍 ${$('aStreet').value.trim()} ${$('aNumber').value.trim()}, ${$('aNeighborhood').value.trim()}${$('aReference').value.trim()?(' ('+$('aReference').value.trim()+')'):''}\\n👤 Recibe: ${$('aReceiver').value.trim()}${d.shipping?`\\n🛵 Envío: $${d.shipping}`:''}`:'\\n🍽️ Como/recojo en el club';
+    const msg=`Hola 👋 Quiero hacer un pedido en *The Rush* (folio #${d.folio}):\\n${lines}\\n\\n💰 Total: $${total}${dirTxt}\\n📝 ${$('cNotes').value.trim()||'Sin notas'}`;
     if(waNum) window.open(`https://wa.me/52${waNum}?text=${encodeURIComponent(msg)}`,'_blank');
-    else toast('Pedido #'+d.folio+' recibido ✅');
+    if(d.track_token) toast('Pedido #'+d.folio+' recibido. Guarda este link: '+location.origin+'/seguimiento.html?token='+d.track_token);
     cart=[]; renderCart(); $('checkoutModal').classList.add('hidden');
   }catch(e){ toast(e.message); }
 }
