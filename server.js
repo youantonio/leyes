@@ -1,5 +1,5 @@
 // RUSH POS v24.3 - Cloudflare Worker + D1
-const ROLES = ["admin", "mesero", "cocina", "barra"];
+const ROLES = ["admin", "mesero", "cocina", "barra", "repartidor"];
 const SESSION_MS = 24 * 60 * 60 * 1000;
 let sessionsReady = false;
 let menuSchemaReady2 = false;
@@ -101,6 +101,9 @@ export default {
           ["business_name", "The Rush - Club, Cafe & Cocina"],
           ["whatsapp_order_number", ""], ["rappi_link", ""], ["uber_link", ""],
           ["loyalty_goal", "10"], ["loyalty_reward", "Un cafe o postre de cortesia"],
+          ["business_lat", "20.1010"], ["business_lng", "-98.7591"],
+          ["delivery_base_fee", "20"], ["delivery_rate_km", "8"],
+          ["payment_info", ""],
         ];
         for (const [k, v] of defSettings) await db.prepare("INSERT OR IGNORE INTO pos_settings (key,value) VALUES (?,?)").bind(k, v).run();
         menuSchemaReady2 = true;
@@ -126,6 +129,16 @@ export default {
         ).run();
         try { await db.prepare("ALTER TABLE menu_items ADD COLUMN category_id TEXT").run(); } catch (e) {}
         try { await db.prepare("ALTER TABLE menu_items ADD COLUMN sold_out INTEGER DEFAULT 0").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE menu_items ADD COLUMN image TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN delivery_status TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN driver_id TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN delivery_lat REAL").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN delivery_lng REAL").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN shipping_cost REAL DEFAULT 0").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN tracking_token TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN delivery_address TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN receiver_name TEXT").run(); } catch (e) {}
+        await db.prepare(`CREATE TABLE IF NOT EXISTS pos_driver_locations (driver_id TEXT PRIMARY KEY, lat REAL, lng REAL, updated_at TEXT)`).run();
         await db.prepare(
           `CREATE TABLE IF NOT EXISTS pos_cash_movements (
              id TEXT PRIMARY KEY, type TEXT NOT NULL, concept TEXT NOT NULL, amount REAL NOT NULL,
@@ -172,6 +185,42 @@ export default {
         const { results } = await db.prepare("SELECT key, value FROM pos_settings").all();
         const o = {}; for (const r of results || []) o[r.key] = r.value; return o;
       };
+      const haversineKm = (lat1, lng1, lat2, lng2) => {
+        const R = 6371, toRad = (d) => (d * Math.PI) / 180;
+        const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      };
+      // Costo de envío automático: tarifa base + $/km en línea recta desde el negocio
+      if (path === "/api/shipping-quote" && request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const lat = Number(b.lat), lng = Number(b.lng);
+        if (!isFinite(lat) || !isFinite(lng)) return json({ error: "Ubicación no válida" }, 400);
+        const st = await getSettings();
+        const bLat = Number(st.business_lat) || 20.101, bLng = Number(st.business_lng) || -98.7591;
+        const km = haversineKm(bLat, bLng, lat, lng);
+        const cost = Math.round((Number(st.delivery_base_fee) || 0) + km * (Number(st.delivery_rate_km) || 0));
+        return json({ km: Math.round(km * 10) / 10, cost });
+      }
+      // Seguimiento público (sin sesión): estatus del pedido + ubicación del repartidor si está compartiendo
+      if (path === "/api/track" && request.method === "GET") {
+        const token = url.searchParams.get("token") || "";
+        const o = token ? await db.prepare("SELECT * FROM orders WHERE tracking_token=?").bind(token).first() : null;
+        if (!o) return json({ error: "Pedido no encontrado" }, 404);
+        let driverLoc = null, driverName = null;
+        if (o.driver_id) {
+          const loc = await db.prepare("SELECT * FROM pos_driver_locations WHERE driver_id=?").bind(o.driver_id).first();
+          if (loc && Date.now() - new Date(loc.updated_at + "Z").getTime() < 5 * 60 * 1000) driverLoc = { lat: loc.lat, lng: loc.lng };
+          const u = await db.prepare("SELECT name FROM users WHERE id=?").bind(o.driver_id).first();
+          driverName = u?.name || null;
+        }
+        return json({
+          folio: o.custom_folio || o.id.slice(0, 6), status: o.status, delivery_status: o.delivery_status || null,
+          channel: o.channel, driver_name: driverName, driver_location: driverLoc,
+          business_location: { lat: Number((await getSettings()).business_lat) || 20.101, lng: Number((await getSettings()).business_lng) || -98.7591 },
+          delivery_location: (o.delivery_lat && o.delivery_lng) ? { lat: o.delivery_lat, lng: o.delivery_lng } : null,
+        });
+      }
       const genToken = () => crypto.randomUUID().replace(/-/g, "");
       const addStamp = async (phone, name) => {
         const goal = Number((await getSettings()).loyalty_goal) || 10;
@@ -198,7 +247,7 @@ export default {
         });
       }
       if (path === "/api/public-menu" && request.method === "GET") {
-        const its = ((await db.prepare("SELECT * FROM menu_items WHERE active=1 AND sold_out=0 ORDER BY sort_order, name").all()).results) || [];
+        const its = ((await db.prepare("SELECT id,name,category,category_id,price,description,destination,image FROM menu_items WHERE active=1 AND sold_out=0 ORDER BY sort_order, name").all()).results) || [];
         const secs = ((await db.prepare("SELECT * FROM pos_menu_sections ORDER BY sort_order, name").all()).results) || [];
         const cats = ((await db.prepare("SELECT * FROM pos_menu_categories ORDER BY sort_order, name").all()).results) || [];
         return json({ items: its, structure: secs.map((sc) => ({ ...sc, categories: cats.filter((c) => c.section_id === sc.id) })) });
@@ -213,16 +262,34 @@ export default {
         if (phone.length !== 10) return json({ error: "WhatsApp a 10 digitos" }, 400);
         const name = String(b.customer_name || "Cliente").trim() || "Cliente";
         const channel = ["restaurante", "domicilio_directo"].includes(b.channel) ? b.channel : "restaurante";
-        const notes = JSON.stringify({ type: channel === "domicilio_directo" ? "Domicilio (directo)" : "Restaurante", cocina: String(b.notes || "").trim(), barra: "" });
-        const total = calcTotal(items0);
-        const id = crypto.randomUUID();
+        let shipping = 0, dLat = null, dLng = null, addrText = "";
+        if (channel === "domicilio_directo") {
+          const a = b.address || {};
+          addrText = [a.street, a.number, a.neighborhood, a.reference].filter(Boolean).join(", ");
+          if (!a.street || !a.number || !a.neighborhood) return json({ error: "Falta calle, número o colonia" }, 400);
+          if (!String(b.receiver_name || "").trim()) return json({ error: "Falta el nombre de quien recibe" }, 400);
+          if (isFinite(Number(a.lat)) && isFinite(Number(a.lng))) {
+            dLat = Number(a.lat); dLng = Number(a.lng);
+            const st = await getSettings();
+            const km = haversineKm(Number(st.business_lat) || 20.101, Number(st.business_lng) || -98.7591, dLat, dLng);
+            shipping = Math.round((Number(st.delivery_base_fee) || 0) + km * (Number(st.delivery_rate_km) || 0));
+          }
+        }
+        const notes = JSON.stringify({
+          type: channel === "domicilio_directo" ? "Domicilio (directo)" : "Restaurante",
+          cocina: String(b.notes || "").trim(), barra: "",
+        });
+        const total = calcTotal(items0) + shipping;
+        const id = crypto.randomUUID(), trackToken = crypto.randomUUID().replace(/-/g, "");
         const dd = new Date(), p2b = (n) => String(n).padStart(2, "0");
         const folio = "WEB-" + p2b(dd.getUTCDate()) + p2b(dd.getUTCMonth() + 1) + "-" + p2b(dd.getUTCHours()) + p2b(dd.getUTCMinutes());
         await db.prepare(
-          `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
-        ).bind(id, folio, name, phone, notes, JSON.stringify(items0), total, total, channel, b.loyalty_consent ? 1 : 0).run();
-        return json({ id, folio }, 201);
+          `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel,
+             loyalty_consent, delivery_status, delivery_lat, delivery_lng, shipping_cost, tracking_token, delivery_address, receiver_name, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
+        ).bind(id, folio, name, phone, notes, JSON.stringify(items0), calcTotal(items0), total, channel, b.loyalty_consent ? 1 : 0,
+               channel === "domicilio_directo" ? "recibido" : null, dLat, dLng, shipping, trackToken, addrText, String(b.receiver_name || "").trim()).run();
+        return json({ id, folio, shipping, track_token: trackToken }, 201);
       }
       if (path === "/api/loyalty-card" && request.method === "GET") {
         const token = url.searchParams.get("token") || "";
@@ -415,6 +482,49 @@ export default {
         return json({ ok: true });
       }
 
+      // ===== REPARTIDORES =====
+      const DELIVERY_STEPS = ["recibido", "preparando", "salio", "en_camino", "entregado"];
+      if (path === "/api/drivers" && request.method === "GET") {
+        if (!isAdmin && sess.role !== "mesero") return json({ error: "No autorizado" }, 403);
+        const { results } = await db.prepare("SELECT id, name, username FROM users WHERE role='repartidor' AND active=1 ORDER BY name").all();
+        return json(results || []);
+      }
+      const dm = path.match(/^\/api\/orders\/([^\/]+)\/delivery$/);
+      if (dm && request.method === "PATCH") {
+        const oid = decodeURIComponent(dm[1]);
+        const o = await db.prepare("SELECT * FROM orders WHERE id=?").bind(oid).first();
+        if (!o) return json({ error: "Pedido no encontrado" }, 404);
+        const b = await request.json().catch(() => ({}));
+        if (b.driver_id !== undefined) {
+          if (!isAdmin && sess.role !== "mesero") return json({ error: "No autorizado" }, 403);
+          await db.prepare("UPDATE orders SET driver_id=?, delivery_status=COALESCE(delivery_status,'recibido'), updated_at=datetime('now') WHERE id=?")
+            .bind(b.driver_id || null, oid).run();
+        }
+        if (b.delivery_status !== undefined) {
+          if (!DELIVERY_STEPS.includes(b.delivery_status)) return json({ error: "Estatus no válido" }, 400);
+          if (!isAdmin && sess.role !== "mesero" && sess.user_id !== o.driver_id) return json({ error: "No autorizado" }, 403);
+          await db.prepare("UPDATE orders SET delivery_status=?, updated_at=datetime('now') WHERE id=?").bind(b.delivery_status, oid).run();
+        }
+        return json({ ok: true });
+      }
+      if (path === "/api/my-deliveries" && request.method === "GET") {
+        if (sess.role !== "repartidor" && !isAdmin) return json({ error: "No autorizado" }, 403);
+        const { results } = await db.prepare(
+          "SELECT * FROM orders WHERE driver_id=? AND delivery_status != 'entregado' ORDER BY created_at"
+        ).bind(sess.user_id).all();
+        return json((results || []).map(parseOrder));
+      }
+      if (path === "/api/my-location" && request.method === "POST") {
+        if (sess.role !== "repartidor") return json({ error: "No autorizado" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const lat = Number(b.lat), lng = Number(b.lng);
+        if (!isFinite(lat) || !isFinite(lng)) return json({ error: "Ubicación no válida" }, 400);
+        await db.prepare(
+          "INSERT INTO pos_driver_locations (driver_id,lat,lng,updated_at) VALUES (?,?,?,datetime('now')) ON CONFLICT(driver_id) DO UPDATE SET lat=excluded.lat,lng=excluded.lng,updated_at=excluded.updated_at"
+        ).bind(sess.user_id, lat, lng).run();
+        return json({ ok: true });
+      }
+
       // ===== CLIENTES (se arman con los datos de las órdenes) =====
       if (path === "/api/customers" && request.method === "GET") {
         const { results } = await db.prepare(
@@ -537,10 +647,11 @@ export default {
           if (!cat) return json({ error: "Categoría no encontrada" }, 404);
           catId = cat.id; catText = cat.name; dest = cat.destination;
         }
+        const image = typeof b.image === "string" && b.image.startsWith("data:image/") ? b.image.slice(0, 400000) : null;
         const id = crypto.randomUUID();
         await db.prepare(
-          "INSERT INTO menu_items (id, name, category, category_id, price, description, destination, active, sort_order) VALUES (?,?,?,?,?,?,?,1,0)"
-        ).bind(id, name, catText, catId, price, String(b.description || ""), dest).run();
+          "INSERT INTO menu_items (id, name, category, category_id, price, description, destination, active, sort_order, image) VALUES (?,?,?,?,?,?,?,1,0,?)"
+        ).bind(id, name, catText, catId, price, String(b.description || ""), dest, image).run();
         return json({ id }, 201);
       }
 
@@ -574,6 +685,10 @@ export default {
         if (b.destination !== undefined) {
           if (!DESTS.includes(b.destination)) return json({ error: "Estación no válida" }, 400);
           sets.push("destination=?"); vals.push(b.destination);
+        }
+        if (b.image !== undefined) {
+          const image = typeof b.image === "string" && b.image.startsWith("data:image/") ? b.image.slice(0, 400000) : null;
+          sets.push("image=?"); vals.push(image);
         }
         if (sets.length) await db.prepare(`UPDATE menu_items SET ${sets.join(", ")} WHERE id=?`).bind(...vals, pid).run();
         if (b.destination !== undefined) await moveOpenOrderItems([pid], b.destination);
