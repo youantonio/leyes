@@ -242,10 +242,18 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div class="card" style="margin-top:15px;">
     <h2 style="margin-top:0">➕ Nuevo producto</h2>
     <div class="grid">
-      <input id="pName" placeholder="Nombre">
+      <div>
+        <input id="pName" placeholder="Nombre (ej. taco de arrachera)" oninput="suggestTitle()">
+        <div id="pNameSuggest" class="muted" style="font-size:12px;margin-top:4px"></div>
+      </div>
       <select id="pCategory"></select>
       <input id="pPrice" type="number" step=".01" placeholder="Precio">
       <input id="pDesc" placeholder="Descripción (opcional)">
+      <div style="grid-column:1/-1">
+        <label class="muted" style="font-size:13px">📷 Foto del producto (opcional, se ve en el menú público)</label>
+        <input type="file" id="pImageFile" accept="image/*" onchange="handleImageFile(this,'pImagePreview','pImageData')">
+        <img id="pImagePreview" style="display:none;max-height:90px;border-radius:10px;margin-top:6px">
+      </div>
       <button class="primary" onclick="createProduct()" style="grid-column:1/-1;">Crear producto</button>
     </div>
     <div class="muted" style="font-size:13px;margin-top:6px">La estación (Cocina o Barra) se asigna sola según la sección de la categoría.</div>
@@ -280,12 +288,36 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <label>Recompensa:<input id="cfgReward" placeholder="Ej. Un café o postre de cortesía"></label>
     </div>
   </div>
+  <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">🚚 Envío a domicilio</h2>
+    <div class="grid">
+      <label>Latitud del negocio:<input id="cfgLat" type="number" step="0.0001"></label>
+      <label>Longitud del negocio:<input id="cfgLng" type="number" step="0.0001"></label>
+      <label>Tarifa base ($):<input id="cfgBaseFee" type="number" step="1"></label>
+      <label>$ por km:<input id="cfgRateKm" type="number" step="1"></label>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Pachuca centro por defecto: 20.1010, -98.7591. Puedes obtener tus coordenadas exactas buscando tu negocio en Google Maps y copiando los números.</div>
+  </div>
+  <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">💳 Datos para transferencia</h2>
+    <textarea id="cfgPaymentInfo" rows="3" placeholder="Banco, CLABE o número de cuenta, a nombre de..."></textarea>
+    <div class="muted" style="font-size:12px;margin-top:6px">Se usa en la plantilla de WhatsApp "Método de pago" en Órdenes.</div>
+  </div>
   <button class="primary" style="margin-top:15px;padding:14px 22px" onclick="saveSettings()">💾 Guardar configuración</button>
   <div class="card" style="margin-top:15px; background:#eff6ff; border:1px solid #93c5fd;">
     <h2 style="margin-top:0">🔗 Página pública del menú</h2>
     <p class="muted">Comparte este link con tus clientes (redes sociales, WhatsApp, tarjetas de mesa):</p>
     <div class="row"><input id="publicLinkBox" readonly style="font-weight:bold"><button onclick="copyPublicLink()">📋 Copiar</button></div>
   </div>
+</section>
+
+<section id="entregas" class="view hidden">
+  <div class="row between"><h1 class="title" style="margin:0">🛵 Mis entregas</h1><button onclick="loadMyDeliveries()">↻</button></div>
+  <div class="card" style="background:#eff6ff;border:1px solid #93c5fd;margin-bottom:12px">
+    <label class="row" style="gap:8px;font-weight:700"><input type="checkbox" id="shareLocToggle" style="width:auto" onchange="toggleShareLocation()"> 📍 Compartir mi ubicación en vivo mientras entrego</label>
+    <div id="shareLocStatus" class="muted" style="font-size:13px;margin-top:4px">Actívalo al salir a entregar. Deja esta pantalla abierta.</div>
+  </div>
+  <div id="myDeliveries" class="grid"></div>
 </section>
 
 <section id="usuarios" class="view hidden">
@@ -296,7 +328,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <input id="uUsername" placeholder="Usuario">
       <input id="uPassword" type="password" placeholder="Contraseña">
       <select id="uRole">
-        <option value="mesero">Mesero</option><option value="cocina">Cocina</option><option value="barra">Barra</option><option value="admin">Administrador</option>
+        <option value="mesero">Mesero</option><option value="cocina">Cocina</option><option value="barra">Barra</option><option value="repartidor">Repartidor</option><option value="admin">Administrador</option>
       </select>
       <button class="primary" onclick="createUser()">Crear Usuario</button>
     </div>
@@ -332,6 +364,15 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <div id="extCart" style="margin-top:10px"></div>
     <div class="row between" style="margin-top:8px"><b>Total</b><b id="extTotal">$0.00</b></div>
     <button class="success" style="width:100%;margin-top:12px;padding:14px" onclick="submitExternalOrder()">Enviar a Cocina/Barra</button>
+  </div>
+</div>
+
+<div id="waModal" class="modal hidden">
+  <div class="modalbox" style="max-width:520px;">
+    <div class="row between"><h2 style="margin:0">💬 Responder por WhatsApp</h2><button onclick="$('waModal').classList.add('hidden')">✕</button></div>
+    <div class="chips" id="waTemplates" style="margin-top:10px"></div>
+    <textarea id="waText" rows="8" style="margin-top:10px"></textarea>
+    <button class="success" style="width:100%;margin-top:10px;padding:12px" onclick="sendWaMessage()">Abrir WhatsApp con este mensaje</button>
   </div>
 </div>
 
@@ -414,9 +455,10 @@ function showApp(){
     ["inventario","📦 Inventario"],
     ["productos","🍔 Menú"],
     ["usuarios","👥 Usuarios"],
-    ["config","⚙️ Configuración"]
+    ["config","⚙️ Configuración"],
+    ["entregas","🛵 Mis entregas"]
   ];
-  const ROLE_VIEWS={ admin:null, mesero:["venta","canchas","mesas","ordenes"], cocina:["cocina"], barra:["barra"] };
+  const ROLE_VIEWS={ admin:null, mesero:["venta","canchas","mesas","ordenes"], cocina:["cocina"], barra:["barra"], repartidor:["entregas"] };
   const allowed = ROLE_VIEWS[me.role]===undefined ? ["venta","ordenes"] : ROLE_VIEWS[me.role];
   if(allowed) nav = nav.filter(x=>allowed.includes(x[0]));
 
@@ -432,7 +474,7 @@ function view(id,btn){
   if(id==="barra") loadBarra(); if(id==="ordenes") loadOrders(); if(id==="caja") loadDashboard();
   if(id==="lealtad") loadLoyaltyCustomers(); if(id==="inventario") loadInventoryData();
   if(id==="productos") renderProductAdmin(); if(id==="usuarios") loadUsers();
-  if(id==="config") loadSettings();
+  if(id==="config") loadSettings(); if(id==="entregas") loadMyDeliveries();
   if(id==="venta") { renderProducts(); renderTableSelect(); }
 }
 
@@ -441,6 +483,7 @@ async function loadAll(){
   if(!Array.isArray(products)) products=[]; if(!Array.isArray(tables)) tables=[]; if(!Array.isArray(inventoryItems)) inventoryItems=[];
   const st=await api("/menu-structure").catch(()=>null); menuStructure=(st&&Array.isArray(st.sections))?st:{sections:[]};
   const pop=await api("/menu-popular").catch(()=>[]); popular=Array.isArray(pop)?pop:[];
+  settingsCache = await api("/settings").catch(()=>settingsCache);
   renderSectionTabs(); renderCategoryChips(); renderPersonChips(); renderProducts(); renderTableSelect(); renderTables(); renderCart();
   if($("invItemSelect")) $("invItemSelect").innerHTML = inventoryItems.map(i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`).join("");
 }
@@ -549,9 +592,15 @@ function addToCart(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p) return;
   if(p.sold_out) return toast("😕 "+p.name+" está agotado por ahora.");
   const person = "Persona "+currentPerson;
-  const ex=cart.find(x=>String(x.menu_item_id)===String(id) && x.person===person);
+  const ex=cart.find(x=>String(x.menu_item_id)===String(id) && x.person===person && !x.note);
   if(ex) ex.qty++; else cart.push({menu_item_id:id, name:p.name, qty:1, unit_price:p.price, destination: p.destination || 'cocina', person: person});
   renderCart(); renderPersonChips();
+}
+function editCartNote(i){
+  const cur=cart[i]; if(!cur) return;
+  const n=prompt(`Nota para "${cur.name}" (ej. sin cebolla, término medio...):`, cur.note||"");
+  if(n===null) return;
+  cur.note=n.trim(); renderCart();
 }
 function renderCart(){
   const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
@@ -560,7 +609,7 @@ function renderCart(){
   $("cart").innerHTML=cart.length?names.map(p=>{
     const sub=groups[p].reduce((s,r)=>s+r.x.qty*r.x.unit_price,0);
     return `<div style="margin-top:8px"><div class="row between"><b>👤 ${esc(p)}</b><span class="muted">$${sub}</span></div>`+
-      groups[p].map(({x,i})=>`<div class="order-item"><div>${x.qty} × ${esc(x.name)} <small class="muted">(${x.destination==='barra'?'☕':'🍳'})</small></div><div class="row"><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart();renderPersonChips()">✕</button></div></div>`).join("")+`</div>`;
+      groups[p].map(({x,i})=>`<div class="order-item"><div>${x.qty} × ${esc(x.name)} <small class="muted">(${x.destination==='barra'?'☕':'🍳'})</small>${x.note?`<br><small style="color:#d97706">📝 ${esc(x.note)}</small>`:''}</div><div class="row"><button type="button" onclick="editCartNote(${i})" title="Agregar nota">📝</button><b>$${x.qty*x.unit_price}</b><button type="button" onclick="cart.splice(${i},1);renderCart();renderPersonChips()">✕</button></div></div>`).join("")+`</div>`;
   }).join(""):"<p class='muted'>Carrito vacío</p>";
   $("cartTotal").textContent="$"+total;
 }
@@ -622,7 +671,7 @@ async function loadStation(dest){
     const items = (o.items||[]).filter(it => (it.destination||'cocina') === dest && !it.done);
     if(!items.length) continue;
     const note = stationNote(o,dest);
-    const groups = groupByPerson(items).map(g=>`<div class="kitchen-item"><b>👤 ${esc(g.person)}</b>${g.items.map(it=>`<div>${it.qty}× ${esc(it.name)}</div>`).join("")}</div>`).join("");
+    const groups = groupByPerson(items).map(g=>`<div class="kitchen-item"><b>👤 ${esc(g.person)}</b>${g.items.map(it=>`<div>${it.qty}× ${esc(it.name)}${it.note?` <span style="color:#d97706">— ${esc(it.note)}</span>`:''}</div>`).join("")}</div>`).join("");
     html += `<div class="card" style="border-left: 6px solid ${isBar?'#2563eb':'#d97706'};"><h3>Orden #${esc(o.custom_folio||o.id.slice(0,6))} · ${esc(tableLabel(o))}</h3><p><b>Cliente:</b> ${esc(cleanName(o.customer_name))}</p><p class="muted">${esc(orderTypeLabel(o))} · 👥 ${orderPeople(o)} persona(s)</p>${note?`<p style="background:#fff7ed;padding:8px;border-radius:10px"><b>📝 Nota ${isBar?'de barra':'de cocina'}:</b> ${esc(note)}</p>`:''}<hr>${groups}<button class="success" style="width:100%;margin-top:10px" onclick="markReady('${o.id}','${dest}')">✅ ${isBar?'Bebidas':'Alimentos'} listos</button></div>`;
   }
   $(isBar?"barraOrders":"kitchenOrders").innerHTML = html || `<p class='muted'>${isBar?'Sin bebidas pendientes.':'Sin alimentos pendientes.'}</p>`;
@@ -634,19 +683,65 @@ async function markReady(id,dest){
   catch(e){ toast(e.message); }
 }
 
+function deliveryBar(o){
+  if(o.channel!=='domicilio_directo') return '';
+  const steps=[['recibido','📝'],['preparando','👨‍🍳'],['salio','🚪'],['en_camino','🛵'],['entregado','✅']];
+  const cur=o.delivery_status||'recibido';
+  const chips=steps.map(([k,ic])=>`<button type="button" class="chip ${cur===k?'active':''}" style="padding:6px 10px;font-size:12px" onclick="setDeliveryStatus('${o.id}','${k}')">${ic}</button>`).join('');
+  const driverSel=`<select onchange="assignDriver('${o.id}',this.value)" style="width:auto"><option value="">Sin asignar</option>${(driversCache||[]).map(d=>`<option value="${esc(d.id)}" ${o.driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>`;
+  const addr=o.delivery_address?`<div class="muted" style="font-size:13px">📍 ${esc(o.delivery_address)}${o.receiver_name?(' · Recibe: '+esc(o.receiver_name)):''}${o.shipping_cost?(' · Envío $'+o.shipping_cost):''}</div>`:'';
+  const trackLink=o.tracking_token?`<div style="font-size:12px"><a href="/seguimiento.html?token=${o.tracking_token}" target="_blank">🔗 Link de seguimiento para el cliente</a></div>`:'';
+  return `<div class="card" style="background:#eff6ff;margin-top:8px;padding:10px">🛵 <b>Entrega a domicilio</b> ${driverSel}${addr}${trackLink}<div class="chips" style="margin-top:6px">${chips}</div></div>`;
+}
 async function loadOrders(){
   try{
     allOrdersCache = await api("/orders").catch(()=>[]); if(!Array.isArray(allOrdersCache)) allOrdersCache=[];
+    if((isAdmin()||me.role==='mesero') && allOrdersCache.some(o=>o.channel==='domicilio_directo')) await loadDrivers();
     $("orders").innerHTML = allOrdersCache.map(o=>{
-      const itemsSummary = groupByPerson(o.items||[]).map(g=>`<b>${esc(g.person)}:</b> `+g.items.map(it=>`${it.qty||1}x ${esc(it.name)}`).join(", ")).join("<br>");
-      const total = (o.items||[]).reduce((acc, it) => acc + ((it.qty||1) * (it.unit_price||it.price||0)), 0);
+      const itemsSummary = groupByPerson(o.items||[]).map(g=>`<b>${esc(g.person)}:</b> `+g.items.map(it=>`${it.qty||1}x ${esc(it.name)}${it.note?` (${esc(it.note)})`:''}`).join(", ")).join("<br>");
+      const total = (o.items||[]).reduce((acc, it) => acc + ((it.qty||1) * (it.unit_price||it.price||0)), 0) + (o.shipping_cost||0);
       const nc=stationNote(o,'cocina'), nb=stationNote(o,'barra');
+      const isWeb = o.channel && o.channel!=='restaurante';
       return `<div class="card" style="border-left: 6px solid #111;">
         <div class="row between"><h3 style="margin:0;">Orden #${esc(o.custom_folio || o.id.slice(0,6))} · ${esc(tableLabel(o))}</h3><span class="status ${esc(o.status)}">${esc(o.status)}</span></div>
+        ${isWeb?`<p><span class="status open">${esc(channelLabel(o.channel))}</span></p>`:''}
         <p><b>Cliente:</b> ${esc(cleanName(o.customer_name))}${o.customer_phone?` · 📱 ${esc(o.customer_phone)}`:''} · 👥 ${orderPeople(o)}</p><p>${stationBadges(o)}</p><p style="color:#555;font-size:14px;">${itemsSummary}</p>${nc?`<p class="muted">🍳 Nota: ${esc(nc)}</p>`:''}${nb?`<p class="muted">☕ Nota: ${esc(nb)}</p>`:''}<p><b>Total:</b> <b style="color:#16a34a;">$${total}</b></p>
-        <div class="row" style="flex-wrap:wrap;"><button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ticket</button>${o.customer_phone?`<button class="success" onclick="sendLoyaltyCard('${o.customer_phone}','${esc(cleanName(o.customer_name)).replace(/'/g,"")}')">⭐ Tarjeta</button>`:''}<button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir</button><button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️</button>`:""}</div></div>`;
+        ${deliveryBar(o)}
+        <div class="row" style="flex-wrap:wrap;"><button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ticket</button>${o.customer_phone?`<button class="success" onclick="sendLoyaltyCard('${o.customer_phone}','${esc(cleanName(o.customer_name)).replace(/'/g,"")}')">⭐ Tarjeta</button><button class="success" onclick="redeemPrompt('${o.customer_phone}')">🎁 Canjear</button>`:''}${isWeb?`<button class="warning" onclick="openWaModal('${o.id}')">💬 Responder WhatsApp</button>`:''}<button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir</button><button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️</button>`:""}</div></div>`;
     }).join("") || "<p class='muted'>Sin órdenes.</p>";
   }catch(e){}
+}
+let driversCache=[], waOrder=null;
+const WA_TEMPLATES={
+  confirmacion:(o)=>`Hola ${firstName(cleanName(o.customer_name))} 👋 Recibimos tu pedido *#${o.custom_folio||o.id.slice(0,6)}* en The Rush.\n\nEstamos confirmando tu pedido, en un momento te decimos el tiempo estimado y cómo va a quedar tu pago. ¡Gracias por tu paciencia! 🙌`,
+  pago:(o)=>{
+    const total=(o.items||[]).reduce((a,it)=>a+(it.qty||1)*(it.unit_price||0),0)+(o.shipping_cost||0);
+    const info=(settingsCache&&settingsCache.payment_info)?('\n💳 Datos para transferencia:\n'+settingsCache.payment_info):'';
+    return `Confirmamos tu pedido #${o.custom_folio||o.id.slice(0,6)} por *$${total}*${o.shipping_cost?` (incluye $${o.shipping_cost} de envío)`:''}.\n\n¿Cómo prefieres pagar?\n1) Efectivo al recibir\n2) Transferencia${info}\n3) Tarjeta con el repartidor (terminal)\n\nContéstanos con el número de tu opción y en un momento te confirmamos. 🙏`;
+  },
+  camino:(o)=>`¡Tu pedido #${o.custom_folio||o.id.slice(0,6)} ya va en camino! 🛵${o.delivery_address?(' Vamos a: '+o.delivery_address):''}\n\nTe avisamos en cuanto llegue.`,
+  entregado:(o)=>`¡Listo! Tu pedido #${o.custom_folio||o.id.slice(0,6)} fue entregado ✅ Gracias por tu compra en The Rush 🎾☕. ¡Te esperamos pronto!`,
+};
+function openWaModal(oid){
+  waOrder=allOrdersCache.find(o=>o.id===oid); if(!waOrder) return;
+  if(!waOrder.customer_phone) return toast("Este pedido no tiene WhatsApp guardado.");
+  $('waTemplates').innerHTML = `<button type="button" class="chip" onclick="pickWaTemplate('confirmacion')">📝 Confirmación</button><button type="button" class="chip" onclick="pickWaTemplate('pago')">💳 Método de pago</button><button type="button" class="chip" onclick="pickWaTemplate('camino')">🛵 Va en camino</button><button type="button" class="chip" onclick="pickWaTemplate('entregado')">✅ Entregado</button>`;
+  pickWaTemplate('confirmacion');
+  $('waModal').classList.remove('hidden');
+}
+function pickWaTemplate(key){ $('waText').value = WA_TEMPLATES[key](waOrder); }
+function sendWaMessage(){
+  const phone=String(waOrder.customer_phone).replace(/\D/g,'').slice(-10);
+  window.open(`https://wa.me/52${phone}?text=${encodeURIComponent($('waText').value)}`,'_blank');
+  $('waModal').classList.add('hidden');
+}
+async function loadDrivers(){ driversCache=await api("/drivers").catch(()=>[]); }
+async function assignDriver(oid,driverId){ try{ await api(`/orders/${oid}/delivery`,{method:"PATCH",body:JSON.stringify({driver_id:driverId||null})}); toast("Repartidor asignado"); loadOrders(); }catch(e){ toast(e.message); } }
+async function setDeliveryStatus(oid,status){ try{ await api(`/orders/${oid}/delivery`,{method:"PATCH",body:JSON.stringify({delivery_status:status})}); loadOrders(); }catch(e){ toast(e.message); } }
+async function redeemPrompt(phone){
+  phone=String(phone).replace(/\D/g,"").slice(-10); if(phone.length!==10) return toast("Sin WhatsApp guardado.");
+  if(!confirm("¿Canjear la recompensa de lealtad de este cliente?")) return;
+  try{ await api("/loyalty-redeem",{method:"POST",body:JSON.stringify({phone})}); toast("Recompensa canjeada 🎁"); }catch(e){ toast(e.message); }
 }
 async function deleteOrder(id){ if(!confirm("¿Borrar esta orden?")) return; try{ await api('/orders/'+id,{method:'DELETE'}); loadOrders(); }catch(e){ toast(e.message); } }
 function openAddItemsModal(orderId){
@@ -693,13 +788,13 @@ async function previewTicket(id){
   const total = items.reduce((acc, it) => acc + ((it.qty||1)*(it.unit_price||0)), 0);
   const custBody = groupByPerson(items).map(g=>{
     const sub=g.items.reduce((s,it)=>s+(it.qty||1)*(it.unit_price||0),0);
-    return `<div class="tk-person">👤 ${esc(g.person)}</div>`+g.items.map(it=>`<div class="tk-row"><span>${it.qty||1}x ${esc(it.name)}</span><span>$${(it.qty||1)*(it.unit_price||0)}</span></div>`).join("")+`<div class="tk-row"><span>Subtotal</span><span>$${sub}</span></div>`;
+    return `<div class="tk-person">👤 ${esc(g.person)}</div>`+g.items.map(it=>`<div class="tk-row"><span>${it.qty||1}x ${esc(it.name)}${it.note?` <i>(${esc(it.note)})</i>`:''}</span><span>$${(it.qty||1)*(it.unit_price||0)}</span></div>`).join("")+`<div class="tk-row"><span>Subtotal</span><span>$${sub}</span></div>`;
   }).join("");
   const station = (dest,title)=>{
     const its=items.filter(it=>(it.destination||'cocina')===dest);
     if(!its.length) return "";
     const n=stationNote(o,dest);
-    return `<div style="text-align:center;font-weight:bold;margin-top:6px">${title}</div>`+groupByPerson(its).map(g=>`<div class="tk-person">👤 ${esc(g.person)}</div>`+g.items.map(it=>`<div>${it.qty||1}x ${esc(it.name)}</div>`).join("")).join("")+(n?`<div><b>NOTA:</b> ${esc(n)}</div>`:"")+`<hr>`;
+    return `<div style="text-align:center;font-weight:bold;margin-top:6px">${title}</div>`+groupByPerson(its).map(g=>`<div class="tk-person">👤 ${esc(g.person)}</div>`+g.items.map(it=>`<div>${it.qty||1}x ${esc(it.name)}${it.note?` <b>(${esc(it.note)})</b>`:''}</div>`).join("")).join("")+(n?`<div><b>NOTA GENERAL:</b> ${esc(n)}</div>`:"")+`<hr>`;
   };
   $("ticketContent").innerHTML =
    `<div class="ticket-preview"><div style="text-align:center"><b>RUSH CLUB PÁDEL</b><br><small>Comprobante cliente</small></div><hr>${ticketHead(o)}<hr>${custBody}<hr><div class="tk-row" style="font-weight:bold;font-size:14px"><span>TOTAL</span><span>$${total}</span></div><div style="text-align:center;margin-top:8px"><small>¡Gracias por tu visita!</small></div></div>`+
@@ -805,6 +900,9 @@ async function loadSettings(){
   $("cfgName").value=settingsCache.business_name||""; $("cfgWaNumber").value=settingsCache.whatsapp_order_number||"";
   $("cfgRappi").value=settingsCache.rappi_link||""; $("cfgUber").value=settingsCache.uber_link||"";
   $("cfgGoal").value=settingsCache.loyalty_goal||10; $("cfgReward").value=settingsCache.loyalty_reward||"";
+  $("cfgLat").value=settingsCache.business_lat||"20.1010"; $("cfgLng").value=settingsCache.business_lng||"-98.7591";
+  $("cfgBaseFee").value=settingsCache.delivery_base_fee||20; $("cfgRateKm").value=settingsCache.delivery_rate_km||8;
+  $("cfgPaymentInfo").value=settingsCache.payment_info||"";
   $("publicLinkBox").value = location.origin + "/menu.html";
 }
 async function saveSettings(){
@@ -815,6 +913,9 @@ async function saveSettings(){
       business_name:$("cfgName").value.trim(), whatsapp_order_number:wa,
       rappi_link:$("cfgRappi").value.trim(), uber_link:$("cfgUber").value.trim(),
       loyalty_goal:Number($("cfgGoal").value)||10, loyalty_reward:$("cfgReward").value.trim(),
+      business_lat:$("cfgLat").value||"20.1010", business_lng:$("cfgLng").value||"-98.7591",
+      delivery_base_fee:Number($("cfgBaseFee").value)||0, delivery_rate_km:Number($("cfgRateKm").value)||0,
+      payment_info:$("cfgPaymentInfo").value.trim(),
     })});
     toast("Configuración guardada ✅");
   }catch(e){ toast(e.message); }
@@ -931,18 +1032,43 @@ function renderClassifyTable(){
     return !q||normTxt(p.name+" "+(p.category||"")).includes(q);
   });
   updateSaveBtn();
-  $("classifyTable").innerHTML = list.length ? `<table><thead><tr><th>Producto</th><th>Categoría</th><th>Estación</th><th></th></tr></thead><tbody>${list.map(({p,i})=>{
+  $("classifyTable").innerHTML = list.length ? `<table><thead><tr><th>Producto</th><th>Categoría</th><th>Estación</th><th>Foto</th><th></th></tr></thead><tbody>${list.map(({p,i})=>{
     const cur=pendingClass[p.id]!==undefined?pendingClass[p.id]:(p.category_id||""), d=p.destination||'cocina';
-    return `<tr><td><b>${esc(p.name)}</b> <span class="muted">$${p.price}</span>${catById(p.category_id)?'':`<div class="muted" style="font-size:12px">Antes: ${esc(p.category||'—')}</div>`}</td><td><select onchange="setPending(${i},this.value)" style="min-width:190px">${catOptions(cur)}</select></td><td><select onchange="setProductDest(${i},this.value)" style="width:auto"><option value="cocina" ${d==='cocina'?'selected':''}>🍳</option><option value="barra" ${d==='barra'?'selected':''}>☕</option></select></td><td><button class="${p.sold_out?'success':'warning'}" onclick="toggleSoldOut(${i})">${p.sold_out?'✅ Disponible':'🚫 Agotado'}</button> <button class="danger" onclick="deactivateProduct(${i})">✕</button></td></tr>`;
+    return `<tr><td class="row" style="gap:8px"><img src="${p.image||''}" style="width:34px;height:34px;border-radius:8px;object-fit:cover;background:#eee;${p.image?'':'display:none'}"><span><b>${esc(p.name)}</b> <span class="muted">$${p.price}</span>${catById(p.category_id)?'':`<div class="muted" style="font-size:12px">Antes: ${esc(p.category||'—')}</div>`}</span></td><td><select onchange="setPending(${i},this.value)" style="min-width:190px">${catOptions(cur)}</select></td><td><select onchange="setProductDest(${i},this.value)" style="width:auto"><option value="cocina" ${d==='cocina'?'selected':''}>🍳</option><option value="barra" ${d==='barra'?'selected':''}>☕</option></select></td><td><input type="file" accept="image/*" style="width:110px;font-size:11px" onchange="uploadProductImage(${i},this)"></td><td><button class="${p.sold_out?'success':'warning'}" onclick="toggleSoldOut(${i})">${p.sold_out?'✅ Disponible':'🚫 Agotado'}</button> <button class="danger" onclick="deactivateProduct(${i})">✕</button></td></tr>`;
   }).join("")}</tbody></table>` : `<p class="muted">${mode==='sin'?'✅ Todo está clasificado.':'Sin productos.'}</p>`;
+}
+const LOWER_WORDS=new Set(['de','del','la','las','el','los','y','o','en','con','al','a','un','una','para','sin']);
+function smartTitle(s){
+  return String(s||'').trim().toLowerCase().split(/\s+/).map((w,i)=>{
+    if(i>0 && LOWER_WORDS.has(w)) return w;
+    return w.charAt(0).toUpperCase()+w.slice(1);
+  }).join(' ');
+}
+function suggestTitle(){
+  const raw=$('pName').value, sug=smartTitle(raw);
+  $('pNameSuggest').innerHTML = (sug && sug!==raw) ? `Sugerencia: <b style="cursor:pointer;text-decoration:underline" onclick="$('pName').value='${sug.replace(/'/g,"\\'")}';$('pNameSuggest').innerHTML=''">${esc(sug)}</b>` : '';
+}
+function handleImageFile(input,previewId,dataFieldId){
+  const file=input.files[0]; if(!file) return;
+  const img=new Image(), reader=new FileReader();
+  reader.onload=e=>{ img.onload=()=>{
+    const MAX=700, scale=Math.min(1,MAX/Math.max(img.width,img.height));
+    const c=document.createElement('canvas'); c.width=img.width*scale; c.height=img.height*scale;
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    const dataUrl=c.toDataURL('image/jpeg',0.75);
+    window[dataFieldId]=dataUrl;
+    const pv=$(previewId); pv.src=dataUrl; pv.style.display='block';
+  }; img.src=e.target.result; };
+  reader.readAsDataURL(file);
 }
 async function createProduct(){
   const name=$("pName").value.trim(), price=$("pPrice").value;
   if(!name) return toast("Escribe el nombre del producto.");
   if(price===""||!(Number(price)>=0)) return toast("Escribe el precio.");
   try{
-    await api("/menu",{method:"POST",body:JSON.stringify({name, category_id:$("pCategory").value||null, price:Number(price), description:$("pDesc").value.trim()})});
+    await api("/menu",{method:"POST",body:JSON.stringify({name, category_id:$("pCategory").value||null, price:Number(price), description:$("pDesc").value.trim(), image:window.pImageData||null})});
     toast("Producto creado ✅"); ["pName","pPrice","pDesc"].forEach(k=>$(k).value="");
+    window.pImageData=null; $('pImagePreview').style.display='none'; $('pImageFile').value=''; $('pNameSuggest').innerHTML='';
     await loadAll(); renderProductAdmin();
   }catch(e){ toast(e.message); }
 }
@@ -950,6 +1076,15 @@ async function setProductDest(i,dest){
   const p=products[i]; if(!p) return;
   try{ await api("/menu/"+encodeURIComponent(p.id),{method:"PATCH",body:JSON.stringify({destination:dest})}); toast(`${p.name} → ${dest==='barra'?'☕ Barra':'🍳 Cocina'}`); await loadAll(); renderProductAdmin(); }
   catch(e){ toast(e.message); }
+}
+async function uploadProductImage(i,input){
+  const p=products[i]; if(!p) return;
+  handleImageFile(input,'pImagePreview','__tmpImg');
+  setTimeout(async()=>{
+    if(!window.__tmpImg) return;
+    try{ await api("/menu/"+encodeURIComponent(p.id),{method:"PATCH",body:JSON.stringify({image:window.__tmpImg})}); window.__tmpImg=null; toast("Foto actualizada ✅"); await loadAll(); renderProductAdmin(); }
+    catch(e){ toast(e.message); }
+  },300);
 }
 async function toggleSoldOut(i){
   const p=products[i]; if(!p) return;
@@ -980,7 +1115,7 @@ function renameCategory(id){ const c=catById(id); const n=prompt("Nuevo nombre d
 function moveCategory(id,dir){ menuAction("PATCH","/menu-categories/"+encodeURIComponent(id),{move:dir}); }
 function deleteCategory(id){ if(confirm("¿Eliminar la categoría? Sus productos quedarán 'sin clasificar' (no se borran).")) return menuAction("DELETE","/menu-categories/"+encodeURIComponent(id),null,"Categoría eliminada"); }
 
-const ROLE_LABEL={admin:"Administrador",mesero:"Mesero",cocina:"Cocina",barra:"Barra"};
+const ROLE_LABEL={admin:"Administrador",mesero:"Mesero",cocina:"Cocina",barra:"Barra",repartidor:"Repartidor"};
 async function loadUsers(){
   try{
     usersCache = await api("/users");
@@ -1060,6 +1195,38 @@ function renderCampaignBar(){
 
 // Cocina y Barra se refrescan solas cada 8 segundos
 setInterval(()=>{ if(!token) return; if(currentView==="cocina") loadKitchen(); else if(currentView==="barra") loadBarra(); },8000);
+let shareLocInterval=null;
+function toggleShareLocation(){
+  if($('shareLocToggle').checked){
+    if(!navigator.geolocation){ toast("Tu navegador no soporta ubicación."); $('shareLocToggle').checked=false; return; }
+    const post=()=>navigator.geolocation.getCurrentPosition(
+      pos=>{ api("/my-location",{method:"POST",body:JSON.stringify({lat:pos.coords.latitude,lng:pos.coords.longitude})}).then(()=>{ $('shareLocStatus').textContent="📍 Compartiendo ubicación... última actualización "+new Date().toLocaleTimeString(); }).catch(()=>{}); },
+      ()=>{ $('shareLocStatus').textContent="No pudimos obtener tu ubicación. Revisa los permisos del navegador."; },
+      {enableHighAccuracy:true, maximumAge:5000}
+    );
+    post(); shareLocInterval=setInterval(post,10000);
+  } else {
+    clearInterval(shareLocInterval); shareLocInterval=null;
+    $('shareLocStatus').textContent="Ubicación en pausa.";
+  }
+}
+async function loadMyDeliveries(){
+  const list = await api("/my-deliveries").catch(()=>[]);
+  const steps=[['recibido','📝','Recibido'],['preparando','👨‍🍳','Preparando'],['salio','🚪','Salió'],['en_camino','🛵','En camino'],['entregado','✅','Entregado']];
+  $("myDeliveries").innerHTML = (Array.isArray(list)&&list.length) ? list.map(o=>{
+    const cur=o.delivery_status||'recibido';
+    const idx=steps.findIndex(s=>s[0]===cur);
+    const next=steps[idx+1];
+    return `<div class="card"><h3>Orden #${esc(o.custom_folio||o.id.slice(0,6))}</h3>
+      <p><b>Cliente:</b> ${esc(cleanName(o.customer_name))} · 📱 ${esc(o.customer_phone||'')}</p>
+      <p>📍 ${esc(o.delivery_address||'Sin dirección')}${o.receiver_name?(' · Recibe: '+esc(o.receiver_name)):''}</p>
+      <p class="muted">Estatus actual: ${steps[idx]?steps[idx][1]+' '+steps[idx][2]:cur}</p>
+      ${next?`<button class="success" style="width:100%" onclick="myDeliveryNext('${o.id}','${next[0]}')">${next[1]} Marcar: ${next[2]}</button>`:''}
+    </div>`;
+  }).join("") : "<p class='muted'>No tienes entregas asignadas por ahora.</p>";
+}
+async function myDeliveryNext(oid,status){ try{ await api(`/orders/${oid}/delivery`,{method:"PATCH",body:JSON.stringify({delivery_status:status})}); loadMyDeliveries(); }catch(e){ toast(e.message); } }
+
 boot();
 </script>
 </body>
