@@ -1,83 +1,61 @@
-RUSH POS v25.0 — "The Rush: Club · Café · Cocina"
+RUSH POS v26.0 — "The Rush: Club · Café · Cocina"
 Fecha: 25 de septiembre de 2026
 Plataforma: Cloudflare Workers + D1 (`rush-pos-db`)
 Estado de las versiones
 Versión	Estado
-v24.1 – v24.5	Base funcional: login, comandas por persona, Cocina/Barra separadas, catálogo tipo Starbucks, usuarios, lealtad básica (lista de clientes).
-v25.0	Candidata a estable. Caja con cortes y métodos de pago, inventario, productos agotados, tarjeta de lealtad digital automática, página pública de menú y pedidos, pedidos externos (Rappi/Uber). Probada con pruebas automatizadas (servidor + lógica; algunas también con el frontend real). Falta confirmarla en producción.
+v24.1 – v25.0	Base funcional completa: comandas por persona, catálogo tipo Starbucks, usuarios, caja, inventario, lealtad, página pública, pedidos externos.
+v26.0	Candidata a estable. Rediseño visual del menú público, fotos de producto, repartidores con ubicación en vivo (gratis), envío automático, plantillas de WhatsApp, canje de recompensa, notas por producto. Probada con pruebas automatizadas del servidor y regresión completa de versiones anteriores. Falta confirmarla en producción.
 No hay versión marcada como estable todavía.
 ---
-1. Caja — ✅ funcionando
-Dashboard con ventas de hoy, ventas desde el último corte, desglose por método de pago (efectivo/tarjeta/transferencia), egresos pendientes.
-Top de productos del periodo (para saber qué se vende más).
-Ingresos y egresos manuales, con historial y opción de borrar (solo si aún no entraron a un corte).
-Corte de caja: cierra el periodo desde el último corte hasta ahora, calcula el efectivo esperado (efectivo cobrado + ingresos − egresos), permite anotar el efectivo contado físicamente y muestra la diferencia. Con folio consecutivo e historial.
-Cobro con método de pago real: al cobrar una cuenta, se pregunta cómo pagó el cliente (efectivo/tarjeta/transferencia) y ya no se puede cobrar dos veces la misma cuenta.
-2. Inventario — ✅ funcionando
-Crear insumos (nombre, unidad, existencia inicial, mínimo de alerta).
-Registrar movimientos (entradas y salidas, con motivo) — ya no solo "sumar".
-No deja que el stock quede negativo.
-Marca en rojo los insumos por debajo del mínimo.
-Historial de movimientos.
-3. Productos agotados — ✅ funcionando
-Cada producto se puede marcar 🚫 Agotado, desde el Menú.
-Desaparece (atenuado) de Venta y no se puede agregar al carrito.
-La página pública tampoco lo deja pedir.
-Se puede marcar ✅ Disponible en cualquier momento.
-4. Orden de categorías — ✅ funcionando
-Botones ⬆️⬇️ para subir/bajar categorías dentro de su sección.
+1. Menú público — rediseño completo (`/menu.html`)
+El bug que reportaste: al tocar "Estoy en el club" no pasaba nada visible. Corregido: ahora hace scroll automático directo al menú.
+El rediseño visual: cambié la estructura completa, no solo colores:
+Encabezado tipo "hero" con degradado y tipografía serif para los títulos (Fraunces), inspirado en apps de delivery como Uber Eats/Rappi, pero con la paleta verde+dorado de "The Rush".
+Tarjetas de producto grandes, con foto (o un degradado de color con ícono si aún no subes foto — nunca se ve una casilla vacía y gris).
+Al tocar un producto se abre una ficha con foto grande, descripción y selector de cantidad, en vez de agregarse de golpe sin avisar.
+Buscador, secciones y categorías con la misma jerarquía que ya usas en el admin.
+Fotos de producto — cómo se cargan: en Menú → Nuevo producto, hay un campo para subir una foto desde tu celular o computadora. Se comprime automáticamente en el navegador antes de guardarse (para no saturar la base de datos) y se ve de inmediato en el menú público. También puedes subir o cambiar la foto de un producto ya existente, desde la tabla de clasificación.
+Nota honesta: las fotos se guardan directo en la base de datos (D1), lo cual es gratis y funciona bien para un menú de tamaño normal. Si algún día suben cientos de fotos en alta resolución, seguirá una migración a almacenamiento de archivos (Cloudflare R2) — te aviso si tu catálogo llega a ese punto, no es algo que debas resolver ahora.
+Nombre del producto bien escrito: al escribir el nombre de un producto nuevo (ej. "taco de arrachera"), aparece abajo una sugerencia en mayúsculas/minúsculas correctas ("Taco de Arrachera") que aceptas con un clic. Ya no dependes de escribirlo bien a mano.
+2. Repartidores y envío a domicilio (Fase B/C/D, con opciones gratuitas)
+Fase B — WhatsApp (versión local, sin API de pago, como pediste)
+En Órdenes, cualquier pedido que llegó por la página web tiene un botón 💬 Responder por WhatsApp con 4 plantillas listas para editar y enviar:
+📝 Confirmación de pedido
+💳 Método de pago (usa los datos de transferencia que guardes en Configuración)
+🛵 Va en camino
+✅ Entregado
+Cada plantilla se arma sola con los datos del pedido (folio, total, dirección) y la puedes editar antes de mandarla — abre WhatsApp con el mensaje listo.
+Fase C — Repartidores
+Nuevo rol de usuario: Repartidor (se crea igual que los demás, en Usuarios).
+En Órdenes, cada pedido a domicilio tiene una barra para asignar repartidor y avanzar su estatus: Recibido → Preparando → Salió → En camino → Entregado.
+El repartidor entra con su usuario y ve 🛵 Mis entregas: sus pedidos asignados, con un botón para avanzar al siguiente estatus.
+Fase D — Envío automático y mapa en vivo, 100% gratis
+Costo de envío automático: al escribir su dirección, el cliente toca "Ubicar mi dirección" y el sistema calcula la distancia real desde el club (usando el buscador gratuito de OpenStreetMap) y aplica tu tarifa base + $/km, configurables en Configuración → Envío a domicilio.
+Mapa en vivo, sin apps ni SDKs de pago: el repartidor activa "📍 Compartir mi ubicación" en su pantalla de Mis entregas — usa el GPS que ya trae su celular, sin instalar nada. El cliente entra a su link de seguimiento (`/seguimiento.html`, se genera solo con cada pedido) y ve su pedido avanzando de estatus, y si el repartidor está compartiendo ubicación, lo ve como un punto en un mapa gratuito.
+Límite honesto: esto solo funciona mientras el repartidor mantiene esa pantalla abierta (pantalla prendida). No sigue en segundo plano como una app nativa — eso sí requeriría inversión en una app aparte.
+Dirección estructurada: el pedido a domicilio ahora pide, como pediste: calle, número, colonia, referencia (por si se pierden), nombre de quien recibe, y confirma el WhatsApp.
+3. Notas por producto (ya no solo por comanda completa)
+En Venta, cada línea del carrito tiene un botón 📝 para ponerle una nota a ESE producto específico (ej. "sin cebolla" solo en el taco de la Persona 2, no en toda la comanda). Se ve en Cocina, Barra, Órdenes y en el ticket, junto al producto exacto.
+4. Canje de recompensa integrado
+En Órdenes, junto al botón de tarjeta, ahora hay 🎁 Canjear: si el cliente ya ganó una recompensa de lealtad, se descuenta con un clic (antes solo existía el endpoint, sin botón).
 ---
-5. Tarjeta de lealtad digital — ✅ funcionando (versión web, sin Apple/Google Wallet)
-Cómo la diseñé: tomé el patrón de tus referencias (Hola Lealtad, Fiweex): tarjeta con sellos, QR/link único, vive en el celular del cliente, se actualiza sola. La diferencia importante:
-> Una tarjeta **real** de Apple Wallet / Google Wallet requiere que tú tengas cuenta de desarrollador de Apple (paga, ~$99 USD/año) y un proyecto dado de alta en Google Wallet API. Yo no puedo generar esas credenciales por ti — son cuentas tuyas, con tu identidad legal. Lo que construí es el **equivalente funcional sin esas cuentas**: una página web con la tarjeta, que el cliente guarda como acceso directo en su pantalla de inicio (funciona igual de bien, solo no vive literalmente dentro de la app Wallet). El día que decidas dar de alta esas cuentas, es un paso adicional, no un rediseño.
-Cómo funciona:
-Al tomar una orden (mesero o página pública), se pregunta el WhatsApp del cliente y una casilla "Inscribir a tarjeta de lealtad", marcada por defecto, pero el cliente puede decir que no — no pasa nada si no deja sus datos.
-Al cobrar una cuenta con consentimiento, el sistema suma 1 sello automáticamente. A los 10 sellos (configurable) se reinicia y se marca una recompensa ganada.
-Desde Órdenes, el botón ⭐ Tarjeta abre WhatsApp con el link de la tarjeta del cliente, listo para enviar.
-El cliente abre el link (`/tarjeta.html?token=...`) y ve su tarjeta: sellos, progreso, y si ya ganó su recompensa.
-Configuras cuántos sellos se necesitan y cuál es la recompensa desde Configuración.
-Seguridad: el link usa un token aleatorio, no el número de teléfono, para que nadie pueda adivinar la tarjeta de otro cliente.
-6. Página pública del menú y pedidos — ✅ funcionando (`/menu.html`)
-Diseñada con paletas y tipografía consistentes con "The Rush: Club · Café · Cocina" (ver sección de marca abajo).
-El cliente entra, ve el menú por secciones y categorías (igual que en el admin), y elige:
-🍽️ Estoy en el club → arma su pedido y lo manda por WhatsApp al número que configures (se abre WhatsApp con el pedido ya escrito).
-🛵 A domicilio → elige entre:
-📱 Directo (WhatsApp): arma su carrito aquí mismo y lo envía por WhatsApp, con nombre, teléfono y dirección.
-🛵 Rappi / 🚗 Uber Eats: lo manda directo al link que configures de cada plataforma (tu menú ahí es independiente; aquí solo es la puerta de entrada).
-Igual pide WhatsApp y nombre, con la misma casilla de lealtad.
-No cobra en línea — todo pedido directo se resuelve por WhatsApp (cuenta, transferencia, o pago al llegar), como pediste.
-7. Pedidos externos (Rappi / Uber) — ✅ funcionando
-En Órdenes → 🛵 Capturar pedido externo: el admin o mesero arma el pedido que llegó por Rappi/Uber/WhatsApp y lo manda directo a Cocina/Barra, con folio y etiqueta de canal (🛵 Rappi, 🚗 Uber Eats, 📱 Domicilio directo) visible en Cocina, Barra, Órdenes y el ticket.
-8. Configuración — ✅ nueva pantalla
-Nombre del negocio, WhatsApp para pedidos, links de Rappi y Uber, meta y recompensa de lealtad, y el link para compartir la página pública del menú.
----
-Lo que pediste y NO construí — con la razón exacta
-Bot de WhatsApp con IA que responde solo. Automatizarlo dejando WhatsApp Web abierto en una compu no es estable (se cae, se desconecta) y viola los Términos de Servicio de WhatsApp, lo que arriesga que bloqueen tu número — un riesgo real para un negocio que depende de ese número. La forma correcta y sostenible es la API oficial de WhatsApp Business de Meta: es de pago, tú la das de alta como dueño del negocio (verificación de empresa incluida), y desde ahí sí puedo conectar un flujo de preguntas frecuentes y guion de ventas. Es un proyecto de la siguiente fase, no algo que dependa de código.
-Rastreo en tiempo real del repartidor (tipo Uber/Waze), con mapa y "cuánto falta". Eso requiere una app con acceso al GPS del celular del repartidor, actualizando su posición en vivo — no es algo que una página web haga de forma confiable ni con buena batería. Lo que sí puedo construir ahora, si quieres, es una versión honesta: el repartidor entra desde su celular, ve la dirección, y va actualizando su estatus a mano (Salió / En camino / Entregado) con botones grandes; el cliente ve ese estatus (no un mapa moviéndose). El mapa en vivo real es un proyecto de app nativa aparte.
-Perfil de repartidor con QR/link temporal, asignación, costo de envío automático (tipo Uber/DiDi). No lo incluí en esta versión por el tamaño del corte — es la siguiente pieza lógica una vez que decidamos cómo va lo de WhatsApp (porque ahí es donde definimos si el pedido "entra" al sistema automático o el admin lo sigue capturando a mano como en el punto 7).
-Marca unificada: "The Rush · Club, Café & Cocina"
-Usé principios de psicología del color y de marketing de restaurantes:
-Verde oscuro (#0f2f26) como color ancla: transmite el club deportivo (pádel, aire libre) sin caer en el naranja genérico de delivery.
-Dorado (#f2a71b) como acento: es el color que en cafeterías/restaurantes se asocia con "premium" y "recompensa" — lo uso en los sellos de lealtad y precios.
-Naranja (cocina) y verde-azulado (barra) como códigos de color internos, ya existentes en tu sistema, ahora también visibles en la página pública (para que el cliente entienda, sin que se lo tengas que explicar, qué es comida y qué es bebida).
-El nombre "The Rush · Club, Café & Cocina" aparece en el encabezado de la página pública y de la tarjeta, dejando claro desde el primer segundo que es club + café + comida — resolviendo la confusión que mencionaste.
-Esto es un punto de partida sólido, no un diseño cerrado: cuando tengas tu logo final o paleta de marca ya definida, la aplico directamente.
+Sobre las fotos que compartiste en Google Drive
+Vi tu mensaje con la carpeta de imágenes nombradas por platillo. Para poder leerlas necesito que conectes Google Drive (te va a aparecer la opción de conectar en el chat) — en cuanto lo hagas, entro a la carpeta, emparejo cada foto con su producto por nombre, y te dejo una siguiente versión con las fotos ya cargadas de una vez, sin que tengas que subirlas tú una por una.
 D1: qué cambia en la base de datos
-No tienes que correr SQL. El Worker crea automáticamente, en el primer uso:
-Tablas `pos_settings`, `pos_loyalty`, `pos_cash_movements`, `pos_cuts`, `pos_inventory`, `pos_inventory_moves`
-Columnas nuevas en `orders`: `channel`, `loyalty_consent`
-Columna nueva en `menu_items`: `sold_out`
-Configuración inicial (nombre del negocio, meta de lealtad, etc.)
-No modifica ni borra nada existente. `sql/migracion_d1.sql` trae consultas de verificación, por si quieres confirmarlo tú mismo.
+No tienes que correr SQL. El Worker crea/agrega solo:
+Columna `image` en `menu_items`
+Columnas `delivery_status`, `driver_id`, `delivery_lat`, `delivery_lng`, `shipping_cost`, `tracking_token`, `delivery_address`, `receiver_name` en `orders`
+Tabla `pos_driver_locations`
+Configuración nueva: ubicación del negocio, tarifa de envío, datos de pago
+Rol `repartidor` disponible en Usuarios
+No modifica ni borra nada existente.
 Cómo desplegar
-Sube `server.js`, `wrangler.toml`, `public/index.html`, `public/menu.html` y `public/tarjeta.html`, y despliega.
-Entra como administrador a la app principal.
-Ve a ⚙️ Configuración y llena: nombre del negocio, tu WhatsApp de pedidos, links de Rappi/Uber, meta y recompensa de lealtad.
-Copia el link de "Página pública del menú" y pruébalo en tu celular.
-Haz una venta de prueba con WhatsApp real, cóbrala, y toca ⭐ Tarjeta para ver el flujo completo.
-Pendiente (roadmap sugerido)
-Fase B — WhatsApp Business API oficial (requiere que tú des de alta cuenta de Meta Business): preguntas frecuentes automáticas, guion de ventas, y que los pedidos de la página pública lleguen ya estructurados a un panel en vez de solo abrir WhatsApp.
-Fase C — Repartidores: perfil de repartidor, asignación desde admin, estatus manual (salió/en camino/entregado) visible para el cliente.
-Fase D — Costo de envío automático y mapa en tiempo real (requiere definir presupuesto para app nativa o SDK de mapas).
-Notas por producto/persona (hoy son por comanda completa).
-Canje de recompensa integrado al cobro (hoy es un endpoint listo, `/api/loyalty-redeem`, pero falta el botón en la pantalla de Órdenes).
+Sube todos los archivos (`server.js`, `wrangler.toml`, `public/index.html`, `public/menu.html`, `public/tarjeta.html`, `public/seguimiento.html`) y despliega.
+Entra como admin → Configuración: revisa/ajusta la ubicación del negocio (o deja Pachuca centro por default), tarifa de envío, y datos de transferencia.
+Menú: sube al menos una foto de prueba y usa la sugerencia de nombre en un producto nuevo.
+Usuarios: crea un usuario de prueba con rol Repartidor.
+Haz un pedido de prueba a domicilio desde `/menu.html`, asígnale el repartidor de prueba desde Órdenes, y activa "Compartir ubicación" desde el usuario repartidor para ver el flujo completo en `/seguimiento.html`.
+Pendiente
+Cargar las fotos de tu carpeta de Drive (pendiente de que conectes el acceso).
+Costo de envío con ruta real por calle (hoy es línea recta) — requeriría un servicio de rutas, hay opciones gratuitas con límites que podemos evaluar si la línea recta no es suficientemente precisa para ti.
+Clon de Uber para Pachuca (proyecto aparte, en pausa, listo para retomar).
