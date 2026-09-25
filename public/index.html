@@ -360,6 +360,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <label>Cliente / referencia:<input id="extCustomer" placeholder="Nombre o # de pedido"></label>
       <label>WhatsApp (opcional):<input id="extPhone" maxlength="10" placeholder="10 dígitos"></label>
       <label>Dirección de entrega:<input id="extAddress"></label>
+      <label class="row" style="gap:8px;grid-column:1/-1"><input type="checkbox" id="extConsent" style="width:auto" checked> Inscribir a tarjeta de lealtad</label>
     </div>
     <div class="row" style="margin-top:10px"><select id="extProductSelect" style="flex:2"></select><input type="number" id="extQty" value="1" min="1" style="width:80px"><button class="primary" onclick="addExtItem()">＋</button></div>
     <div id="extCart" style="margin-top:10px"></div>
@@ -925,7 +926,7 @@ function copyPublicLink(){ $("publicLinkBox").select(); document.execCommand("co
 
 // ----- Pedidos externos (Rappi/Uber/Domicilio directo) -----
 function openExternalOrderModal(){
-  extCart=[]; $("extCustomer").value=""; $("extPhone").value=""; $("extAddress").value="";
+  extCart=[]; $("extCustomer").value=""; $("extPhone").value=""; $("extAddress").value=""; $("extConsent").checked=true;
   $("extProductSelect").innerHTML = products.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} ($${p.price})</option>`).join("");
   renderExtCart(); $("externalOrderModal").classList.remove("hidden");
 }
@@ -947,6 +948,7 @@ async function submitExternalOrder(){
     const r=await api("/external-order",{method:"POST",body:JSON.stringify({
       channel:$("extChannel").value, customer_name:$("extCustomer").value.trim(),
       customer_phone:$("extPhone").value.replace(/\D/g,""), address:$("extAddress").value.trim(), items:extCart,
+      loyalty_consent:$("extConsent").checked?1:0,
     })});
     toast(`Pedido #${r.folio} enviado a Cocina/Barra ✅`); $("externalOrderModal").classList.add("hidden"); loadOrders();
   }catch(e){ toast(e.message); }
