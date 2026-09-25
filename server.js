@@ -2,6 +2,7 @@
 const ROLES = ["admin", "mesero", "cocina", "barra"];
 const SESSION_MS = 24 * 60 * 60 * 1000;
 let sessionsReady = false;
+let menuSchemaReady2 = false;
 let menuSchemaReady = false;
 
 // Estructura inicial del menú (tipo Starbucks: 2 secciones y categorías por "cómo lo pide el cliente")
@@ -86,6 +87,25 @@ export default {
       const db = env.DB;
       if (!db) return json({ error: "Base de datos no disponible" }, 500);
 
+      if (!menuSchemaReady2) {
+        await db.prepare(`CREATE TABLE IF NOT EXISTS pos_settings (key TEXT PRIMARY KEY, value TEXT)`).run();
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_loyalty (
+             phone TEXT PRIMARY KEY, name TEXT, card_token TEXT UNIQUE, stamps INTEGER DEFAULT 0,
+             rewards_earned INTEGER DEFAULT 0, rewards_redeemed INTEGER DEFAULT 0,
+             consent INTEGER DEFAULT 1, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')))`
+        ).run();
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN channel TEXT DEFAULT 'restaurante'").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN loyalty_consent INTEGER DEFAULT 0").run(); } catch (e) {}
+        const defSettings = [
+          ["business_name", "The Rush - Club, Cafe & Cocina"],
+          ["whatsapp_order_number", ""], ["rappi_link", ""], ["uber_link", ""],
+          ["loyalty_goal", "10"], ["loyalty_reward", "Un cafe o postre de cortesia"],
+        ];
+        for (const [k, v] of defSettings) await db.prepare("INSERT OR IGNORE INTO pos_settings (key,value) VALUES (?,?)").bind(k, v).run();
+        menuSchemaReady2 = true;
+      }
+
       if (!sessionsReady) {
         await db.prepare(
           `CREATE TABLE IF NOT EXISTS pos_sessions (
@@ -105,6 +125,27 @@ export default {
              id TEXT PRIMARY KEY, section_id TEXT NOT NULL, name TEXT NOT NULL, sort_order INTEGER DEFAULT 0)`
         ).run();
         try { await db.prepare("ALTER TABLE menu_items ADD COLUMN category_id TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE menu_items ADD COLUMN sold_out INTEGER DEFAULT 0").run(); } catch (e) {}
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_cash_movements (
+             id TEXT PRIMARY KEY, type TEXT NOT NULL, concept TEXT NOT NULL, amount REAL NOT NULL,
+             created_by TEXT, created_at TEXT DEFAULT (datetime('now')))`
+        ).run();
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_cuts (
+             id TEXT PRIMARY KEY, folio INTEGER, period_start TEXT, period_end TEXT, data TEXT,
+             created_by TEXT, created_at TEXT DEFAULT (datetime('now')))`
+        ).run();
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_inventory (
+             id TEXT PRIMARY KEY, name TEXT NOT NULL, unit TEXT DEFAULT 'pza', stock REAL DEFAULT 0,
+             min_stock REAL DEFAULT 0, active INTEGER DEFAULT 1)`
+        ).run();
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_inventory_moves (
+             id TEXT PRIMARY KEY, item_id TEXT, qty REAL, reason TEXT, created_by TEXT,
+             created_at TEXT DEFAULT (datetime('now')))`
+        ).run();
         for (const sec of DEFAULT_SECTIONS)
           await db.prepare("INSERT OR IGNORE INTO pos_menu_sections (id,name,icon,destination,sort_order) VALUES (?,?,?,?,?)")
             .bind(sec.id, sec.name, sec.icon, sec.destination, sec.sort).run();
@@ -119,6 +160,81 @@ export default {
       const calcTotal = (items) =>
         items.reduce((s, i) => s + (Number(i.qty) || 1) * (Number(i.unit_price) || 0), 0);
       const parseOrder = (r) => ({ ...r, items: JSON.parse(r.items || "[]"), np: parseNotes(r.notes) });
+
+      const soldOutNames = async (items) => {
+        const ids = [...new Set((items || []).map((i) => i.menu_item_id).filter(Boolean).map(String))].slice(0, 80);
+        if (!ids.length) return [];
+        const q = ids.map(() => "?").join(",");
+        const { results } = await db.prepare(`SELECT name FROM menu_items WHERE sold_out=1 AND id IN (${q})`).bind(...ids).all();
+        return (results || []).map((r) => r.name);
+      };
+      const getSettings = async () => {
+        const { results } = await db.prepare("SELECT key, value FROM pos_settings").all();
+        const o = {}; for (const r of results || []) o[r.key] = r.value; return o;
+      };
+      const genToken = () => crypto.randomUUID().replace(/-/g, "");
+      const addStamp = async (phone, name) => {
+        const goal = Number((await getSettings()).loyalty_goal) || 10;
+        let row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(phone).first();
+        if (!row) {
+          const token = genToken();
+          await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent) VALUES (?,?,?,0,1)").bind(phone, name, token).run();
+          row = { phone, name, card_token: token, stamps: 0, rewards_earned: 0 };
+        }
+        let stamps = row.stamps + 1, earned = row.rewards_earned, justEarned = false;
+        if (stamps >= goal) { stamps = 0; earned += 1; justEarned = true; }
+        await db.prepare("UPDATE pos_loyalty SET stamps=?, rewards_earned=?, name=?, updated_at=datetime('now') WHERE phone=?")
+          .bind(stamps, earned, name || row.name, phone).run();
+        return { token: row.card_token, stamps, goal, justEarned };
+      };
+
+      // ===== PUBLICO (sin sesion): pagina de pedidos y tarjeta de lealtad =====
+      if (path === "/api/public-settings" && request.method === "GET") {
+        const st = await getSettings();
+        return json({
+          business_name: st.business_name, whatsapp_order_number: st.whatsapp_order_number,
+          rappi_link: st.rappi_link, uber_link: st.uber_link,
+          loyalty_goal: Number(st.loyalty_goal) || 10, loyalty_reward: st.loyalty_reward,
+        });
+      }
+      if (path === "/api/public-menu" && request.method === "GET") {
+        const its = ((await db.prepare("SELECT * FROM menu_items WHERE active=1 AND sold_out=0 ORDER BY sort_order, name").all()).results) || [];
+        const secs = ((await db.prepare("SELECT * FROM pos_menu_sections ORDER BY sort_order, name").all()).results) || [];
+        const cats = ((await db.prepare("SELECT * FROM pos_menu_categories ORDER BY sort_order, name").all()).results) || [];
+        return json({ items: its, structure: secs.map((sc) => ({ ...sc, categories: cats.filter((c) => c.section_id === sc.id) })) });
+      }
+      if (path === "/api/public-order" && request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const items0 = b.items || [];
+        if (!items0.length) return json({ error: "El carrito esta vacio" }, 400);
+        const soldOut = await soldOutNames(items0);
+        if (soldOut.length) return json({ error: "Agotado: " + soldOut.join(", ") }, 409);
+        let phone = String(b.customer_phone || "").replace(/\D/g, ""); if (phone.length > 10) phone = phone.slice(-10);
+        if (phone.length !== 10) return json({ error: "WhatsApp a 10 digitos" }, 400);
+        const name = String(b.customer_name || "Cliente").trim() || "Cliente";
+        const channel = ["restaurante", "domicilio_directo"].includes(b.channel) ? b.channel : "restaurante";
+        const notes = JSON.stringify({ type: channel === "domicilio_directo" ? "Domicilio (directo)" : "Restaurante", cocina: String(b.notes || "").trim(), barra: "" });
+        const total = calcTotal(items0);
+        const id = crypto.randomUUID();
+        const dd = new Date(), p2b = (n) => String(n).padStart(2, "0");
+        const folio = "WEB-" + p2b(dd.getUTCDate()) + p2b(dd.getUTCMonth() + 1) + "-" + p2b(dd.getUTCHours()) + p2b(dd.getUTCMinutes());
+        await db.prepare(
+          `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
+        ).bind(id, folio, name, phone, notes, JSON.stringify(items0), total, total, channel, b.loyalty_consent ? 1 : 0).run();
+        return json({ id, folio }, 201);
+      }
+      if (path === "/api/loyalty-card" && request.method === "GET") {
+        const token = url.searchParams.get("token") || "";
+        const row = token ? await db.prepare("SELECT * FROM pos_loyalty WHERE card_token=?").bind(token).first() : null;
+        if (!row) return json({ error: "Tarjeta no encontrada" }, 404);
+        const st = await getSettings();
+        return json({
+          name: row.name, stamps: row.stamps, goal: Number(st.loyalty_goal) || 10, reward: st.loyalty_reward,
+          rewards_earned: row.rewards_earned, rewards_redeemed: row.rewards_redeemed, business_name: st.business_name,
+        });
+      }
+
 
       // ===== LOGIN (único endpoint sin sesión) =====
       if (path === "/api/login" && request.method === "POST") {
@@ -267,6 +383,38 @@ export default {
         }
       }
 
+      // Da (o crea) el token de la tarjeta de un cliente, para compartir su link
+      if (path === "/api/loyalty-token" && request.method === "POST") {
+        if (!isAdmin && sess.role !== "mesero") return json({ error: "No autorizado" }, 403);
+        const b = await request.json().catch(() => ({}));
+        let phone = String(b.phone || "").replace(/\D/g, ""); if (phone.length > 10) phone = phone.slice(-10);
+        if (phone.length !== 10) return json({ error: "WhatsApp no valido" }, 400);
+        let row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(phone).first();
+        if (!row) {
+          const token = genToken();
+          await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent) VALUES (?,?,?,0,1)").bind(phone, String(b.name || "Cliente"), token).run();
+          row = { card_token: token };
+        }
+        return json({ token: row.card_token });
+      }
+      if (path === "/api/loyalty-redeem" && request.method === "POST") {
+        if (!isAdmin && sess.role !== "mesero") return json({ error: "No autorizado" }, 403);
+        const b = await request.json().catch(() => ({}));
+        let phone = String(b.phone || "").replace(/\D/g, ""); if (phone.length > 10) phone = phone.slice(-10);
+        const row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(phone).first();
+        if (!row) return json({ error: "Cliente no encontrado" }, 404);
+        if (row.rewards_earned <= row.rewards_redeemed) return json({ error: "No tiene recompensas disponibles" }, 400);
+        await db.prepare("UPDATE pos_loyalty SET rewards_redeemed=rewards_redeemed+1, updated_at=datetime('now') WHERE phone=?").bind(phone).run();
+        return json({ ok: true });
+      }
+      if (path === "/api/settings" && request.method === "GET") return json(await getSettings());
+      if (path === "/api/settings" && request.method === "PATCH") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede editar la configuracion" }, 403);
+        const b = await request.json().catch(() => ({}));
+        for (const [k, v] of Object.entries(b)) await db.prepare("INSERT INTO pos_settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, String(v ?? "")).run();
+        return json({ ok: true });
+      }
+
       // ===== CLIENTES (se arman con los datos de las órdenes) =====
       if (path === "/api/customers" && request.method === "GET") {
         const { results } = await db.prepare(
@@ -324,6 +472,18 @@ export default {
             .bind(cat.id, cat.name, cat.destination, pid).run();
         await moveOpenOrderItems(productIds, cat.destination);
         return true;
+      };
+      // Sube/baja un elemento y renumera su grupo
+      const reorder = async (table, whereCol, whereVal, id, dir) => {
+        const rows = whereCol
+          ? (await db.prepare(`SELECT id FROM ${table} WHERE ${whereCol}=? ORDER BY sort_order, name`).bind(whereVal).all()).results
+          : (await db.prepare(`SELECT id FROM ${table} ORDER BY sort_order, name`).all()).results;
+        const ids = (rows || []).map((r) => r.id);
+        const i = ids.indexOf(id), j = dir === "up" ? i - 1 : i + 1;
+        if (i < 0 || j < 0 || j >= ids.length) return;
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+        for (let k = 0; k < ids.length; k++)
+          await db.prepare(`UPDATE ${table} SET sort_order=? WHERE id=?`).bind(k + 1, ids[k]).run();
       };
       const idsInCategories = async (catIds) => {
         if (!catIds.length) return [];
@@ -397,12 +557,16 @@ export default {
 
       const mm = path.match(/^\/api\/menu\/([^\/]+)$/);
       if (mm && request.method === "PATCH") {
-        const deny = needAdmin(); if (deny) return deny;
         const pid = decodeURIComponent(mm[1]);
         const cur = await db.prepare("SELECT * FROM menu_items WHERE id=?").bind(pid).first();
         if (!cur) return json({ error: "Producto no encontrado" }, 404);
         const b = await request.json().catch(() => ({}));
+        const onlySoldOut = Object.keys(b).length === 1 && b.sold_out !== undefined;
+        if (!(onlySoldOut && ["admin", "cocina", "barra"].includes(sess.role))) {
+          const deny = needAdmin(); if (deny) return deny;
+        }
         const sets = [], vals = [];
+        if (b.sold_out !== undefined) { sets.push("sold_out=?"); vals.push(b.sold_out ? 1 : 0); }
         if (typeof b.name === "string" && b.name.trim()) { sets.push("name=?"); vals.push(b.name.trim()); }
         if (typeof b.description === "string") { sets.push("description=?"); vals.push(b.description); }
         if (b.price !== undefined && Number(b.price) >= 0) { sets.push("price=?"); vals.push(Number(b.price)); }
@@ -438,6 +602,10 @@ export default {
         const cur = await db.prepare("SELECT * FROM pos_menu_sections WHERE id=?").bind(sid).first();
         if (!cur) return json({ error: "Sección no encontrada" }, 404);
         const b = await request.json().catch(() => ({}));
+        if (b.move === "up" || b.move === "down") {
+          await reorder("pos_menu_sections", null, null, sid, b.move);
+          return json({ ok: true });
+        }
         const sets = [], vals = [];
         if (typeof b.name === "string" && b.name.trim()) { sets.push("name=?"); vals.push(b.name.trim()); }
         if (typeof b.icon === "string" && b.icon.trim()) { sets.push("icon=?"); vals.push(b.icon.trim()); }
@@ -451,11 +619,12 @@ export default {
           // toda la sección cambia de estación (ej. Bebidas -> barra)
           const cats = ((await db.prepare("SELECT id FROM pos_menu_categories WHERE section_id=?").bind(sid).all()).results || []).map((c) => c.id);
           const ids = await idsInCategories(cats);
-          if (ids.length) {
-            const q = ids.map(() => "?").join(",");
-            await db.prepare(`UPDATE menu_items SET destination=? WHERE id IN (${q})`).bind(b.destination, ...ids).run();
-            await moveOpenOrderItems(ids, b.destination);
+          if (cats.length) {
+            // por categoría (no por lista de productos) para no pasar del límite de 100 variables de D1
+            const cq = cats.map(() => "?").join(",");
+            await db.prepare(`UPDATE menu_items SET destination=? WHERE category_id IN (${cq})`).bind(b.destination, ...cats).run();
           }
+          await moveOpenOrderItems(ids, b.destination);
         }
         return json({ ok: true });
       }
@@ -491,6 +660,10 @@ export default {
         const cur = await db.prepare("SELECT * FROM pos_menu_categories WHERE id=?").bind(cid).first();
         if (!cur) return json({ error: "Categoría no encontrada" }, 404);
         const b = await request.json().catch(() => ({}));
+        if (b.move === "up" || b.move === "down") {
+          await reorder("pos_menu_categories", "section_id", cur.section_id, cid, b.move);
+          return json({ ok: true });
+        }
         if (typeof b.name === "string" && b.name.trim()) {
           await db.prepare("UPDATE pos_menu_categories SET name=? WHERE id=?").bind(b.name.trim(), cid).run();
           await db.prepare("UPDATE menu_items SET category=? WHERE category_id=?").bind(b.name.trim(), cid).run();
@@ -540,22 +713,29 @@ export default {
         if (!id && request.method === "POST") {
           const b = await request.json();
           const items = (b.items || []).map(({ done, ...i }) => i);
+          const soldOut = await soldOutNames(items);
+          if (soldOut.length) return json({ error: "Agotado: " + soldOut.join(", ") }, 409);
           const total = calcTotal(items);
           const newId = crypto.randomUUID();
           const notes = b.notes && typeof b.notes === "object" ? JSON.stringify(b.notes) : String(b.notes || "");
           await db.prepare(
-            `INSERT INTO orders (id, custom_folio, table_id, customer_name, customer_phone, notes, items, subtotal, total, created_at, updated_at)
-             VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
+            `INSERT INTO orders (id, custom_folio, table_id, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
           ).bind(newId, b.custom_folio || null, b.table_id || null, b.customer_name || "Mostrador",
-                 b.customer_phone || "", notes, JSON.stringify(items), total, total).run();
+                 b.customer_phone || "", notes, JSON.stringify(items), total, total, b.channel || "restaurante", b.loyalty_consent ? 1 : 0).run();
           return json({ id: newId }, 201);
         }
 
         if (id && sub === "payments" && request.method === "POST") {
           const o = await db.prepare("SELECT * FROM orders WHERE id = ?").bind(id).first();
           if (!o) return json({ error: "Orden no encontrada" }, 404);
+          if (o.status === "paid") return json({ error: "Esta cuenta ya fue cobrada" }, 409);
           let method = "efectivo";
           try { const b = await request.json(); if (b.method) method = b.method; } catch (e) {}
+          if (!["efectivo", "tarjeta", "transferencia"].includes(method)) return json({ error: "Método de pago no válido" }, 400);
+          let loyalty = null;
+          if (o.loyalty_consent && o.customer_phone && String(o.customer_phone).replace(/\D/g, "").length >= 10)
+            loyalty = await addStamp(String(o.customer_phone).replace(/\D/g, "").slice(-10), (o.customer_name || "Cliente").replace(/\s*\(\d{10}\)\s*$/, ""));
           await db.batch([
             db.prepare(
               `INSERT INTO payments (order_id, method, amount, cash_amount, card_amount, terminal_amount, created_by)
@@ -566,7 +746,7 @@ export default {
                closed_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
             ).bind(method, id),
           ]);
-          return json({ ok: true, paid: o.total });
+          return json({ ok: true, paid: o.total, loyalty });
         }
 
         if (id && !sub && request.method === "GET") {
@@ -584,6 +764,8 @@ export default {
           let itemsChanged = false;
           if (Array.isArray(b.items)) { items = b.items; itemsChanged = true; }
           if (Array.isArray(b.add_items) && b.add_items.length) {
+            const soldOut = await soldOutNames(b.add_items);
+            if (soldOut.length) return json({ error: "Agotado: " + soldOut.join(", ") }, 409);
             items = items.concat(b.add_items.map(({ done, ...i }) => i));
             itemsChanged = true;
           }
@@ -612,17 +794,193 @@ export default {
         }
       }
 
-      // ===== DASHBOARD (mínimo) =====
+      if (path === "/api/external-order" && request.method === "POST") {
+        if (!isAdmin && sess.role !== "mesero") return json({ error: "No autorizado" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const items = b.items || [];
+        const soldOut = await soldOutNames(items);
+        if (soldOut.length) return json({ error: "Agotado: " + soldOut.join(", ") }, 409);
+        if (!items.length) return json({ error: "Agrega productos" }, 400);
+        const channel = ["rappi", "uber", "domicilio_directo"].includes(b.channel) ? b.channel : "rappi";
+        const total = calcTotal(items);
+        const notes = JSON.stringify({ type: (channel === "rappi" ? "🛵 Rappi" : channel === "uber" ? "🚗 Uber Eats" : "📱 Domicilio directo") + (b.address ? " · " + b.address : ""), cocina: String(b.notes || "").trim(), barra: "" });
+        const id = crypto.randomUUID();
+        const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
+        const folio = channel.slice(0, 3).toUpperCase() + "-" + p2(d.getUTCHours()) + p2(d.getUTCMinutes());
+        await db.prepare(
+          `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
+        ).bind(id, folio, String(b.customer_name || channel).trim(), String(b.customer_phone || ""), notes, JSON.stringify(items), total, total, channel).run();
+        return json({ id, folio }, 201);
+      }
+
+      // ===== CAJA =====
+      // Hora de México: UTC-6 (sin horario de verano). "Hoy" = día local, no día UTC.
+      const clock = async () => await db.prepare(
+        "SELECT datetime(date('now','-6 hours'),'+6 hours','-1 second') AS day_start, datetime('now') AS now"
+      ).first();
+      const lastCutRow = async () => await db.prepare("SELECT * FROM pos_cuts ORDER BY folio DESC LIMIT 1").first();
+
+      // Resumen de ventas y movimientos de caja en (start, end]
+      const summarize = async (start, end) => {
+        const pays = (await db.prepare(
+          "SELECT order_id, method, amount FROM payments WHERE created_at > ? AND created_at <= ?"
+        ).bind(start, end).all()).results || [];
+        const by = { efectivo: 0, tarjeta: 0, transferencia: 0 };
+        let sales = 0;
+        for (const p of pays) {
+          const m = String(p.method || "").toLowerCase(), a = Number(p.amount) || 0;
+          sales += a;
+          if (m === "efectivo" || m === "cash") by.efectivo += a;
+          else if (m === "tarjeta" || m === "card" || m === "terminal") by.tarjeta += a;
+          else by.transferencia += a;
+        }
+        const orders = new Set(pays.map((p) => p.order_id)).size;
+        const ords = (await db.prepare(
+          "SELECT id, items FROM orders WHERE id IN (SELECT order_id FROM payments WHERE created_at > ? AND created_at <= ?)"
+        ).bind(start, end).all()).results || [];
+        const byDest = { cocina: 0, barra: 0 }, tally = {};
+        for (const o of ords) {
+          let its; try { its = JSON.parse(o.items || "[]"); } catch (e) { continue; }
+          for (const i of its) {
+            const amt = (Number(i.qty) || 1) * (Number(i.unit_price) || 0);
+            byDest[(i.destination || "cocina") === "barra" ? "barra" : "cocina"] += amt;
+            const t = (tally[i.name] ||= { name: i.name, qty: 0, amount: 0 });
+            t.qty += Number(i.qty) || 1; t.amount += amt;
+          }
+        }
+        const movements = (await db.prepare(
+          "SELECT id, type, concept, amount, created_by, created_at FROM pos_cash_movements WHERE created_at > ? AND created_at <= ? ORDER BY created_at"
+        ).bind(start, end).all()).results || [];
+        const income = movements.filter((m) => m.type === "ingreso").reduce((x, m) => x + m.amount, 0);
+        const expenses = movements.filter((m) => m.type === "egreso").reduce((x, m) => x + m.amount, 0);
+        return {
+          period_start: start, period_end: end, orders, sales,
+          avg_ticket: orders ? sales / orders : 0,
+          by_method: by, by_dest: byDest,
+          top: Object.values(tally).sort((x, y) => y.qty - x.qty).slice(0, 5),
+          income, expenses, movements,
+          expected_cash: by.efectivo + income - expenses,
+        };
+      };
+      const cutOut = (r) => ({ id: r.id, folio: r.folio, created_by: r.created_by, created_at: r.created_at, ...JSON.parse(r.data || "{}") });
+
       if (path === "/api/dashboard" && request.method === "GET") {
-        let sales = 0, orders = 0;
-        try {
-          const r = await db.prepare(
-            `SELECT COALESCE(SUM(total),0) AS s, COUNT(*) AS c FROM orders
-             WHERE status='paid' AND date(closed_at)=date('now')`
-          ).first();
-          sales = r?.s || 0; orders = r?.c || 0;
-        } catch (e) {}
-        return json({ today: { sales, orders, expenses: 0 } });
+        const c = await clock();
+        const lc = await lastCutRow();
+        const since = lc ? lc.period_end : c.day_start;
+        const [today, pending] = await Promise.all([summarize(c.day_start, c.now), summarize(since, c.now)]);
+        return json({
+          today: { sales: today.sales, orders: today.orders, avg_ticket: today.avg_ticket, by_method: today.by_method, expenses: today.expenses, income: today.income },
+          pending, last_cut: lc ? cutOut(lc) : null,
+        });
+      }
+
+      if (path === "/api/manual-transactions" && request.method === "POST") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede registrar movimientos de caja" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const type = b.type === "egreso" ? "egreso" : b.type === "ingreso" ? "ingreso" : null;
+        const concept = String(b.concept || "").trim(), amount = Number(b.amount);
+        if (!type) return json({ error: "Tipo no válido" }, 400);
+        if (!concept) return json({ error: "Escribe el concepto" }, 400);
+        if (!(amount > 0)) return json({ error: "El monto debe ser mayor a 0" }, 400);
+        const id = crypto.randomUUID();
+        await db.prepare("INSERT INTO pos_cash_movements (id,type,concept,amount,created_by) VALUES (?,?,?,?,?)")
+          .bind(id, type, concept, amount, sess.username).run();
+        return json({ id }, 201);
+      }
+      const tm = path.match(/^\/api\/manual-transactions\/([^\/]+)$/);
+      if (tm && request.method === "DELETE") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede borrar movimientos" }, 403);
+        const lc = await lastCutRow();
+        const mv = await db.prepare("SELECT * FROM pos_cash_movements WHERE id=?").bind(decodeURIComponent(tm[1])).first();
+        if (!mv) return json({ error: "Movimiento no encontrado" }, 404);
+        if (lc && mv.created_at <= lc.period_end) return json({ error: "Ese movimiento ya entró en un corte y no se puede borrar" }, 400);
+        await db.prepare("DELETE FROM pos_cash_movements WHERE id=?").bind(mv.id).run();
+        return json({ ok: true });
+      }
+
+      if (path === "/api/cuts" && request.method === "GET") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede ver los cortes" }, 403);
+        const { results } = await db.prepare("SELECT * FROM pos_cuts ORDER BY folio DESC LIMIT 60").all();
+        return json((results || []).map(cutOut));
+      }
+      if (path === "/api/cuts" && request.method === "POST") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede hacer el corte" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const c = await clock();
+        const lc = await lastCutRow();
+        const data = await summarize(lc ? lc.period_end : c.day_start, c.now);
+        const counted = b.counted_cash === null || b.counted_cash === undefined || b.counted_cash === "" ? null : Number(b.counted_cash);
+        if (counted !== null && !(counted >= 0)) return json({ error: "El efectivo contado no es válido" }, 400);
+        data.counted_cash = counted;
+        data.difference = counted === null ? null : counted - data.expected_cash;
+        const folio = ((lc && lc.folio) || 0) + 1;
+        const id = crypto.randomUUID();
+        await db.prepare("INSERT INTO pos_cuts (id, folio, period_start, period_end, data, created_by) VALUES (?,?,?,?,?,?)")
+          .bind(id, folio, data.period_start, data.period_end, JSON.stringify(data), sess.username).run();
+        return json(cutOut(await db.prepare("SELECT * FROM pos_cuts WHERE id=?").bind(id).first()), 201);
+      }
+
+      // ===== INVENTARIO (control manual de insumos) =====
+      const INV_ROLES = ["admin", "cocina", "barra"];
+      if (path === "/api/inventory" && request.method === "GET") {
+        const { results } = await db.prepare("SELECT * FROM pos_inventory WHERE active=1 ORDER BY name").all();
+        return json((results || []).map((i) => ({ ...i, low: i.min_stock > 0 && i.stock <= i.min_stock })));
+      }
+      if (path === "/api/inventory" && request.method === "POST") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede crear insumos" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const name = String(b.name || "").trim();
+        if (!name) return json({ error: "El nombre es obligatorio" }, 400);
+        const dup = await db.prepare("SELECT id FROM pos_inventory WHERE active=1 AND lower(trim(name))=lower(?)").bind(name).first();
+        if (dup) return json({ error: "Ya existe un insumo con ese nombre" }, 409);
+        const stock = Number(b.stock) || 0, min = Number(b.min_stock) || 0;
+        if (stock < 0 || min < 0) return json({ error: "Las cantidades no pueden ser negativas" }, 400);
+        const id = crypto.randomUUID();
+        await db.prepare("INSERT INTO pos_inventory (id,name,unit,stock,min_stock,active) VALUES (?,?,?,?,?,1)")
+          .bind(id, name, String(b.unit || "pza"), stock, min).run();
+        if (stock > 0)
+          await db.prepare("INSERT INTO pos_inventory_moves (id,item_id,qty,reason,created_by) VALUES (?,?,?,?,?)")
+            .bind(crypto.randomUUID(), id, stock, "Existencia inicial", sess.username).run();
+        return json({ id }, 201);
+      }
+      if (path === "/api/inventory-moves" && request.method === "GET") {
+        const { results } = await db.prepare(
+          `SELECT m.id, m.qty, m.reason, m.created_by, m.created_at, i.name, i.unit
+             FROM pos_inventory_moves m LEFT JOIN pos_inventory i ON i.id = m.item_id
+            ORDER BY m.created_at DESC, m.rowid DESC LIMIT 30`
+        ).all();
+        return json(results || []);
+      }
+      const im = path.match(/^\/api\/inventory\/([^\/]+)$/);
+      if (im && request.method === "PATCH") {
+        const iid = decodeURIComponent(im[1]);
+        const cur = await db.prepare("SELECT * FROM pos_inventory WHERE id=?").bind(iid).first();
+        if (!cur) return json({ error: "Insumo no encontrado" }, 404);
+        const b = await request.json().catch(() => ({}));
+        if (b.delta !== undefined) {
+          if (!INV_ROLES.includes(sess.role)) return json({ error: "No tienes permiso para mover el inventario" }, 403);
+          const delta = Number(b.delta);
+          if (!delta || !isFinite(delta)) return json({ error: "Escribe una cantidad válida" }, 400);
+          const next = Math.round((cur.stock + delta) * 1000) / 1000;
+          if (next < 0) return json({ error: `Stock insuficiente: hay ${cur.stock} ${cur.unit}` }, 400);
+          await db.batch([
+            db.prepare("UPDATE pos_inventory SET stock=? WHERE id=?").bind(next, iid),
+            db.prepare("INSERT INTO pos_inventory_moves (id,item_id,qty,reason,created_by) VALUES (?,?,?,?,?)")
+              .bind(crypto.randomUUID(), iid, delta, String(b.reason || (delta > 0 ? "Entrada" : "Salida")), sess.username),
+          ]);
+          return json({ ok: true, stock: next });
+        }
+        if (!isAdmin) return json({ error: "Solo el administrador puede editar insumos" }, 403);
+        const sets = [], vals = [];
+        if (typeof b.name === "string" && b.name.trim()) { sets.push("name=?"); vals.push(b.name.trim()); }
+        if (typeof b.unit === "string" && b.unit.trim()) { sets.push("unit=?"); vals.push(b.unit.trim()); }
+        if (b.min_stock !== undefined && Number(b.min_stock) >= 0) { sets.push("min_stock=?"); vals.push(Number(b.min_stock)); }
+        if (b.active !== undefined) { sets.push("active=?"); vals.push(b.active ? 1 : 0); }
+        if (!sets.length) return json({ error: "Nada que actualizar" }, 400);
+        await db.prepare(`UPDATE pos_inventory SET ${sets.join(", ")} WHERE id=?`).bind(...vals, iid).run();
+        return json({ ok: true });
       }
 
       // ===== Aún no implementados =====
