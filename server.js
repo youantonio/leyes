@@ -647,7 +647,9 @@ export default {
           if (!cat) return json({ error: "Categoría no encontrada" }, 404);
           catId = cat.id; catText = cat.name; dest = cat.destination;
         }
-        const image = typeof b.image === "string" && b.image.startsWith("data:image/") ? b.image.slice(0, 400000) : null;
+        const rawImg = String(b.image || "");
+        const okImg = rawImg.startsWith("data:image/") || rawImg.startsWith("https://") || rawImg.startsWith("http://");
+        const image = okImg ? rawImg.slice(0, 400000) : null;
         const id = crypto.randomUUID();
         await db.prepare(
           "INSERT INTO menu_items (id, name, category, category_id, price, description, destination, active, sort_order, image) VALUES (?,?,?,?,?,?,?,1,0,?)"
@@ -687,7 +689,9 @@ export default {
           sets.push("destination=?"); vals.push(b.destination);
         }
         if (b.image !== undefined) {
-          const image = typeof b.image === "string" && b.image.startsWith("data:image/") ? b.image.slice(0, 400000) : null;
+          const val = String(b.image || "");
+          const okImg = val.startsWith("data:image/") || val.startsWith("https://") || val.startsWith("http://");
+          const image = okImg ? val.slice(0, 400000) : null;
           sets.push("image=?"); vals.push(image);
         }
         if (sets.length) await db.prepare(`UPDATE menu_items SET ${sets.join(", ")} WHERE id=?`).bind(...vals, pid).run();
