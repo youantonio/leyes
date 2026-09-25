@@ -927,9 +927,9 @@ export default {
         const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
         const folio = channel.slice(0, 3).toUpperCase() + "-" + p2(d.getUTCHours()) + p2(d.getUTCMinutes());
         await db.prepare(
-          `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
-        ).bind(id, folio, String(b.customer_name || channel).trim(), String(b.customer_phone || ""), notes, JSON.stringify(items), total, total, channel).run();
+          `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
+        ).bind(id, folio, String(b.customer_name || channel).trim(), String(b.customer_phone || ""), notes, JSON.stringify(items), total, total, channel, b.loyalty_consent ? 1 : 0).run();
         return json({ id, folio }, 201);
       }
 
