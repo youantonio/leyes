@@ -1,1 +1,64 @@
-
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Seguimiento de tu pedido · The Rush</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+:root{--ink:#0f2f26;--gold:#f2a71b;--cream:#faf6ee}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--cream);color:var(--ink)}
+header{background:var(--ink);color:#fff;padding:16px}
+.brand{font-weight:800}
+main{max-width:520px;margin:auto;padding:14px}
+.card{background:#fff;border-radius:18px;padding:16px;margin-top:12px;border:1px solid #eee2cd}
+#map{height:280px;border-radius:16px;margin-top:12px;background:#eee}
+.steps{display:flex;justify-content:space-between;margin-top:10px}
+.step{flex:1;text-align:center;font-size:11px;color:#999}
+.step .dot{width:22px;height:22px;border-radius:50%;background:#eee;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-size:12px}
+.step.done .dot{background:var(--gold);color:#3a2600}
+.step.done{color:var(--ink);font-weight:700}
+.msg{text-align:center;color:#888;padding:30px 0}
+</style>
+</head>
+<body>
+<header><div class="brand">🎾 THE RUSH · Seguimiento de pedido</div></header>
+<main>
+  <div id="app" class="msg">Cargando tu pedido…</div>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const token=new URLSearchParams(location.search).get('token');
+const STEPS=[["recibido","📝","Recibido"],["preparando","👨‍🍳","Preparando"],["salio","🚪","Salió"],["en_camino","🛵","En camino"],["entregado","✅","Entregado"]];
+let map=null, driverMarker=null, destMarker=null;
+function stepsHtml(cur){
+  const i=STEPS.findIndex(s=>s[0]===cur);
+  return `<div class="steps">${STEPS.map((s,idx)=>`<div class="step ${idx<=i?'done':''}"><div class="dot">${s[1]}</div>${s[2]}</div>`).join('')}</div>`;
+}
+async function tick(){
+  if(!token){ document.getElementById('app').textContent='Link inválido.'; return; }
+  try{
+    const r=await fetch('/api/track?token='+encodeURIComponent(token));
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'No se encontró tu pedido');
+    let html=`<div class="card"><b>Folio #${d.folio}</b><div class="muted" style="color:#888;font-size:13px;margin-top:2px">${d.status==='paid'?'Pagado':'En proceso'}</div>${stepsHtml(d.delivery_status||'recibido')}${d.driver_name?`<div style="margin-top:10px;font-size:14px">🛵 Repartidor: <b>${d.driver_name}</b></div>`:''}</div>`;
+    document.getElementById('app').innerHTML = html + (d.delivery_location?'<div id="mapWrap" class="card"><b>Ubicación</b><div id="map"></div></div>':'');
+    if(d.delivery_location){
+      if(!map){
+        map=L.map('map').setView([d.delivery_location.lat,d.delivery_location.lng],14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+        destMarker=L.marker([d.delivery_location.lat,d.delivery_location.lng]).addTo(map).bindPopup('Tu dirección');
+      }
+      if(d.driver_location){
+        if(!driverMarker) driverMarker=L.marker([d.driver_location.lat,d.driver_location.lng],{title:'Repartidor'}).addTo(map);
+        else driverMarker.setLatLng([d.driver_location.lat,d.driver_location.lng]);
+      }
+    }
+  }catch(e){
+    document.getElementById('app').innerHTML=`<div class="msg">${e.message}</div>`;
+  }
+}
+tick(); setInterval(tick, 12000);
+</script>
+</body>
+</html>
