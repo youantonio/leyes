@@ -25,10 +25,11 @@
 </head>
 <body>
 <div id="app" class="msg">Cargando tu tarjeta…</div>
+<div id="refreshRow" style="text-align:center;margin-top:14px"></div>
 <script>
 const params=new URLSearchParams(location.search);
 const token=params.get('token');
-(async()=>{
+async function loadCard(){
   if(!token){ document.getElementById('app').textContent='Link inválido. Pide tu tarjeta al mesero.'; return; }
   try{
     const r=await fetch('/api/loyalty-card?token='+encodeURIComponent(token));
@@ -47,7 +48,13 @@ const token=params.get('token');
   }catch(e){
     document.getElementById('app').textContent = e.message || 'No se pudo cargar tu tarjeta.';
   }
-})();
+}
+loadCard();
+document.getElementById('refreshRow').innerHTML = '<button onclick="loadCard()" style="background:none;border:1px solid #0f2f26;color:#0f2f26;padding:8px 16px;border-radius:10px;font-weight:700;cursor:pointer">↻ Actualizar</button><div style="font-size:11px;color:#8a7c62;margin-top:6px">Se actualiza sola cada compra</div>';
+setInterval(loadCard, 15000);
+</script>
+</body>
+</html>
 </script>
 </body>
 </html>
