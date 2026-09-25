@@ -264,7 +264,8 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
   <div class="card" style="margin-top:15px;">
     <h2 style="margin-top:0">🏷️ Clasificar productos</h2>
-    <div class="row" style="flex-wrap:wrap"><button class="primary" onclick="autoClassify()">✨ Sugerir clasificación automática</button><button class="success" id="saveClassBtn" onclick="saveClassification()">💾 Guardar (0)</button></div>
+    <div class="row" style="flex-wrap:wrap"><button class="primary" onclick="autoClassify()">✨ Sugerir clasificación automática</button><button class="success" id="saveClassBtn" onclick="saveClassification()">💾 Guardar (0)</button><button class="warning" onclick="suggestPhotosFromDrive()">📷 Sugerir fotos desde Drive</button></div>
+    <div id="photoSuggestBox"></div>
     <div class="row" style="margin-top:10px"><input id="menuFilter" class="search" placeholder="🔎 Buscar producto" oninput="renderClassifyTable()"><select id="classifyMode" onchange="renderClassifyTable()" style="width:auto"><option value="sin">Solo sin clasificar</option><option value="todos">Todos</option></select></div>
     <div id="classifyTable" style="overflow-x:auto;margin-top:10px"></div>
   </div>
@@ -1060,6 +1061,164 @@ function handleImageFile(input,previewId,dataFieldId){
     const pv=$(previewId); pv.src=dataUrl; pv.style.display='block';
   }; img.src=e.target.result; };
   reader.readAsDataURL(file);
+}
+const DRIVE_PHOTOS = {
+  "Agua de Jamaica de 16 onzas": "https://drive.google.com/uc?export=view&id=1Q3wmn41BgGg9DBCQ8LFWqPGCKHB3hFFC",
+  "Caramel macchiato": "https://drive.google.com/uc?export=view&id=14-2b9R81pa1MrwAV7hKHD3FOOFD1XYDO",
+  "Frappe de vainilla": "https://drive.google.com/uc?export=view&id=1_ejGlJQcX5eTNQ8WpEN9oqPNtXAweOUE",
+  "Vainilla latte": "https://drive.google.com/uc?export=view&id=1i_uZh1tnmU85Cqun4r90pPz3GEHUNQDN",
+  "Jugo de naranja 450 ml": "https://drive.google.com/uc?export=view&id=1MLHz4rM-fqrYmAmdtGXQG3hNHTT1uQZW",
+  "Cookies and cream frappe": "https://drive.google.com/uc?export=view&id=1EotEDOCR7UTCFvc9ttzeccPkONnrkwM0",
+  "Cocoa frappe": "https://drive.google.com/uc?export=view&id=17zADxriUp6OzRmjKV1tf4OW_IUjjxhyQ",
+  "Berry frappe": "https://drive.google.com/uc?export=view&id=121uURlbXF_WIQrXBlB10cDjb5e1EYmZh",
+  "Matcha frappe": "https://drive.google.com/uc?export=view&id=10F6NDPhjj89c_fv0GP1AIdi4oFzN6OWK",
+  "Mocha frappe": "https://drive.google.com/uc?export=view&id=1cRtV_4LBUJhgZOgLNC2OIcju47jbwCOv",
+  "Caramel frappe": "https://drive.google.com/uc?export=view&id=1PtRy5ecM2C6lTTDkBRzuud6ld07rvWHC",
+  "Moca nutella": "https://drive.google.com/uc?export=view&id=1QZicDMp9URytqoCTYIHq5sIalD4IACia",
+  "Hot chocolate": "https://drive.google.com/uc?export=view&id=16sSD9vGe6HGq1otpJFVtxecNndsxO9Vr",
+  "Golden Milk latte": "https://drive.google.com/uc?export=view&id=1IGaXG7n8Z11jtGfqfg0TYQFFsSd61a1O",
+  "Matcha latte": "https://drive.google.com/uc?export=view&id=19zdOtmxXdyqvttnuaY252nUbbR-23ebf",
+  "Chai latte": "https://drive.google.com/uc?export=view&id=1bA4H74clqTzWAEpsHpy2vRcNUs9oEOU-",
+  "Mocha blanco": "https://drive.google.com/uc?export=view&id=1Uo05zfKZfDdjYhv__gswUk3VDS8CxInZ",
+  "Mocha": "https://drive.google.com/uc?export=view&id=1x_jhmf6nsTDNi-PnbwkpOyOtt-cWwmvF",
+  "Hazelnut latte": "https://drive.google.com/uc?export=view&id=1bKvHk2VARUDHOsw5f3jScgaNvwj6_FCn",
+  "Flat white": "https://drive.google.com/uc?export=view&id=1yGRqB1whA7hlNPkrlEla5eOVEidv7npt",
+  "Latte": "https://drive.google.com/uc?export=view&id=1YDsxhxo0QJyfOsBXJmO5-Qxr0Lo4AoQJ",
+  "Capuchino": "https://drive.google.com/uc?export=view&id=1vvD7RGSDek4UdCNMPmotdxtDKqH7EARk",
+  "Americano": "https://drive.google.com/uc?export=view&id=1ipimORRP-SSsYcJFO_FdAsAkKJBwMW4D",
+  "Espresso doble": "https://drive.google.com/uc?export=view&id=1jmV7hV6J23O6H3dTd89TohNasEWFu2gM",
+  "Tropical 20 onzas": "https://drive.google.com/uc?export=view&id=1_9mOXIXyNJqPqtVKeaN5VbhM968Ikpqe",
+  "Strawberry chocolate 20 oz": "https://drive.google.com/uc?export=view&id=127gyW0_8VrjDbcpf6CwQ0JQUp0kMk9ym",
+  "Agua de frutas 16 onzas": "https://drive.google.com/uc?export=view&id=19gbeG8EOYZhq-B095vKxNz4l_i0Chkmk",
+  "Blue Rush 20 oz": "https://drive.google.com/uc?export=view&id=1Ys5gTZ2-bfCGZmdPiK7UzmBvR4Of5_JQ",
+  "Protein Berry 20 onzas": "https://drive.google.com/uc?export=view&id=1iiQz_At3D4bfnunVV9QRu9o9miBNd_q9",
+  "Strawberry mango 20 oz": "https://drive.google.com/uc?export=view&id=1MGRw8BIVIZRdPvA4jWD_NnvYlC1ZIQys",
+  "Reesez 20 oz": "https://drive.google.com/uc?export=view&id=17a6TY4kmRZhYKBaP8JT6D15T_VTw0mZd",
+  "Pin Shake 20 oz": "https://drive.google.com/uc?export=view&id=1TzXDGvgKB3Y3B7NmhC03DGvoUKMozjTs",
+  "Sunrise 450 ml": "https://drive.google.com/uc?export=view&id=16JTu1f7zc4XhI4N8i_05WKvs56oQyDJH",
+  "Energy 450 ml": "https://drive.google.com/uc?export=view&id=1SO2VUXTFSam4xvVaj4QZtI6ktWBZOSkv",
+  "Very Berry 450 ml": "https://drive.google.com/uc?export=view&id=1wIflD2OTQ1y8na9vTcIhyoxEIiK4OYGD",
+  "Green 450 ml": "https://drive.google.com/uc?export=view&id=1gGiB-I53TWsWZE5rZ4rtMbU2pwOekwpj",
+  "Glow boost 450 ml": "https://drive.google.com/uc?export=view&id=1Vm3hFd_rDxzdtr3wwRezW-xaMT9k5Hxo",
+  "Agua de tamarindo 16 onzas": "https://drive.google.com/uc?export=view&id=1mALc_OtQcD60DxgGZvNyU_9ykfrax0xt",
+  "Agua de guayaba 16 onzas": "https://drive.google.com/uc?export=view&id=1tSB4BfT6EXVTpMDUZFWmltZ1r-BPGBSZ",
+  "Agua de mango 16 onzas": "https://drive.google.com/uc?export=view&id=1Vc1LUxSGOveR3xlQx32Eja0O4D2-ukyD",
+  "Agua de melon 16 onzas": "https://drive.google.com/uc?export=view&id=1H0Gn0FHGvLYtccW8k-LqHI27MwZFL2jY",
+  "Agua de pepino con limon 16 onzas": "https://drive.google.com/uc?export=view&id=15_-chuEhHZKbZvHr70d_6_k7A2sSYixw",
+  "Naranjada de 16 onzas": "https://drive.google.com/uc?export=view&id=1BJ8Lm6owhdqBMRmW-hb0p12f_TUlssbk",
+  "Limonada de 16 oz": "https://drive.google.com/uc?export=view&id=16aE7oWk6OLp33YSxFc4e3Cy6DIb67Yka",
+  "Agua de horchata de 16 onzas": "https://drive.google.com/uc?export=view&id=1u0RMmwux32bDVEIhdGtHAaLSwqFwJScd",
+  "Limonada con menta": "https://drive.google.com/uc?export=view&id=15OnA4vIjeFfqxgUdNhO6CnPpSxWk5PFG",
+  "Agua del dia": "https://drive.google.com/uc?export=view&id=1XFhGExmlkiVrrPrYjadaC3MkINOSo2kP",
+  "Tisana valeriana lavanda": "https://drive.google.com/uc?export=view&id=17zHP6HOQ1K9JsKdlwdBAx5Ohnx78SzrI",
+  "Tisana menta poleo": "https://drive.google.com/uc?export=view&id=1i7sIKyWYFeSiozCq3Gj282oLx7xvu_76",
+  "Tisana gengibre y miel": "https://drive.google.com/uc?export=view&id=1Nkp646AST5h5RCcEpQwQokpM_rTWWMp8",
+  "Tisana piña colada": "https://drive.google.com/uc?export=view&id=1tkUYknpydW5RRVYTgqzApWGsVza0Kste",
+  "Tisana frutos tropicales": "https://drive.google.com/uc?export=view&id=1qyRIPk76AKz_xl3yHWT_IXiiepn-uNV9",
+  "Tisana manzana canela": "https://drive.google.com/uc?export=view&id=1UB8gqVUqhPXD4x_tzthGPqhAFX1fV3T5",
+  "Tisana frutos rojos": "https://drive.google.com/uc?export=view&id=1dU6kBAlXoTFadnN-tjXaJ2UcboCHswze",
+  "Te verde": "https://drive.google.com/uc?export=view&id=12udU3_pjk6mGHvcy2GuDfCwjz964lwau",
+  "Te manzanilla": "https://drive.google.com/uc?export=view&id=1UN8HRMwMLNhsjJ3thkb397IHxbMqJVXZ",
+  "Te caliente": "https://drive.google.com/uc?export=view&id=1HAY_nu2UK8EdBwaOZ0vN-K0k9eslLngW",
+  "Chocolate abuelita 16 oz": "https://drive.google.com/uc?export=view&id=1eqOEb832BquwNUDc0fJXcmwwjJM6COUp",
+  "Chocolate caliente 16 onzas": "https://drive.google.com/uc?export=view&id=1JlMMhouvXRVqqkJYFyTn3skSM2W47Ey1",
+  "Dirty Chai": "https://drive.google.com/uc?export=view&id=1sU4nPXxmF_MjXIj_yYR87eruoU02OSTZ",
+  "Caramel macchiato 12 y 16 oz": "https://drive.google.com/uc?export=view&id=1Pg5Zde_HRtQNkkiVUNIbU2IQ4UjfMm2u",
+  "Te berries sin azucar 16 oz": "https://drive.google.com/uc?export=view&id=15U_1hMRIEArf4hiozT1-FnuuwrQB9kpC",
+  "Te negro sin azucar 16 oz": "https://drive.google.com/uc?export=view&id=1XvHsn60F6gXcrjMNlMD33whuBoep_tYd",
+  "Agua natural 600 ml": "https://drive.google.com/uc?export=view&id=1_k9TNeqzX3zAIRKuULWaEE3EVK59yIYd",
+  "Limonada de frutos rojos": "https://drive.google.com/uc?export=view&id=1w9rvoMEt_xW9ICKdfJWO6gn8YoSU-t1f",
+  "Naranjada 16 oz": "https://drive.google.com/uc?export=view&id=1BIb_3vVWUWH8zK_giX5iWG9-Tvsgjg4X",
+  "Rusa 16 oz": "https://drive.google.com/uc?export=view&id=1OAepeXdJJMnSVHKz-4pHqr-QIbKI_adb",
+  "Expreso 7-12 oz": "https://drive.google.com/uc?export=view&id=1fEJ3xuhsDtmcxAUzuLZcCfss7nI078kr",
+  "Refrescos 600 ml": "https://drive.google.com/uc?export=view&id=1CCHhxeTpFu40LloMtjmUMpd_byWFYiwA",
+  "Matcha con foam caramel": "https://drive.google.com/uc?export=view&id=1aqnYLSjFMoVoD99JnVZQYg2ML-6NdKCL",
+  "Matcha con foam chai": "https://drive.google.com/uc?export=view&id=1XKnC93GFcQ9kSQbTrQPZ6X5xqUyhbtjp",
+  "Matcha con foam taro": "https://drive.google.com/uc?export=view&id=1u8knp57MOq096Kahm2JUShamlL9TO4Kh",
+  "Strawberry matcha": "https://drive.google.com/uc?export=view&id=1i38P1zWRFKVvkGpEpOhZU_WmvwYt9Qrp",
+  "Mango matcha": "https://drive.google.com/uc?export=view&id=1sHPpumGuGa1FkrD_hKyXAkPrVFptdOJ9",
+  "Refresher mora azul": "https://drive.google.com/uc?export=view&id=12n_hqG29Q54y7v1bjs9NcAYTBoumPgKi",
+  "Choripan argentino": "https://drive.google.com/uc?export=view&id=1tEHXNnBDnTyLzM5za9_SKbDwGqK-I2pO",
+  "Hot Dog Especial": "https://drive.google.com/uc?export=view&id=1tX3X301bcizE880yOr02N83HpaC5rVYb",
+  "Hot Dog Mexicano": "https://drive.google.com/uc?export=view&id=1-L3qVB7630a0NwBZ1k_MB2B3HjYhVHeB",
+  "Hamburguesa doble": "https://drive.google.com/uc?export=view&id=1N60fDCL_hcJUjgb8N3Cknmt57YOXB2VM",
+  "Hamburguesa hawaiana": "https://drive.google.com/uc?export=view&id=1nl8-A8KFvkVCDvkl7fdAVtRt4gpe9TRD",
+  "Hamburguesa sencilla": "https://drive.google.com/uc?export=view&id=1ZrYQ5X0IIRU2CPREO2fA2prYfGt0cwt5",
+  "Gringa de chistorra": "https://drive.google.com/uc?export=view&id=1lDEyJ3jnxBHchsk10lDPr-xLsBdNZyg7",
+  "Gringa chorizo argentino": "https://drive.google.com/uc?export=view&id=1hSK1ew21XCqjxzrsdXeLo-fjWN0ffqG6",
+  "Gringa sirloin": "https://drive.google.com/uc?export=view&id=1otcMPgmOIEknCJau9cGwKwmYmV4DY43a",
+  "Gringa de roast beef": "https://drive.google.com/uc?export=view&id=199kxE5mnJl5WbXuqxR9V0vuEZ1pwYgUl",
+  "Gringa": "https://drive.google.com/uc?export=view&id=1x3U_vIziOegApiT7bH1sTOPGaGtqL3wg",
+  "Volcan de queso": "https://drive.google.com/uc?export=view&id=1o4xHZsjb87GTGn85-rQLyECoWtWnC15I",
+  "Volcan de chistorra": "https://drive.google.com/uc?export=view&id=1kCeMuW1LvVYQnyP3_gxOyWmAZCm8dV33",
+  "Volcan de chorizo": "https://drive.google.com/uc?export=view&id=1C1neGJVsEfWwxUjzCBFXPKgq9XGqJ6ig",
+  "Volcan de sirloin": "https://drive.google.com/uc?export=view&id=1_O2I_8ZIZ0SJGePf7VhS3HQBm89LRkBC",
+  "Volcan de roast beef": "https://drive.google.com/uc?export=view&id=1CwTKXT186cWtpGFi5jqfp0CTmaxqXPk-",
+  "Volcan de arrachera": "https://drive.google.com/uc?export=view&id=1X-IF8EuEI7mb2qeoVDEVNXuFfj-PS8G5",
+  "Burrito de chistorra": "https://drive.google.com/uc?export=view&id=1tUyYYqqOz0GDEaVaoZDGX1wU0uc8DDYx",
+  "Burrito de chorizo argentino": "https://drive.google.com/uc?export=view&id=1N9jfekqmMmnOtjfppTiXszw9MjxcEHGO",
+  "Burrito de sirloin": "https://drive.google.com/uc?export=view&id=1CflXcJk6ErL0Jz7yriEZlIUnx_Q8iLec",
+  "Burrito de roast beef": "https://drive.google.com/uc?export=view&id=1DB_KtIenefsuRmaFLJV6jZUybvDt3gDE",
+  "Burrito de arrachera": "https://drive.google.com/uc?export=view&id=1VqlXEEHQEvwHBjnoZz6PqeRrg4H8AAsP",
+  "Taco de chistorra": "https://drive.google.com/uc?export=view&id=1QmOsrGLIJ_pQX7iIx1YhqCI6wQCeQgx6",
+  "Taco de chorizo argentino": "https://drive.google.com/uc?export=view&id=1LdxOrPB1O1FBA26VqU1dK1J6jSdaU9gN",
+  "Taco de sirloin": "https://drive.google.com/uc?export=view&id=1Lm4vyxFFSiBc-9gfZFFf4GEgrA9mOlDC",
+  "Taco de roast beef": "https://drive.google.com/uc?export=view&id=1631M1jx2fiPE0-S0fQ7GKyubUFQCkAUJ",
+  "Taco de arrachera": "https://drive.google.com/uc?export=view&id=11NUqOLh9PZMEoY9rxD8a3S6JO0o4NOCL"
+,
+  "Moca helado": "https://drive.google.com/uc?export=view&id=1oB2BJaf6ZSCj9PSlKKJ3JxV5GNtVY_jz",
+  "Matcha con foam de moras": "https://drive.google.com/uc?export=view&id=14Q_I_e3eQRyGKfDMnp5BSpu3EggEAZPQ",
+  "Enchiladas de pollo": "https://drive.google.com/uc?export=view&id=1z1iIzHxMdweUHcjRvm5BliKsAmsbwJLS",
+  "Chilaquiles verdes tradicionales": "https://drive.google.com/uc?export=view&id=1bbwXKbIeQ-fCBly-ooLLzJzx_1ScA0tO",
+  "Chilaquiles verdes con huevo": "https://drive.google.com/uc?export=view&id=1WLSyaOw2IWUruNao4_v5p_pbsZSdIaRs",
+  "Chilaquiles verdes con arrachera": "https://drive.google.com/uc?export=view&id=1gsIM7AQxq6A6H1lOHnQUQZNeavRFetbT",
+  "Molletes de pollo": "https://drive.google.com/uc?export=view&id=1XKr4RnB-bhBG4-NWwPrHWwtV9kdOtbil",
+  "Molletes con tocino": "https://drive.google.com/uc?export=view&id=1W2Hf67Aa-jK2NztdM4jXFqXlF8iJ9Od4",
+  "Torrejas francesas con frutos rojos": "https://drive.google.com/uc?export=view&id=15XzCsIE16qEKELZSGJ77PTjGizmE3gnP",
+  "Omelette con tocino": "https://drive.google.com/uc?export=view&id=1Ohh0MUcY3_Cth9gVZGGXm4zqGTOgfPbV",
+  "Matcha tradicional ceremonial": "https://drive.google.com/uc?export=view&id=1TjX7bt6LFjvhJZ5zxrXDzjlfEVBquL5R",
+  "Sándwich de huevo tocino y queso": "https://drive.google.com/uc?export=view&id=1b2ymtcF6EFGmZ8Fm9BFCyCjOCT9mLiCs",
+  "Frappe de maracuya": "https://drive.google.com/uc?export=view&id=1slZMa04j1m9nGHPx9hHwpMGQxl3XU61q",
+  "Matcha con foam de caramelo": "https://drive.google.com/uc?export=view&id=10vIRHNNdUsyKN8f0t2bQRgbM5L6UBlGl",
+  "Matcha con foam de vainilla": "https://drive.google.com/uc?export=view&id=1Q-fxwg7RIUdJIhnvruTRmZTLJMwT13eM",
+  "Matcha con foam de taro": "https://drive.google.com/uc?export=view&id=1mQtId0w72bWaQuWx3twJzHEjj2zS0nMi"
+};
+const DRIVE_KEYS_NORM = Object.keys(DRIVE_PHOTOS).map(k=>({key:k, norm:normTxt(k.replace(/\d+\s*(onzas?|oz|ml|litros?|l)\b/gi,''))}));
+let pendingPhotos={};
+function bestPhotoMatch(name){
+  const n = normTxt(name.replace(/\d+\s*(onzas?|oz|ml|litros?|l)\b/gi,''));
+  if(!n) return null;
+  let exact = DRIVE_KEYS_NORM.find(k=>k.norm===n);
+  if(exact) return exact.key;
+  // contiene / es contenido (ej. "Taco de Arrachera" vs "taco arrachera")
+  let partial = DRIVE_KEYS_NORM.filter(k=>k.norm.includes(n)||n.includes(k.norm));
+  if(partial.length===1) return partial[0].key;
+  if(partial.length>1){ partial.sort((a,b)=>Math.abs(a.norm.length-n.length)-Math.abs(b.norm.length-n.length)); return partial[0].key; }
+  return null;
+}
+function suggestPhotosFromDrive(){
+  pendingPhotos={};
+  let matched=0;
+  products.forEach(p=>{ if(p.image) return; const m=bestPhotoMatch(p.name); if(m) pendingPhotos[p.id]=DRIVE_PHOTOS[m]; });
+  matched=Object.keys(pendingPhotos).length;
+  renderPhotoSuggestBox();
+  toast(matched?`📷 ${matched} coincidencia(s) encontradas. Revisa y aplica.`:'No encontré coincidencias por nombre. Prueba subiendo las fotos manualmente.');
+}
+function renderPhotoSuggestBox(){
+  const ids=Object.keys(pendingPhotos);
+  if(!ids.length){ $('photoSuggestBox').innerHTML=''; return; }
+  $('photoSuggestBox').innerHTML = `<div class="card" style="margin-top:10px;background:#fffbeb;border-color:#fcd34d"><b>${ids.length} foto(s) sugeridas de Drive:</b><div class="grid" style="margin-top:8px">`+
+    ids.map(id=>{ const p=products.find(x=>x.id===id); return `<div class="row" style="gap:8px;border:1px solid #eee;border-radius:10px;padding:6px"><img src="${pendingPhotos[id]}" style="width:44px;height:44px;object-fit:cover;border-radius:8px"><span style="flex:1">${esc(p?p.name:id)}</span><button onclick="delete pendingPhotos['${id}'];renderPhotoSuggestBox()">✕</button></div>`; }).join('')+
+    `</div><button class="success" style="width:100%;margin-top:10px" onclick="applyPendingPhotos()">💾 Aplicar estas ${ids.length} fotos</button></div>`;
+}
+async function applyPendingPhotos(){
+  const ids=Object.keys(pendingPhotos); if(!ids.length) return;
+  let ok=0;
+  for(const id of ids){
+    try{ await api("/menu/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({image:pendingPhotos[id]})}); ok++; }catch(e){}
+  }
+  toast(`✅ ${ok} foto(s) aplicadas`); pendingPhotos={}; $('photoSuggestBox').innerHTML='';
+  await loadAll(); renderProductAdmin();
 }
 async function createProduct(){
   const name=$("pName").value.trim(), price=$("pPrice").value;
