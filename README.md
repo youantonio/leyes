@@ -1,10 +1,12 @@
-RUSH POS v26.0 — "The Rush: Club · Café · Cocina"
+RUSH POS v26.2 — "The Rush: Club · Café · Cocina"
 Fecha: 25 de septiembre de 2026
 Plataforma: Cloudflare Workers + D1 (`rush-pos-db`)
 Estado de las versiones
 Versión	Estado
 v24.1 – v25.0	Base funcional completa: comandas por persona, catálogo tipo Starbucks, usuarios, caja, inventario, lealtad, página pública, pedidos externos.
-v26.0	Candidata a estable. Rediseño visual del menú público, fotos de producto, repartidores con ubicación en vivo (gratis), envío automático, plantillas de WhatsApp, canje de recompensa, notas por producto. Probada con pruebas automatizadas del servidor y regresión completa de versiones anteriores. Falta confirmarla en producción.
+v26.0	Rediseño, repartidores, envío, WhatsApp local.
+v26.1	Emparejador de fotos por nombre, aceptar URLs además de subir archivo.
+v26.2	Candidata a estable. 19 fotos sin nombre revisadas una por una e identificadas visualmente; 16 quedaron renombradas en tu Drive y agregadas al catálogo (118 fotos en total). Las 3 restantes eran duplicados de fotos que ya tenías. Fotos de Drive emparejadas automáticamente por nombre; ahora las fotos también se pueden pegar como URL, no solo subir archivo. Rediseño visual del menú público, fotos de producto, repartidores con ubicación en vivo (gratis), envío automático, plantillas de WhatsApp, canje de recompensa, notas por producto. Probada con pruebas automatizadas del servidor y regresión completa de versiones anteriores. Falta confirmarla en producción.
 No hay versión marcada como estable todavía.
 ---
 1. Menú público — rediseño completo (`/menu.html`)
@@ -39,8 +41,14 @@ En Venta, cada línea del carrito tiene un botón 📝 para ponerle una nota a E
 4. Canje de recompensa integrado
 En Órdenes, junto al botón de tarjeta, ahora hay 🎁 Canjear: si el cliente ya ganó una recompensa de lealtad, se descuenta con un clic (antes solo existía el endpoint, sin botón).
 ---
-Sobre las fotos que compartiste en Google Drive
-Vi tu mensaje con la carpeta de imágenes nombradas por platillo. Para poder leerlas necesito que conectes Google Drive (te va a aparecer la opción de conectar en el chat) — en cuanto lo hagas, entro a la carpeta, emparejo cada foto con su producto por nombre, y te dejo una siguiente versión con las fotos ya cargadas de una vez, sin que tengas que subirlas tú una por una.
+Fotos de Drive — cómo se cargan en v26.1
+Conectaste Google Drive y leí tu carpeta completa: 131 fotos. De esas, 102 tienen nombre de platillo reconocible (bebidas y comida: gringas, volcanes, burritos, tacos, hamburguesas) y quedaron mapeadas dentro del sistema. Las ~20 restantes se guardaron como `IMG_46xx.JPG` (nombre de cámara) y no se pueden emparejar solas — habría que renombrarlas en Drive con el nombre del platillo, o subirlas a mano.
+Cómo aplicarlas: en Menú, nuevo botón 📷 Sugerir fotos desde Drive. Compara el nombre de cada producto sin foto contra el catálogo de 102 fotos (ignora tamaños como "16 oz" o "450 ml", acentos y mayúsculas), te muestra las coincidencias con miniatura, puedes quitar las que no te convenzan, y con un clic las aplica todas.
+Importante sobre las fotos: quedan enlazadas directo a tu Google Drive (no se copian a la base de datos). Eso significa:
+Si mueves, renombras o eliminas el archivo en Drive, la foto deja de verse en el menú.
+El archivo debe seguir compartido como "cualquiera con el enlace puede ver" para que se muestre en la página pública (ya lo está, por cómo compartiste la carpeta).
+Si algún día prefieres que las fotos vivan dentro del sistema (más seguro a largo plazo, no depende de Drive), es la misma migración a Cloudflare R2 que ya mencioné — se las subes una vez, y de ahí en adelante el sistema no depende de tu Drive.
+El campo de imagen ahora acepta dos formas: subir un archivo (se guarda comprimido dentro del sistema) o pegar/aplicar una URL como la de Drive. Puedes mezclar ambas según el producto.
 D1: qué cambia en la base de datos
 No tienes que correr SQL. El Worker crea/agrega solo:
 Columna `image` en `menu_items`
@@ -59,3 +67,25 @@ Pendiente
 Cargar las fotos de tu carpeta de Drive (pendiente de que conectes el acceso).
 Costo de envío con ruta real por calle (hoy es línea recta) — requeriría un servicio de rutas, hay opciones gratuitas con límites que podemos evaluar si la línea recta no es suficientemente precisa para ti.
 Clon de Uber para Pachuca (proyecto aparte, en pausa, listo para retomar).
+
+v26.2 — Las 19 fotos sin nombre, revisadas una por una
+Descargué y vi cada una de las 19 fotos que quedaron como `IMG_46xx.JPG`. 16 eran platillos nuevos que no tenías nombrados; las renombré directo en tu Google Drive y las agregué al catálogo del sistema:
+Nombre nuevo
+Moca helado
+Matcha con foam de moras
+Matcha con foam de caramelo
+Matcha con foam de vainilla
+Matcha con foam de taro
+Matcha tradicional ceremonial
+Frappe de maracuya
+Enchiladas de pollo
+Chilaquiles verdes tradicionales
+Chilaquiles verdes con huevo
+Chilaquiles verdes con arrachera
+Molletes de pollo
+Molletes con tocino
+Torrejas francesas con frutos rojos
+Omelette con tocino
+Sándwich de huevo, tocino y queso
+Las otras 3 (`IMG_4618`, dos copias de `IMG_4616`) resultaron ser fotos duplicadas de "Strawberry Matcha" y "Mango Matcha", que ya tenías nombradas — las dejé como "(alterna)" en Drive para no perderlas, pero no hacía falta agregarlas de nuevo al catálogo.
+El catálogo de fotos ya tiene 118 platillos. El botón 📷 Sugerir fotos desde Drive en Menú ahora busca contra las 118, no solo las 102 originales.
