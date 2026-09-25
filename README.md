@@ -1,4 +1,4 @@
-RUSH POS v26.2 — "The Rush: Club · Café · Cocina"
+RUSH POS v26.3 — "The Rush: Club · Café · Cocina"
 Fecha: 25 de septiembre de 2026
 Plataforma: Cloudflare Workers + D1 (`rush-pos-db`)
 Estado de las versiones
@@ -6,7 +6,8 @@ Versión	Estado
 v24.1 – v25.0	Base funcional completa: comandas por persona, catálogo tipo Starbucks, usuarios, caja, inventario, lealtad, página pública, pedidos externos.
 v26.0	Rediseño, repartidores, envío, WhatsApp local.
 v26.1	Emparejador de fotos por nombre, aceptar URLs además de subir archivo.
-v26.2	Candidata a estable. 19 fotos sin nombre revisadas una por una e identificadas visualmente; 16 quedaron renombradas en tu Drive y agregadas al catálogo (118 fotos en total). Las 3 restantes eran duplicados de fotos que ya tenías. Fotos de Drive emparejadas automáticamente por nombre; ahora las fotos también se pueden pegar como URL, no solo subir archivo. Rediseño visual del menú público, fotos de producto, repartidores con ubicación en vivo (gratis), envío automático, plantillas de WhatsApp, canje de recompensa, notas por producto. Probada con pruebas automatizadas del servidor y regresión completa de versiones anteriores. Falta confirmarla en producción.
+v26.2	19 fotos identificadas y renombradas en Drive.
+v26.3	Candidata a estable. Corrige que los pedidos externos no sumaban sello de lealtad, y que la tarjeta digital no se actualizaba sola. 19 fotos sin nombre revisadas una por una e identificadas visualmente; 16 quedaron renombradas en tu Drive y agregadas al catálogo (118 fotos en total). Las 3 restantes eran duplicados de fotos que ya tenías. Fotos de Drive emparejadas automáticamente por nombre; ahora las fotos también se pueden pegar como URL, no solo subir archivo. Rediseño visual del menú público, fotos de producto, repartidores con ubicación en vivo (gratis), envío automático, plantillas de WhatsApp, canje de recompensa, notas por producto. Probada con pruebas automatizadas del servidor y regresión completa de versiones anteriores. Falta confirmarla en producción.
 No hay versión marcada como estable todavía.
 ---
 1. Menú público — rediseño completo (`/menu.html`)
@@ -89,3 +90,11 @@ Omelette con tocino
 Sándwich de huevo, tocino y queso
 Las otras 3 (`IMG_4618`, dos copias de `IMG_4616`) resultaron ser fotos duplicadas de "Strawberry Matcha" y "Mango Matcha", que ya tenías nombradas — las dejé como "(alterna)" en Drive para no perderlas, pero no hacía falta agregarlas de nuevo al catálogo.
 El catálogo de fotos ya tiene 118 platillos. El botón 📷 Sugerir fotos desde Drive en Menú ahora busca contra las 118, no solo las 102 originales.
+
+v26.3 — Bug: pedidos externos no sumaban sello de lealtad
+Lo que reportaste: cobraste un pedido (ej. Dulce) y su tarjeta digital no se actualizó con la visita.
+Causa real, confirmada con una prueba: el formulario 🛵 Capturar pedido externo (Rappi/Uber/directo) nunca preguntaba ni guardaba el consentimiento de lealtad — se guardaba en "no" sin que se viera en pantalla. Por eso, al cobrar esos pedidos, el sistema no sumaba el sello: no tenía permiso guardado para hacerlo. Los pedidos hechos desde Venta (mesero) o desde la página pública sí funcionaban bien, porque esos dos sí llevaban la casilla.
+Corregido:
+El modal de pedido externo ahora tiene la misma casilla ✅ "Inscribir a tarjeta de lealtad" que ya tenían los otros dos flujos.
+Probé el escenario exacto: pedido externo con lealtad → cobrar → la tarjeta pasa de 0 a 1 sello correctamente.
+Además corregí que la tarjeta no se refrescaba sola. Si el mesero le mostraba el link al cliente antes de cobrar, la página se quedaba congelada en "0 sellos" aunque el cobro sí hubiera sumado el sello por dentro — solo hacía falta recargar. Ahora `/tarjeta.html` se actualiza sola cada 15 segundos y tiene un botón "↻ Actualizar" para revisarlo al instante.
