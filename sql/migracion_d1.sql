@@ -1,14 +1,14 @@
--- RUSH POS v24.1 - Cambios en D1 (base: rush-pos-db)
--- Ejecutar en la CONSOLA SQL del dashboard de Cloudflare, una sentencia a la vez.
--- Solo AGREGAN columnas; no borran nada. Si una ya existe, marcará "duplicate column": ignorar.
+-- RUSH POS v25.0 - Base de datos (D1: rush-pos-db)
+-- NO ES OBLIGATORIO correr nada: el Worker crea todo automáticamente al primer uso.
+-- Solo para VERIFICAR (consola SQL del dashboard, una consulta a la vez).
 
-ALTER TABLE orders ADD COLUMN items TEXT DEFAULT '[]';
-ALTER TABLE orders ADD COLUMN custom_folio TEXT;
-ALTER TABLE menu_items ADD COLUMN destination TEXT DEFAULT 'cocina';
+SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'pos_%';
+-- Deben aparecer: pos_sessions, pos_menu_sections, pos_menu_categories,
+-- pos_settings, pos_loyalty, pos_cash_movements, pos_cuts, pos_inventory, pos_inventory_moves
 
--- v24.4: ya NO hace falta SQL para mandar bebidas a barra.
--- Se hace desde el sistema: Menú -> categoría -> "Toda a Barra".
+PRAGMA table_info(orders);   -- deben aparecer channel y loyalty_consent
+PRAGMA table_info(menu_items); -- debe aparecer sold_out
 
--- v24.3: la tabla de sesiones (pos_sessions) la crea el Worker automáticamente.
--- Si quisieras crearla a mano:
--- CREATE TABLE IF NOT EXISTS pos_sessions (token TEXT PRIMARY KEY, user_id TEXT, username TEXT, name TEXT, role TEXT, expires_at INTEGER);
+SELECT * FROM pos_settings;
+SELECT phone, name, stamps, rewards_earned, rewards_redeemed FROM pos_loyalty ORDER BY updated_at DESC LIMIT 20;
+SELECT folio, period_start, period_end, created_by FROM pos_cuts ORDER BY folio DESC LIMIT 10;
