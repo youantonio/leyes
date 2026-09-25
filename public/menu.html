@@ -1,1 +1,199 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f2f26">
+<title>The Rush · Club, Café & Cocina</title>
+<style>
+:root{
+  --ink:#0f2f26; --cream:#faf6ee; --card:#fff; --line:#e7e0d2;
+  --cocina:#c1440e; --barra:#0e6b5c; --accent:#f2a71b; --muted:#7a6f5c;
+}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--cream);color:var(--ink)}
+header{background:var(--ink);color:#fff;padding:18px 16px 14px;position:sticky;top:0;z-index:20}
+.brand{font-size:22px;font-weight:900;letter-spacing:.3px;display:flex;align-items:center;gap:8px}
+.brand small{display:block;font-size:12px;font-weight:500;color:#cfe3dc;letter-spacing:.5px;margin-top:2px}
+main{max-width:640px;margin:auto;padding:14px 14px 100px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-top:14px}
+h2{margin:0 0 10px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch}
+.chip{flex:none;padding:10px 16px;border-radius:999px;background:#fff;border:1px solid var(--line);font-weight:700;font-size:14px;cursor:pointer}
+.chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.product-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.product{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;min-height:120px;position:relative}
+.product b{font-size:15px;line-height:1.25}
+.product .desc{font-size:12px;color:var(--muted);margin-top:4px}
+.product .price{font-weight:800;margin-top:8px}
+.tag{position:absolute;top:8px;right:8px;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;color:#fff}
+.opt{border:2px solid var(--line);border-radius:16px;padding:16px;text-align:center;cursor:pointer;font-weight:700}
+.opt.active{border-color:var(--accent);background:#fff8e8}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;font:inherit;background:#fff}
+button.big{width:100%;padding:15px;border:0;border-radius:14px;background:var(--ink);color:#fff;font-weight:800;font-size:16px;cursor:pointer}
+button.big:disabled{opacity:.4}
+.cartbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));display:flex;justify-content:space-between;align-items:center;gap:12px}
+.cartbar b{font-size:17px}
+.qty{display:flex;align-items:center;gap:8px}
+.qty button{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:18px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;z-index:50}
+.sheet{background:#fff;width:100%;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px}
+.hidden{display:none!important}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 16px;border-radius:12px;z-index:80}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🎾 THE RUSH<small id="bizSub">CLUB DE PÁDEL · CAFÉ · COCINA</small></div>
+</header>
+<main>
+  <div class="card" id="stepChannel">
+    <h2>¿Cómo quieres tu pedido?</h2>
+    <div class="grid2">
+      <div class="opt active" id="optRestaurante" onclick="setChannel('restaurante')">🍽️<br>Estoy en el club</div>
+      <div class="opt" id="optDomicilio" onclick="setChannel('domicilio')">🛵<br>A domicilio</div>
+    </div>
+    <div id="domicilioOpts" class="grid3 hidden" style="margin-top:10px">
+      <div class="opt" onclick="setDomicilio('directo')">📱<br><small>Directo (WhatsApp)</small></div>
+      <div class="opt" onclick="setDomicilio('rappi')">🛵<br><small>Rappi</small></div>
+      <div class="opt" onclick="setDomicilio('uber')">🚗<br><small>Uber Eats</small></div>
+    </div>
+  </div>
 
+  <div class="card">
+    <div class="chips" id="sectionTabs"></div>
+    <div class="chips" id="categoryChips"></div>
+    <input id="search" placeholder="🔎 Buscar en el menú" oninput="renderProducts()" style="margin-bottom:10px">
+    <div id="products" class="product-grid"></div>
+  </div>
+</main>
+
+<div class="cartbar" id="cartbar" style="display:none">
+  <div>🛒 <b id="cartCount">0</b> · <b id="cartTotal">$0</b></div>
+  <button class="big" style="width:auto;padding:12px 22px" onclick="openCheckout()">Continuar</button>
+</div>
+
+<div id="checkoutModal" class="modal hidden">
+  <div class="sheet">
+    <h2 id="checkoutTitle">Tu pedido</h2>
+    <div id="checkoutCart"></div>
+    <div style="margin-top:14px" id="rappiUberBox"></div>
+    <div id="formBox">
+      <label>Tu nombre<input id="cName"></label>
+      <label style="margin-top:8px">WhatsApp (10 dígitos)<input id="cPhone" maxlength="10" inputmode="numeric"></label>
+      <div id="addressBox" class="hidden" style="margin-top:8px"><label>Dirección de entrega<textarea id="cAddress" rows="2"></textarea></label></div>
+      <div style="margin-top:8px"><label>Notas para cocina (opcional)<input id="cNotes" placeholder="Sin cebolla, término medio..."></label></div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="cConsent" style="width:auto" checked> Quiero mi tarjeta de lealtad (1 sello por compra, cada <span id="goalTxt">10</span> = <span id="rewardTxt">un premio</span> 🎁)</label>
+      <button class="big" style="margin-top:14px" onclick="sendOrder()">Enviar pedido por WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script>
+const $=id=>document.getElementById(id);
+let settings={}, structure={sections:[]}, items=[], cart=[], channel='restaurante', domicilioMode='directo', currentSection='ALL', currentCat='TODOS';
+function toast(m){ $('toast').textContent=m; $('toast').classList.remove('hidden'); setTimeout(()=>$('toast').classList.add('hidden'),2500); }
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function boot(){
+  try{ settings=await (await fetch('/api/public-settings')).json(); }catch(e){ settings={}; }
+  $('bizSub').textContent=(settings.business_name||'THE RUSH · CLUB · CAFÉ · COCINA').toUpperCase();
+  $('goalTxt').textContent=settings.loyalty_goal||10; $('rewardTxt').textContent=settings.loyalty_reward||'un premio';
+  try{ const r=await (await fetch('/api/public-menu')).json(); items=r.items||[]; structure=r.structure||{sections:[]}; }catch(e){ items=[]; }
+  currentSection = structure.sections[0] ? structure.sections[0].id : 'ALL';
+  renderSectionTabs(); renderCategoryChips(); renderProducts(); renderCart();
+}
+function setChannel(c){
+  channel=c;
+  $('optRestaurante').classList.toggle('active',c==='restaurante');
+  $('optDomicilio').classList.toggle('active',c==='domicilio');
+  $('domicilioOpts').classList.toggle('hidden',c!=='domicilio');
+  document.querySelectorAll('#domicilioOpts .opt').forEach(o=>o.classList.remove('active'));
+}
+function setDomicilio(m){
+  domicilioMode=m;
+  document.querySelectorAll('#domicilioOpts .opt').forEach(o=>o.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  if(m==='rappi'){ if(settings.rappi_link) window.open(settings.rappi_link,'_blank'); else toast('Aún no se configuró el link de Rappi.'); }
+  if(m==='uber'){ if(settings.uber_link) window.open(settings.uber_link,'_blank'); else toast('Aún no se configuró el link de Uber Eats.'); }
+}
+function placement(p){
+  const cats=structure.sections.flatMap(s=>s.categories.map(c=>({...c,section_id:s.id})));
+  const c=p.category_id?cats.find(x=>String(x.id)===String(p.category_id)):null;
+  if(c) return {sec:structure.sections.find(s=>s.id===c.section_id), name:c.name, key:'c:'+c.id};
+  const sec=structure.sections.find(s=>s.destination===(p.destination||'cocina'))||structure.sections[0];
+  return {sec, name:p.category||'Otros', key:'t:'+(p.category||'Otros')};
+}
+function renderSectionTabs(){
+  $('sectionTabs').innerHTML = structure.sections.map(s=>`<button type="button" class="chip ${currentSection===s.id?'active':''}" onclick="selSection('${s.id}')">${esc(s.icon)} ${esc(s.name)}</button>`).join('');
+}
+function selSection(id){ currentSection=id; currentCat='TODOS'; renderSectionTabs(); renderCategoryChips(); renderProducts(); }
+function renderCategoryChips(){
+  const sec=structure.sections.find(s=>s.id===currentSection);
+  if(!sec){ $('categoryChips').innerHTML=''; return; }
+  const inSec=items.filter(p=>placement(p).sec&&placement(p).sec.id===sec.id);
+  const cats=[...new Set(inSec.map(p=>placement(p).key))];
+  $('categoryChips').innerHTML = `<button type="button" class="chip ${currentCat==='TODOS'?'active':''}" onclick="selCat('TODOS')">Todos</button>`+
+    sec.categories.filter(c=>cats.includes('c:'+c.id)).map(c=>`<button type="button" class="chip ${currentCat==='c:'+c.id?'active':''}" onclick="selCat('c:${c.id}')">${esc(c.name)}</button>`).join('');
+}
+function selCat(k){ currentCat=k; renderCategoryChips(); renderProducts(); }
+function renderProducts(){
+  const q=($('search').value||'').toLowerCase();
+  let list = q ? items.filter(p=>(p.name+' '+(p.description||'')).toLowerCase().includes(q))
+    : items.filter(p=>{ const pl=placement(p); return pl.sec&&pl.sec.id===currentSection&&(currentCat==='TODOS'||pl.key===currentCat); });
+  $('products').innerHTML = list.length ? list.map(p=>{
+    const dest=p.destination||'cocina', color = dest==='barra'?'var(--barra)':'var(--cocina)';
+    return `<div class="product" onclick="addItem('${p.id}')"><span class="tag" style="background:${color}">${dest==='barra'?'☕':'🍳'}</span><div><b>${esc(p.name)}</b><div class="desc">${esc(p.description||'')}</div></div><div class="price">$${p.price}</div></div>`;
+  }).join('') : "<p style='grid-column:1/-1;color:var(--muted)'>Sin productos aquí.</p>";
+}
+function addItem(id){
+  const p=items.find(x=>String(x.id)===id); if(!p) return;
+  const ex=cart.find(x=>x.menu_item_id===id);
+  if(ex) ex.qty++; else cart.push({menu_item_id:id,name:p.name,qty:1,unit_price:p.price,destination:p.destination||'cocina'});
+  renderCart(); toast(p.name+' agregado');
+}
+function renderCart(){
+  const n=cart.reduce((s,x)=>s+x.qty,0), total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
+  $('cartbar').style.display = n?'flex':'none';
+  $('cartCount').textContent=n; $('cartTotal').textContent='$'+total;
+}
+function openCheckout(){
+  if(!cart.length) return;
+  $('checkoutTitle').textContent = channel==='restaurante' ? 'Confirmar pedido · En el club' : (domicilioMode==='directo'?'Confirmar pedido · A domicilio':'Este pedido se hace en la app externa');
+  $('checkoutCart').innerHTML = cart.map((x,i)=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)"><span>${x.qty} × ${esc(x.name)}</span><span>$${x.qty*x.unit_price} <button onclick="cart.splice(${i},1);renderCart();openCheckout()" style="border:0;background:none;color:#b91c1c;font-weight:800">✕</button></span></div>`).join('')
+    + `<div style="display:flex;justify-content:space-between;padding:10px 0;font-weight:800"><span>Total</span><span>$${cart.reduce((s,x)=>s+x.qty*x.unit_price,0)}</span></div>`;
+  const externalRappiUber = channel==='domicilio' && domicilioMode!=='directo';
+  $('formBox').classList.toggle('hidden', externalRappiUber);
+  $('rappiUberBox').innerHTML = externalRappiUber ? `<p>Este pedido se realiza directo en ${domicilioMode==='rappi'?'Rappi':'Uber Eats'}. Te llevamos allá — el carrito de aquí es solo tu guía.</p><button class="big" onclick="window.open('${domicilioMode==='rappi'?(settings.rappi_link||'#'):(settings.uber_link||'#')}','_blank')">Abrir ${domicilioMode==='rappi'?'Rappi':'Uber Eats'}</button>` : '';
+  $('addressBox').classList.toggle('hidden', channel!=='domicilio' || domicilioMode!=='directo');
+  $('checkoutModal').classList.remove('hidden');
+}
+async function sendOrder(){
+  const phone=$('cPhone').value.replace(/\\D/g,'');
+  if(phone.length!==10) return toast('WhatsApp a 10 dígitos.');
+  if(!$('cName').value.trim()) return toast('Escribe tu nombre.');
+  if(channel==='domicilio' && domicilioMode==='directo' && !$('cAddress').value.trim()) return toast('Escribe tu dirección.');
+  const body={
+    items:cart, customer_name:$('cName').value.trim(), customer_phone:phone,
+    channel: channel==='domicilio' ? 'domicilio_directo' : 'restaurante',
+    notes:($('cNotes').value.trim()+(channel==='domicilio'?(' | Dirección: '+$('cAddress').value.trim()):'')),
+    loyalty_consent: $('cConsent').checked?1:0,
+  };
+  try{
+    const r=await fetch('/api/public-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Error al enviar');
+    const lines=cart.map(x=>`- ${x.qty}x ${x.name}`).join('\\n');
+    const total=cart.reduce((s,x)=>s+x.qty*x.unit_price,0);
+    const waNum=settings.whatsapp_order_number;
+    const msg=`Hola 👋 Quiero hacer un pedido en *The Rush* (folio #${d.folio}):\\n${lines}\\n\\n💰 Total: $${total}\\n📍 ${channel==='domicilio'?('Domicilio: '+$('cAddress').value.trim()):'Lo recojo/como en el club'}\\n📝 ${$('cNotes').value.trim()||'Sin notas'}`;
+    if(waNum) window.open(`https://wa.me/52${waNum}?text=${encodeURIComponent(msg)}`,'_blank');
+    else toast('Pedido #'+d.folio+' recibido ✅');
+    cart=[]; renderCart(); $('checkoutModal').classList.add('hidden');
+  }catch(e){ toast(e.message); }
+}
+boot();
+</script>
+</body>
+</html>
