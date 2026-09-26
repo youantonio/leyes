@@ -1,4 +1,4 @@
-RUSH POS v27.0 — "The Rush: Club · Café · Cocina"
+RUSH POS v27.1 — "The Rush: Club · Café · Cocina"
 Fecha: 25 de septiembre de 2026
 Plataforma: Cloudflare Workers + D1 (`rush-pos-db`)
 Estado de las versiones
@@ -10,6 +10,7 @@ v26.2	19 fotos identificadas y renombradas en Drive.
 v26.3	Candidata a estable. Corrige que los pedidos externos no sumaban sello de lealtad, y que la tarjeta digital no se actualizaba sola. 19 fotos sin nombre revisadas una por una e identificadas visualmente; 16 quedaron renombradas en tu Drive y agregadas al catálogo (118 fotos en total). Las 3 restantes eran duplicados de fotos que ya tenías. Fotos de Drive emparejadas automáticamente por nombre; ahora las fotos también se pueden pegar como URL, no solo subir archivo. Rediseño visual del menú público, fotos de producto, repartidores con ubicación en vivo (gratis), envío automático, plantillas de WhatsApp, canje de recompensa, notas por producto. Probada con pruebas automatizadas del servidor y regresión completa de versiones anteriores. Falta confirmarla en producción.
 v26.4	Candidata a estable. WhatsApp de pedidos según el admin en turno, configurable en el panel. Corrige el mensaje de WhatsApp roto del menú público, precios manipulables, folios repetidos y la ventana de WhatsApp bloqueada en iPhone. Agrega mesa/cancha. Falta confirmarla en producción.
 v27.0	Candidata a estable. Fotos en Cloudflare R2 (con respaldo automático desde Drive), rol Editor de carta, y carta pública rediseñada con la base de Gemini conectada a todo el sistema. Falta confirmarla en producción.
+v27.1	Candidata a estable. Carta con diseño Gemini intacto cuando no hay foto, fotos por 3 rutas, subida de fotos en lote por nombre, prueba de fotos y opción para ocultarlas.
 No hay versión marcada como estable todavía.
 ---
 1. Menú público — rediseño completo (`/menu.html`)
@@ -162,4 +163,22 @@ Abre `/menu.html`: las fotos de Drive ya deben verse.
 Configuración → Copiar fotos a R2.
 Crea un usuario Editor de carta, entra con él y cambia una foto.
 Haz un pedido de prueba con una bebida y un platillo, con nota en cada estación.
-Además corregí que la tarjeta no se refrescaba sola. Si el mesero le mostraba el link al cliente antes de cobrar, la página se quedaba congelada en "0 sellos" aunque el cobro sí hubiera sumado el sello por dentro — solo hacía falta recargar. Ahora `/tarjeta.html` se actualiza sola cada 15 segundos y tiene un botón "↻ Actualizar" para revisarlo al instante.
+
+---
+v27.1 — Carta Gemini al 100 % + fotos confiables
+Fecha: 25 de septiembre de 2026
+Carta
+Si una foto no carga, la tarjeta queda exactamente como el diseño de Gemini (etiqueta Barra/Cocina, nombre, descripción, precio). Ya no hay cuadros de color vacíos.
+En celular vuelve a una columna con descripción visible, como en el diseño original.
+Configuración → Mostrar fotos en la carta pública: apágalo y la carta queda 100 % estilo Gemini.
+Fotos: 3 rutas antes de rendirse
+Tu Worker (R2 o caché).
+Drive `thumbnail`, pedido directo desde el celular del cliente.
+Drive `lh3`, también directo.
+🔍 Probar fotos de Drive
+Configuración → 📦 Fotos → 🔍 Probar fotos de Drive te dice cuál de las 3 rutas funciona en tu Cloudflare.
+📂 Subir fotos en lote (la forma más segura)
+En Google Drive, selecciona la carpeta de fotos → Descargar (baja un .zip) → descomprímelo.
+En Menú (o Editar carta) toca 📂 Subir fotos en lote y elige todas las fotos.
+Se emparejan solas por nombre (ignora "de", tamaños y acentos). Corrige las que falten con el selector.
+⬆️ Subir: quedan en R2 y ya no dependen de Drive.
