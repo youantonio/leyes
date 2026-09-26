@@ -3,62 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Seguimiento de tu pedido · The Rush</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<meta name="theme-color" content="#0f2f26">
+<title>Tarjeta de lealtad · The Rush</title>
 <style>
-:root{--ink:#0f2f26;--gold:#f2a71b;--cream:#faf6ee}
-*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--cream);color:var(--ink)}
-header{background:var(--ink);color:#fff;padding:16px}
-.brand{font-weight:800}
-main{max-width:520px;margin:auto;padding:14px}
-.card{background:#fff;border-radius:18px;padding:16px;margin-top:12px;border:1px solid #eee2cd}
-#map{height:280px;border-radius:16px;margin-top:12px;background:#eee}
-.steps{display:flex;justify-content:space-between;margin-top:10px}
-.step{flex:1;text-align:center;font-size:11px;color:#999}
-.step .dot{width:22px;height:22px;border-radius:50%;background:#eee;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-size:12px}
-.step.done .dot{background:var(--gold);color:#3a2600}
-.step.done{color:var(--ink);font-weight:700}
-.msg{text-align:center;color:#888;padding:30px 0}
+:root{--ink:#0f2f26;--cream:#faf6ee;--gold:#f2a71b}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--cream);color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{width:100%;max-width:380px;background:linear-gradient(135deg,#0f2f26,#164a3b);color:#fff;border-radius:24px;padding:26px;box-shadow:0 20px 40px rgba(0,0,0,.25)}
+.top{display:flex;justify-content:space-between;align-items:flex-start}
+.brand{font-weight:900;font-size:20px}
+.brand small{display:block;font-weight:500;font-size:11px;color:#cfe3dc;letter-spacing:.5px}
+.name{margin-top:18px;font-size:15px;color:#cfe3dc}
+.stamps{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.stamp{width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;font-size:20px}
+.stamp.filled{background:var(--gold);border-color:var(--gold);color:#3a2600}
+.progress{margin-top:14px;font-size:13px;color:#cfe3dc}
+.reward{margin-top:16px;background:rgba(255,255,255,.12);border-radius:14px;padding:12px 14px;font-size:14px}
+.reward b{color:var(--gold)}
+.footer{margin-top:18px;font-size:11px;color:#a9c2b8;text-align:center}
+.msg{max-width:380px;text-align:center;color:var(--ink)}
 </style>
 </head>
 <body>
-<header><div class="brand">🎾 THE RUSH · Seguimiento de pedido</div></header>
-<main>
-  <div id="app" class="msg">Cargando tu pedido…</div>
-</main>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<div id="app" class="msg">Cargando tu tarjeta…</div>
+<div id="refreshRow" style="text-align:center;margin-top:14px"></div>
 <script>
-const token=new URLSearchParams(location.search).get('token');
-const STEPS=[["recibido","📝","Recibido"],["preparando","👨‍🍳","Preparando"],["salio","🚪","Salió"],["en_camino","🛵","En camino"],["entregado","✅","Entregado"]];
-let map=null, driverMarker=null, destMarker=null;
-function stepsHtml(cur){
-  const i=STEPS.findIndex(s=>s[0]===cur);
-  return `<div class="steps">${STEPS.map((s,idx)=>`<div class="step ${idx<=i?'done':''}"><div class="dot">${s[1]}</div>${s[2]}</div>`).join('')}</div>`;
-}
-async function tick(){
-  if(!token){ document.getElementById('app').textContent='Link inválido.'; return; }
+const params=new URLSearchParams(location.search);
+const token=params.get('token');
+async function loadCard(){
+  if(!token){ document.getElementById('app').textContent='Link inválido. Pide tu tarjeta al mesero.'; return; }
   try{
-    const r=await fetch('/api/track?token='+encodeURIComponent(token));
+    const r=await fetch('/api/loyalty-card?token='+encodeURIComponent(token));
     const d=await r.json();
-    if(!r.ok) throw new Error(d.error||'No se encontró tu pedido');
-    let html=`<div class="card"><b>Folio #${d.folio}</b><div class="muted" style="color:#888;font-size:13px;margin-top:2px">${d.status==='paid'?'Pagado':'En proceso'}</div>${stepsHtml(d.delivery_status||'recibido')}${d.driver_name?`<div style="margin-top:10px;font-size:14px">🛵 Repartidor: <b>${d.driver_name}</b></div>`:''}</div>`;
-    document.getElementById('app').innerHTML = html + (d.delivery_location?'<div id="mapWrap" class="card"><b>Ubicación</b><div id="map"></div></div>':'');
-    if(d.delivery_location){
-      if(!map){
-        map=L.map('map').setView([d.delivery_location.lat,d.delivery_location.lng],14);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
-        destMarker=L.marker([d.delivery_location.lat,d.delivery_location.lng]).addTo(map).bindPopup('Tu dirección');
-      }
-      if(d.driver_location){
-        if(!driverMarker) driverMarker=L.marker([d.driver_location.lat,d.driver_location.lng],{title:'Repartidor'}).addTo(map);
-        else driverMarker.setLatLng([d.driver_location.lat,d.driver_location.lng]);
-      }
-    }
+    if(!r.ok) throw new Error(d.error||'No se encontró la tarjeta');
+    const goal=d.goal, stamps=d.stamps;
+    let dots=''; for(let i=1;i<=goal;i++) dots+=`<div class="stamp ${i<=stamps?'filled':''}">${i<=stamps?'🎾':''}</div>`;
+    document.getElementById('app').outerHTML = `<div class="card">
+      <div class="top"><div class="brand">🎾 THE RUSH<small>CLUB · CAFÉ · COCINA</small></div></div>
+      <div class="name">Hola, ${d.name||'amig@'} 👋</div>
+      <div class="stamps">${dots}</div>
+      <div class="progress">${stamps} de ${goal} sellos${stamps>=goal?' · ¡completaste tu tarjeta! 🎉':''}</div>
+      <div class="reward">🎁 Cada <b>${goal} visitas</b> ganas: <b>${d.reward||'una recompensa'}</b>${d.rewards_earned>d.rewards_redeemed?'<br><br>✅ Tienes una recompensa lista. ¡Muéstrale esta pantalla a tu mesero!':''}</div>
+      <div class="footer">Un sello por cada cuenta pagada · The Rush</div>
+    </div>`;
   }catch(e){
-    document.getElementById('app').innerHTML=`<div class="msg">${e.message}</div>`;
+    document.getElementById('app').textContent = e.message || 'No se pudo cargar tu tarjeta.';
   }
 }
-tick(); setInterval(tick, 12000);
+loadCard();
+document.getElementById('refreshRow').innerHTML = '<button onclick="loadCard()" style="background:none;border:1px solid #0f2f26;color:#0f2f26;padding:8px 16px;border-radius:10px;font-weight:700;cursor:pointer">↻ Actualizar</button><div style="font-size:11px;color:#8a7c62;margin-top:6px">Se actualiza sola cada compra</div>';
+setInterval(loadCard, 15000);
 </script>
 </body>
 </html>
