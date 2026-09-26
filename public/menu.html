@@ -56,11 +56,15 @@
   .section-title{font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:1px}
   .section-subtitle{font-size:11px;font-weight:700;color:var(--brand-accent);white-space:nowrap}
   .items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
-  .item-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s}
+  .item-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;transition:transform .2s,box-shadow .2s;position:relative}
   .item-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.08);border-color:var(--brand-accent)}
-  .item-photo{aspect-ratio:4/3;position:relative;display:flex;align-items:center;justify-content:center;font-size:44px;overflow:hidden}
-  .item-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  .item-photo .station{position:absolute;left:10px;top:10px;background:rgba(17,24,39,.6);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;text-transform:uppercase}
+  /* La foto solo aparece si carga bien; si no, la tarjeta queda como el diseño original */
+  .item-photo{display:none;aspect-ratio:4/3;overflow:hidden;background:var(--border-color)}
+  .item-photo.ok{display:block}
+  .item-photo img{width:100%;height:100%;object-fit:cover;display:block}
+  .badge-tag{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:6px;margin-bottom:6px;width:fit-content}
+  .badge-energy{background:#D1FAE5;color:#065F46}
+  .badge-crave{background:#FEE2E2;color:#991B1B}
   .item-body{padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;flex:1}
   .item-name{font-size:15px;font-weight:800;line-height:1.25}
   .item-desc{font-size:12px;color:var(--text-muted);margin-top:5px;line-height:1.4}
@@ -107,7 +111,7 @@
   .total-line{display:flex;justify-content:space-between;font-weight:900;font-size:16px;padding:8px 0}
   .toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:#111827;color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:700;z-index:300;border:1px solid var(--brand-accent);max-width:90vw;text-align:center}
   .hidden{display:none!important}
-  @media (max-width:520px){ .brand-logo-text{font-size:38px} .mode-btn{min-width:calc(50% - 5px)} .items-grid{grid-template-columns:1fr 1fr;gap:10px} .item-body{padding:10px 11px} .item-name{font-size:13.5px} .item-desc{display:none} .item-footer{flex-direction:column;align-items:stretch;gap:8px} .add-btn{width:100%} }
+  @media (max-width:520px){ .brand-logo-text{font-size:38px} .mode-btn{min-width:calc(50% - 5px)} .items-grid{grid-template-columns:1fr} .item-photo{aspect-ratio:16/9} }
   @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
 </style>
 </head>
@@ -257,11 +261,21 @@ function renderCategories(){
 }
 function selectCategory(k){ currentCat=k; renderCategories(); renderMenu(); window.scrollTo({top:$('modeSwitcher').offsetTop,behavior:'smooth'}); }
 
+// Rutas para cada foto: primero tu Worker (R2/caché), luego Drive directo desde el navegador del cliente
+function photoSrcs(u){
+  const m=String(u||'').match(/^\/img\/drive\/([\w-]{20,})$/);
+  if(m) return ['/img/drive/'+m[1], `https://drive.google.com/thumbnail?id=${m[1]}&sz=w800`, `https://lh3.googleusercontent.com/d/${m[1]}=w800`];
+  return u?[u]:[];
+}
+function nextPhoto(img){
+  const alts=(img.dataset.alts||'').split('|').filter(Boolean);
+  if(!alts.length){ img.parentNode.remove(); return; }   // ninguna ruta funcionó: tarjeta sin foto
+  img.dataset.alts=alts.slice(1).join('|'); img.src=alts[0];
+}
 function photo(p){
-  const barra=(p.destination||'cocina')==='barra';
-  const icon=barra?'☕':'🍽️', label=barra?'☕ Barra':'🍳 Cocina';
-  const img=p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy" onerror="this.remove()">`:'';
-  return `<div class="item-photo" style="background:var(${barra?'--ph-barra':'--ph-cocina'})">${icon}${img}<span class="station">${label}</span></div>`;
+  if(settings.show_photos===false) return '';
+  const srcs=photoSrcs(p.image); if(!srcs.length) return '';
+  return `<div class="item-photo"><img src="${esc(srcs[0])}" data-alts="${esc(srcs.slice(1).join('|'))}" alt="${esc(p.name)}" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('ok')" onerror="nextPhoto(this)"></div>`;
 }
 function renderMenu(){
   const q=$('searchInput').value.toLowerCase().trim();
@@ -276,7 +290,7 @@ function renderMenu(){
         <article class="item-card">
           ${photo(p)}
           <div class="item-body">
-            <div><div class="item-name">${esc(p.name)}</div>${p.description?`<div class="item-desc">${esc(p.description)}</div>`:''}</div>
+            <div><span class="badge-tag ${(p.destination||'cocina')==='barra'?'badge-energy':'badge-crave'}">${(p.destination||'cocina')==='barra'?'☕ Barra':'🍳 Cocina'}</span><div class="item-name">${esc(p.name)}</div>${p.description?`<div class="item-desc">${esc(p.description)}</div>`:''}</div>
             <div class="item-footer"><div class="price-tag">$${Number(p.price)||0}</div>
               <button class="add-btn ${inCart?'in-cart':''}" onclick="addToCart('${esc(p.id)}')">${inCart?`✓ ${inCart.qty} · Agregar otro`:'+ Agregar'}</button></div>
           </div>
