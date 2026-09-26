@@ -180,6 +180,7 @@ export default {
           ["payment_info", ""],
           ["menu_tagline", "Tu ritual empieza aquí, entre espuma y aroma"],
           ["business_hours", "Abierto de 8:00 a.m. a 11:00 p.m."],
+          ["show_photos", "1"],
         ];
         for (const [k, v] of defSettings) await db.prepare("INSERT OR IGNORE INTO pos_settings (key,value) VALUES (?,?)").bind(k, v).run();
         menuSchemaReady2 = true;
@@ -333,6 +334,7 @@ export default {
           rappi_link: st.rappi_link, uber_link: st.uber_link,
           loyalty_goal: Number(st.loyalty_goal) || 10, loyalty_reward: st.loyalty_reward,
           menu_tagline: st.menu_tagline || "", business_hours: st.business_hours || "",
+          show_photos: st.show_photos !== "0",
         });
       }
       if (path === "/api/public-menu" && request.method === "GET") {
