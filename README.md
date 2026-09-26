@@ -437,4 +437,4 @@ La pantalla de login, la de registro y el panel de plataforma las ve **cualquier
 ### Nuevo: `MAPA-LINEAS.md`
 A partir de la v31, para pedir un cambio puedes decir el número de línea o el nombre de la función/endpoint, usando este mapa. Yo reviso esa línea exacta antes de tocar nada, así evitamos que un cambio afecte otra parte por accidente.
 
-**Aviso importante:** los números de línea cambian cada vez que se edita el archivo. Este mapa es válido para la v30.0 tal cual viene en este zip; en cuanto hagamos el siguiente cambio, genero un mapa actualizado para que sigas usándolo con la versión más reciente.
+**Aviso importante:** los números de línea cambian cada vez que se edita el archivo. Este mapa es válido para la v30.0 tal cual viene en este zip; en cuanto hagamos el siguiente cambio, genero un mapa actualizado para que sigas usándolo con la versión más reciente..ok.
