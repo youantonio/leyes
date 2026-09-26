@@ -136,10 +136,48 @@ function mergeNotes(curRaw, add) {
   });
 }
 
+// ===== NEGOCIOS (multi-tenant): cada restaurante vive en /t/<slug>/…              =====
+// Sin prefijo -> negocio "rush" (The Rush), exactamente como siempre: nada cambia.
+const DEFAULT_TENANT = "rush";
+function splitTenant(pathname) {
+  const m = pathname.match(/^\/t\/([a-z0-9][a-z0-9-]{1,38})(\/.*)?$/);
+  return m ? { slug: m[1], rest: m[2] || "/" } : { slug: DEFAULT_TENANT, rest: pathname };
+}
+async function ensureTenantsSchema(db) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS tenants (
+       id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+       modules TEXT NOT NULL DEFAULT '{}', plan_status TEXT NOT NULL DEFAULT 'trial',
+       trial_ends_at TEXT, onboarded INTEGER DEFAULT 0,
+       contact_name TEXT, contact_phone TEXT, contact_email TEXT,
+       created_at TEXT DEFAULT (datetime('now')))`
+  ).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS tenant_settings (tenant_id TEXT, key TEXT, value TEXT, PRIMARY KEY (tenant_id, key))`).run();
+  const rush = await db.prepare("SELECT id FROM tenants WHERE id=?").bind(DEFAULT_TENANT).first();
+  if (!rush) {
+    const allModules = JSON.stringify({ cocina: true, barra: true, mesas: true, canchas: true, repartidores: true, loyalty: true });
+    await db.prepare(
+      "INSERT INTO tenants (id, slug, name, modules, plan_status, onboarded) VALUES (?,?,?,?,?,1)"
+    ).bind(DEFAULT_TENANT, DEFAULT_TENANT, "The Rush", allModules, "active").run();
+  }
+}
+let tenantsSchemaReady = false;
+let tenantColsReady = false;
+// Todo lo existente queda marcado del negocio "rush" (no cambia nada para The Rush).
+// Se corre AL FINAL, cuando ya existen todas las tablas pos_* (algunas se crean más abajo).
+async function ensureTenantCols(db) {
+  for (const t of ["users", "menu_items", "orders", "payments", "tables", "pos_loyalty", "pos_shifts", "pos_voids",
+                    "pos_cuts", "pos_cash_movements", "pos_inventory", "pos_inventory_moves",
+                    "pos_menu_sections", "pos_menu_categories", "pos_driver_locations"]) {
+    try { await db.prepare(`ALTER TABLE ${t} ADD COLUMN tenant_id TEXT DEFAULT 'rush'`).run(); } catch (e) {}
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const path = url.pathname;
+    const { slug: tenantSlug, rest: tenantPath } = splitTenant(url.pathname);
+    let path = tenantPath; // el resto del código nunca ve el prefijo /t/<slug>
 
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
@@ -153,12 +191,21 @@ export default {
 
     // Fotos de producto (R2 / proxy de Drive)
     if (path.startsWith("/img/") && request.method === "GET") return serveImage(path, env, ctx);
-    // Archivos estáticos
-    if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
+    // Archivos estáticos: sirve los mismos archivos de siempre, para cualquier negocio
+    if (!path.startsWith("/api/")) {
+      const assetUrl = new URL(request.url); assetUrl.pathname = path;
+      return env.ASSETS.fetch(new Request(assetUrl, request));
+    }
 
     try {
       const db = env.DB;
       if (!db) return json({ error: "Base de datos no disponible" }, 500);
+
+      if (!tenantsSchemaReady) { await ensureTenantsSchema(db); tenantsSchemaReady = true; }
+      const tenant = await db.prepare("SELECT * FROM tenants WHERE slug=?").bind(tenantSlug).first();
+      if (!tenant) return json({ error: "No existe un negocio con ese nombre en la URL" }, 404);
+      const tenantId = tenant.id;
+      const tenantModules = (() => { try { return JSON.parse(tenant.modules || "{}"); } catch (e) { return {}; } })();
 
       if (!menuSchemaReady2) {
         await db.prepare(`CREATE TABLE IF NOT EXISTS pos_settings (key TEXT PRIMARY KEY, value TEXT)`).run();
@@ -172,6 +219,11 @@ export default {
         try { await db.prepare("ALTER TABLE orders ADD COLUMN loyalty_consent INTEGER DEFAULT 0").run(); } catch (e) {}
         try { await db.prepare("ALTER TABLE users ADD COLUMN whatsapp TEXT").run(); } catch (e) {}
         try { await db.prepare("ALTER TABLE users ADD COLUMN wa_notify INTEGER DEFAULT 1").run(); } catch (e) {}
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_loyalty_events (
+             id TEXT PRIMARY KEY, phone TEXT, name TEXT, type TEXT, tenant_id TEXT DEFAULT 'rush',
+             created_at TEXT DEFAULT (datetime('now')))`
+        ).run();
         await db.prepare(
           `CREATE TABLE IF NOT EXISTS pos_voids (
              id TEXT PRIMARY KEY, order_id TEXT, folio TEXT, customer TEXT, amount REAL, method TEXT,
@@ -197,15 +249,20 @@ export default {
           ["business_hours", "Abierto de 8:00 a.m. a 11:00 p.m."],
           ["show_photos", "1"],
         ];
-        for (const [k, v] of defSettings) await db.prepare("INSERT OR IGNORE INTO pos_settings (key,value) VALUES (?,?)").bind(k, v).run();
+        if (tenantId === "rush") {
+          for (const [k, v] of defSettings) await db.prepare("INSERT OR IGNORE INTO pos_settings (key,value) VALUES (?,?)").bind(k, v).run();
+        } else {
+          for (const [k, v] of defSettings) await db.prepare("INSERT OR IGNORE INTO tenant_settings (tenant_id,key,value) VALUES (?,?,?)").bind(tenantId, k, v).run();
+        }
         menuSchemaReady2 = true;
       }
 
       if (!sessionsReady) {
         await db.prepare(
           `CREATE TABLE IF NOT EXISTS pos_sessions (
-             token TEXT PRIMARY KEY, user_id TEXT, username TEXT, name TEXT, role TEXT, expires_at INTEGER)`
+             token TEXT PRIMARY KEY, user_id TEXT, username TEXT, name TEXT, role TEXT, expires_at INTEGER, tenant_id TEXT DEFAULT 'rush')`
         ).run();
+        try { await db.prepare("ALTER TABLE pos_sessions ADD COLUMN tenant_id TEXT DEFAULT 'rush'").run(); } catch (e) {}
         sessionsReady = true;
       }
 
@@ -261,6 +318,7 @@ export default {
               .bind(id, sid, name, sort).run();
         menuSchemaReady = true;
       }
+      if (!tenantColsReady) { await ensureTenantCols(db); tenantColsReady = true; }
 
       const calcTotal = (items) =>
         items.reduce((s, i) => s + (Number(i.qty) || 1) * (Number(i.unit_price) || 0), 0);
@@ -270,19 +328,25 @@ export default {
         const ids = [...new Set((items || []).map((i) => i.menu_item_id).filter(Boolean).map(String))].slice(0, 80);
         if (!ids.length) return [];
         const q = ids.map(() => "?").join(",");
-        const { results } = await db.prepare(`SELECT name FROM menu_items WHERE sold_out=1 AND id IN (${q})`).bind(...ids).all();
+        const { results } = await db.prepare(`SELECT name FROM menu_items WHERE sold_out=1 AND tenant_id=? AND id IN (${q})`).bind(tenantId, ...ids).all();
         return (results || []).map((r) => r.name);
       };
+      // "rush" usa la tabla de siempre (pos_settings), sin ningún cambio; cualquier otro negocio usa tenant_settings
       const getSettings = async () => {
-        const { results } = await db.prepare("SELECT key, value FROM pos_settings").all();
+        const { results } = tenantId === "rush"
+          ? await db.prepare("SELECT key, value FROM pos_settings").all()
+          : await db.prepare("SELECT key, value FROM tenant_settings WHERE tenant_id=?").bind(tenantId).all();
         const o = {}; for (const r of results || []) o[r.key] = r.value; return o;
       };
+      const setSetting = (k, v) => tenantId === "rush"
+        ? db.prepare("INSERT INTO pos_settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, String(v ?? "")).run()
+        : db.prepare("INSERT INTO tenant_settings (tenant_id,key,value) VALUES (?,?,?) ON CONFLICT(tenant_id,key) DO UPDATE SET value=excluded.value").bind(tenantId, k, String(v ?? "")).run();
       // WhatsApp que recibe los pedidos: el del admin en turno; si no hay, el número general de respaldo
       const resolveOrderWa = async (st) => {
         const clean = (v) => String(v || "").replace(/\D/g, "").slice(-10);
         if (st.whatsapp_on_duty) {
-          const u = await db.prepare("SELECT name, whatsapp FROM users WHERE id=? AND active=1 AND role='admin'")
-            .bind(st.whatsapp_on_duty).first().catch(() => null);
+          const u = await db.prepare("SELECT name, whatsapp FROM users WHERE id=? AND active=1 AND role='admin' AND tenant_id=?")
+            .bind(st.whatsapp_on_duty, tenantId).first().catch(() => null);
           if (u && clean(u.whatsapp).length === 10) return { number: clean(u.whatsapp), name: u.name, source: "turno" };
         }
         const g = clean(st.whatsapp_order_number);
@@ -308,7 +372,7 @@ export default {
       // Seguimiento público (sin sesión): estatus del pedido + ubicación del repartidor si está compartiendo
       if (path === "/api/track" && request.method === "GET") {
         const token = url.searchParams.get("token") || "";
-        const o = token ? await db.prepare("SELECT * FROM orders WHERE tracking_token=?").bind(token).first() : null;
+        const o = token ? await db.prepare("SELECT * FROM orders WHERE tracking_token=? AND tenant_id=?").bind(token, tenantId).first() : null;
         if (!o) return json({ error: "Pedido no encontrado" }, 404);
         let driverLoc = null, driverName = null;
         if (o.driver_id) {
@@ -325,18 +389,22 @@ export default {
         });
       }
       const genToken = () => crypto.randomUUID().replace(/-/g, "");
+      // Lealtad: el mismo teléfono en dos negocios distintos guarda dos tarjetas separadas
+      const lk = (ph) => (tenantId === "rush" ? ph : tenantId + ":" + ph);
       const addStamp = async (phone, name) => {
         const goal = Number((await getSettings()).loyalty_goal) || 10;
-        let row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(phone).first();
+        let row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(lk(phone)).first();
         if (!row) {
           const token = genToken();
-          await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent) VALUES (?,?,?,0,1)").bind(phone, name, token).run();
-          row = { phone, name, card_token: token, stamps: 0, rewards_earned: 0 };
+          await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent,tenant_id) VALUES (?,?,?,0,1,?)").bind(lk(phone), name, token, tenantId).run();
+          row = { phone: lk(phone), name, card_token: token, stamps: 0, rewards_earned: 0 };
         }
         let stamps = row.stamps + 1, earned = row.rewards_earned, justEarned = false;
         if (stamps >= goal) { stamps = 0; earned += 1; justEarned = true; }
         await db.prepare("UPDATE pos_loyalty SET stamps=?, rewards_earned=?, name=?, updated_at=datetime('now') WHERE phone=?")
-          .bind(stamps, earned, name || row.name, phone).run();
+          .bind(stamps, earned, name || row.name, lk(phone)).run();
+        await db.prepare("INSERT INTO pos_loyalty_events (id,phone,name,type,tenant_id) VALUES (?,?,?,?,?)")
+          .bind(crypto.randomUUID(), lk(phone), name || row.name, justEarned ? "reward" : "stamp", tenantId).run();
         return { token: row.card_token, stamps, goal, justEarned };
       };
 
@@ -353,9 +421,9 @@ export default {
         });
       }
       if (path === "/api/public-menu" && request.method === "GET") {
-        const its = ((await db.prepare("SELECT id,name,category,category_id,price,description,destination,image FROM menu_items WHERE active=1 AND sold_out=0 ORDER BY sort_order, name").all()).results) || [];
-        const secs = ((await db.prepare("SELECT * FROM pos_menu_sections ORDER BY sort_order, name").all()).results) || [];
-        const cats = ((await db.prepare("SELECT * FROM pos_menu_categories ORDER BY sort_order, name").all()).results) || [];
+        const its = ((await db.prepare("SELECT id,name,category,category_id,price,description,destination,image FROM menu_items WHERE active=1 AND sold_out=0 AND tenant_id=? ORDER BY sort_order, name").bind(tenantId).all()).results) || [];
+        const secs = ((await db.prepare("SELECT * FROM pos_menu_sections WHERE tenant_id=? ORDER BY sort_order, name").bind(tenantId).all()).results) || [];
+        const cats = ((await db.prepare("SELECT * FROM pos_menu_categories WHERE tenant_id=? ORDER BY sort_order, name").bind(tenantId).all()).results) || [];
         return json({ items: its.map((i) => ({ ...i, image: imgOut(i.image) })), structure: secs.map((sc) => ({ ...sc, categories: cats.filter((c) => c.section_id === sc.id) })) });
       }
       if (path === "/api/public-order" && request.method === "POST") {
@@ -371,8 +439,8 @@ export default {
         // Precios SIEMPRE desde la base de datos (nunca confiar en el precio que manda el navegador)
         const reqIds = [...new Set(items0.map((i) => String(i.menu_item_id || "")).filter(Boolean))].slice(0, 80);
         if (!reqIds.length) return json({ error: "Productos no válidos" }, 400);
-        const dbItems = ((await db.prepare(`SELECT id, name, price, destination FROM menu_items WHERE active=1 AND id IN (${reqIds.map(() => "?").join(",")})`)
-          .bind(...reqIds).all()).results) || [];
+        const dbItems = ((await db.prepare(`SELECT id, name, price, destination FROM menu_items WHERE active=1 AND tenant_id=? AND id IN (${reqIds.map(() => "?").join(",")})`)
+          .bind(tenantId, ...reqIds).all()).results) || [];
         const byId = Object.fromEntries(dbItems.map((r) => [String(r.id), r]));
         const missing = items0.filter((i) => !byId[String(i.menu_item_id)]);
         if (missing.length) return json({ error: "Ya no está disponible: " + missing.map((i) => i.name || "producto").join(", ") + ". Recarga el menú." }, 409);
@@ -407,22 +475,36 @@ export default {
           + "-" + trackToken.slice(0, 2).toUpperCase();
         await db.prepare(
           `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel,
-             loyalty_consent, delivery_status, delivery_lat, delivery_lng, shipping_cost, tracking_token, delivery_address, receiver_name, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
+             loyalty_consent, delivery_status, delivery_lat, delivery_lng, shipping_cost, tracking_token, delivery_address, receiver_name, created_at, updated_at, tenant_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'),?)`
         ).bind(id, folio, name, phone, notes, JSON.stringify(itemsSafe), calcTotal(itemsSafe), total, channel, b.loyalty_consent ? 1 : 0,
-               channel === "domicilio_directo" ? "recibido" : null, dLat, dLng, shipping, trackToken, addrText, String(b.receiver_name || "").trim()).run();
+               channel === "domicilio_directo" ? "recibido" : null, dLat, dLng, shipping, trackToken, addrText, String(b.receiver_name || "").trim(), tenantId).run();
         const waTo = await resolveOrderWa(await getSettings());
         // Tarjeta de lealtad: se crea (sin sello) para que el cliente tenga su link desde ya; el sello se suma al cobrar
         let cardToken = null;
         if (b.loyalty_consent) {
-          const row = await db.prepare("SELECT card_token FROM pos_loyalty WHERE phone=?").bind(phone).first();
+          const row = await db.prepare("SELECT card_token FROM pos_loyalty WHERE phone=?").bind(lk(phone)).first();
           if (row) cardToken = row.card_token;
           else {
             cardToken = genToken();
-            await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent) VALUES (?,?,?,0,1)").bind(phone, name, cardToken).run();
+            await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent,tenant_id) VALUES (?,?,?,0,1,?)").bind(lk(phone), name, cardToken, tenantId).run();
           }
         }
         return json({ id, folio, shipping, total, track_token: trackToken, whatsapp_to: waTo.number, card_token: cardToken }, 201);
+      }
+      if (path === "/api/loyalty-join" && request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        let phone = String(b.phone || "").replace(/\D/g, ""); if (phone.length > 10) phone = phone.slice(-10);
+        if (phone.length !== 10) return json({ error: "Tu WhatsApp debe tener 10 dígitos" }, 400);
+        const name = String(b.name || "Cliente").trim().slice(0, 60) || "Cliente";
+        let row = await db.prepare("SELECT card_token FROM pos_loyalty WHERE phone=?").bind(lk(phone)).first();
+        let cardToken;
+        if (row) cardToken = row.card_token;
+        else {
+          cardToken = genToken();
+          await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent,tenant_id) VALUES (?,?,?,0,1,?)").bind(lk(phone), name, cardToken, tenantId).run();
+        }
+        return json({ card_token: cardToken }, 201);
       }
       if (path === "/api/loyalty-card" && request.method === "GET") {
         const token = url.searchParams.get("token") || "";
@@ -437,6 +519,67 @@ export default {
 
 
       // ===== LOGIN (único endpoint sin sesión) =====
+      if (path === "/api/signup" && request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const bizName = String(b.business_name || "").trim();
+        let slug = String(b.slug || "").toLowerCase().trim().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+        const adminName = String(b.admin_name || "").trim();
+        const adminUser = String(b.admin_username || "").trim();
+        const adminPass = String(b.admin_password || "");
+        const contactPhone = String(b.contact_phone || "").replace(/\D/g, "").slice(-10);
+        if (!bizName || !slug || !adminName || !adminUser) return json({ error: "Faltan datos del negocio o del administrador" }, 400);
+        if (slug.length < 3 || slug === "t" || slug === "rush") return json({ error: "Ese nombre para tu URL no es válido, prueba otro" }, 400);
+        if (adminPass.length < 4) return json({ error: "La contraseña debe tener al menos 4 caracteres" }, 400);
+        const dupSlug = await db.prepare("SELECT id FROM tenants WHERE slug=?").bind(slug).first();
+        if (dupSlug) return json({ error: "Ese nombre de negocio ya está en uso, prueba otro" }, 409);
+        const modules = {
+          cocina: !!b.modules?.cocina, barra: !!b.modules?.barra, mesas: !!b.modules?.mesas,
+          canchas: !!b.modules?.canchas, repartidores: !!b.modules?.repartidores, loyalty: !!b.modules?.loyalty,
+        };
+        const newTenantId = crypto.randomUUID();
+        const trialDays = 30;
+        await db.prepare(
+          `INSERT INTO tenants (id, slug, name, modules, plan_status, trial_ends_at, onboarded, contact_name, contact_phone, contact_email)
+           VALUES (?,?,?,?,'trial', datetime('now','+${trialDays} days'), 0, ?, ?, ?)`
+        ).bind(newTenantId, slug, bizName, JSON.stringify(modules), adminName, contactPhone, String(b.contact_email || "").trim()).run();
+        const salt = newSalt();
+        const hash = await hashPw(adminPass, salt);
+        const uid = crypto.randomUUID();
+        await db.prepare(
+          `INSERT INTO users (id, username, name, role, password_hash, password_salt, active, created_at, updated_at, approved, tenant_id)
+           VALUES (?,?,?, 'admin', ?,?,1,datetime('now'),datetime('now'),1,?)`
+        ).bind(uid, adminUser, adminName, hash, salt, newTenantId).run();
+        return json({ ok: true, slug, url: "/t/" + slug + "/" }, 201);
+      }
+
+      // ===== Estado del negocio: prueba, activo o bloqueado =====
+      if (path === "/api/tenant-status" && request.method === "GET") {
+        const now = await db.prepare("SELECT datetime('now') AS n").first();
+        let status = tenant.plan_status;
+        if (status === "trial" && tenant.trial_ends_at && now.n > tenant.trial_ends_at) {
+          status = "locked";
+          await db.prepare("UPDATE tenants SET plan_status='locked' WHERE id=? AND plan_status='trial'").bind(tenantId).run();
+        }
+        const daysLeft = tenant.trial_ends_at
+          ? Math.max(0, Math.ceil((new Date(tenant.trial_ends_at.replace(" ", "T") + "Z") - new Date(now.n.replace(" ", "T") + "Z")) / 86400000))
+          : null;
+        return json({
+          name: tenant.name, status, days_left: daysLeft, onboarded: !!tenant.onboarded, modules: tenantModules,
+          contact_phone: tenant.contact_phone || "",
+        });
+      }
+
+      // ===== Bloqueo: si el negocio ya no está activo, nada de /api/* funciona salvo lo de arriba =====
+      if (tenantId !== "rush" && tenant.plan_status !== "active") {
+        const now = await db.prepare("SELECT datetime('now') AS n").first();
+        const expired = tenant.plan_status === "locked" || (tenant.trial_ends_at && now.n > tenant.trial_ends_at);
+        if (expired) {
+          if (tenant.plan_status !== "locked") await db.prepare("UPDATE tenants SET plan_status='locked' WHERE id=?").bind(tenantId).run();
+          const allow = path === "/api/login" || path === "/api/tenant-status" || path === "/api/public-settings";
+          if (!allow) return json({ error: "trial_expired", message: "Tu mes de prueba terminó. Contacta al administrador para activar tu plan." }, 402);
+        }
+      }
+
       if (path === "/api/login" && request.method === "POST") {
         const b = await request.json().catch(() => ({}));
         const username = String(b.username || "").trim();
@@ -446,7 +589,7 @@ export default {
         if (username) {
           let u = null;
           try {
-            u = await db.prepare("SELECT * FROM users WHERE lower(username)=lower(?) AND active=1").bind(username).first();
+            u = await db.prepare("SELECT * FROM users WHERE lower(username)=lower(?) AND active=1 AND tenant_id=?").bind(username, tenantId).first();
           } catch (e) {}
           if (u) {
             if (String(u.password_hash || "").startsWith("pbkdf2$")) {
@@ -460,8 +603,8 @@ export default {
           let allowed = true;
           try {
             const r = await db.prepare(
-              "SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1 AND password_hash LIKE 'pbkdf2$%'"
-            ).first();
+              "SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1 AND password_hash LIKE 'pbkdf2$%' AND tenant_id=?"
+            ).bind(tenantId).first();
             allowed = (r?.c || 0) === 0;
           } catch (e) {}
           if (allowed) user = { id: "fallback", name: "Administrador", username: "admin", role: "admin" };
@@ -476,19 +619,50 @@ export default {
 
         await db.prepare("DELETE FROM pos_sessions WHERE expires_at < ?").bind(Date.now()).run();
         const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
-        await db.prepare("INSERT INTO pos_sessions (token,user_id,username,name,role,expires_at) VALUES (?,?,?,?,?,?)")
-          .bind(token, String(user.id), user.username, user.name, user.role, Date.now() + SESSION_MS).run();
-        return json({ token, user: { id: user.id, name: user.name, username: user.username, role: user.role } });
+        await db.prepare("INSERT INTO pos_sessions (token,user_id,username,name,role,expires_at,tenant_id) VALUES (?,?,?,?,?,?,?)")
+          .bind(token, String(user.id), user.username, user.name, user.role, Date.now() + SESSION_MS, tenantId).run();
+        return json({ token, user: { id: user.id, name: user.name, username: user.username, role: user.role }, tenant: { slug: tenant.slug, name: tenant.name, modules: tenantModules } });
       }
 
       // ===== Sesión obligatoria para todo lo demás =====
       const auth = request.headers.get("Authorization") || "";
       const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
       const sess = token
-        ? await db.prepare("SELECT * FROM pos_sessions WHERE token=? AND expires_at>?").bind(token, Date.now()).first()
+        ? await db.prepare("SELECT * FROM pos_sessions WHERE token=? AND expires_at>? AND tenant_id=?").bind(token, Date.now(), tenantId).first()
         : null;
       if (!sess) return json({ error: "Sesión expirada. Inicia sesión de nuevo." }, 401);
       const isAdmin = sess.role === "admin";
+
+      // ===== Asistente de primera sesión: elegir módulos =====
+      if (path === "/api/onboarding" && request.method === "POST") {
+        if (!isAdmin) return json({ error: "Solo el administrador configura el negocio" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const modules = {
+          cocina: !!b.cocina, barra: !!b.barra, mesas: !!b.mesas,
+          canchas: !!b.canchas, repartidores: !!b.repartidores, loyalty: !!b.loyalty,
+        };
+        await db.prepare("UPDATE tenants SET modules=?, onboarded=1 WHERE id=?").bind(JSON.stringify(modules), tenantId).run();
+        return json({ ok: true, modules });
+      }
+
+      // ===== Panel de super-admin (solo para "rush", que opera la plataforma) =====
+      if (path === "/api/platform/tenants" && request.method === "GET") {
+        if (!(tenantId === "rush" && isAdmin)) return json({ error: "No autorizado" }, 403);
+        const { results } = await db.prepare("SELECT id, slug, name, plan_status, trial_ends_at, onboarded, contact_name, contact_phone, contact_email, created_at FROM tenants WHERE id != 'rush' ORDER BY created_at DESC").all();
+        return json(results || []);
+      }
+      const ptm = path.match(/^\/api\/platform\/tenants\/([^\/]+)$/);
+      if (ptm && request.method === "PATCH") {
+        if (!(tenantId === "rush" && isAdmin)) return json({ error: "No autorizado" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const sets = [], vals = [];
+        if (["trial", "active", "locked"].includes(b.plan_status)) { sets.push("plan_status=?"); vals.push(b.plan_status); }
+        if (b.extend_days) { sets.push("trial_ends_at=datetime(COALESCE(trial_ends_at, 'now'), '+' || ? || ' days')"); vals.push(Number(b.extend_days) || 0); }
+        if (!sets.length) return json({ error: "Nada que actualizar" }, 400);
+        await db.prepare(`UPDATE tenants SET ${sets.join(", ")} WHERE id=?`).bind(...vals, decodeURIComponent(ptm[1])).run();
+        return json({ ok: true });
+      }
+
 
       if (path === "/api/logout" && request.method === "POST") {
         await db.prepare("DELETE FROM pos_sessions WHERE token=?").bind(token).run();
@@ -502,15 +676,15 @@ export default {
         const uid = um[1] ? decodeURIComponent(um[1]) : null;
         const otherAdmins = async (excludeId) => {
           const r = await db.prepare(
-            "SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1 AND id != ?"
-          ).bind(excludeId).first();
+            "SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1 AND id != ? AND tenant_id=?"
+          ).bind(excludeId, tenantId).first();
           return r?.c || 0;
         };
 
         if (!uid && request.method === "GET") {
           const { results } = await db.prepare(
-            "SELECT id, username, name, role, active, created_at, password_hash, whatsapp, wa_notify FROM users ORDER BY name"
-          ).all();
+            "SELECT id, username, name, role, active, created_at, password_hash, whatsapp, wa_notify FROM users WHERE tenant_id=? ORDER BY name"
+          ).bind(tenantId).all();
           return json((results || []).map(({ password_hash, ...u }) => ({
             ...u, legacy: !String(password_hash || "").startsWith("pbkdf2$"),
           })));
@@ -527,21 +701,21 @@ export default {
           if (!ROLES.includes(role)) return json({ error: "Rol no válido" }, 400);
           const wa = String(b.whatsapp || "").replace(/\D/g, "").slice(-10);
           if (wa && wa.length !== 10) return json({ error: "El WhatsApp debe tener 10 dígitos" }, 400);
-          const dup = await db.prepare("SELECT id FROM users WHERE lower(username)=lower(?)").bind(username).first();
+          const dup = await db.prepare("SELECT id FROM users WHERE lower(username)=lower(?) AND tenant_id=?").bind(username, tenantId).first();
           if (dup) return json({ error: "Ese usuario ya existe" }, 409);
           const salt = newSalt();
           const hash = await hashPw(password, salt);
           const id = crypto.randomUUID();
           await db.prepare(
-            `INSERT INTO users (id, username, name, role, password_hash, password_salt, active, created_at, updated_at, approved)
-             VALUES (?,?,?,?,?,?,1,datetime('now'),datetime('now'),1)`
-          ).bind(id, username, name, role, hash, salt).run();
+            `INSERT INTO users (id, username, name, role, password_hash, password_salt, active, created_at, updated_at, approved, tenant_id)
+             VALUES (?,?,?,?,?,?,1,datetime('now'),datetime('now'),1,?)`
+          ).bind(id, username, name, role, hash, salt, tenantId).run();
           if (wa) await db.prepare("UPDATE users SET whatsapp=? WHERE id=?").bind(wa, id).run();
           return json({ id }, 201);
         }
 
         if (uid && request.method === "PATCH") {
-          const target = await db.prepare("SELECT * FROM users WHERE id=?").bind(uid).first();
+          const target = await db.prepare("SELECT * FROM users WHERE id=? AND tenant_id=?").bind(uid, tenantId).first();
           if (!target) return json({ error: "Usuario no encontrado" }, 404);
           const b = await request.json().catch(() => ({}));
           const sets = [], vals = [];
@@ -582,7 +756,7 @@ export default {
 
         if (uid && request.method === "DELETE") {
           if (uid === sess.user_id) return json({ error: "No puedes eliminar tu propio usuario" }, 400);
-          const target = await db.prepare("SELECT * FROM users WHERE id=?").bind(uid).first();
+          const target = await db.prepare("SELECT * FROM users WHERE id=? AND tenant_id=?").bind(uid, tenantId).first();
           if (!target) return json({ error: "Usuario no encontrado" }, 404);
           if (target.role === "admin" && target.active && (await otherAdmins(uid)) === 0)
             return json({ error: "No puedes eliminar al único administrador" }, 400);
@@ -598,10 +772,10 @@ export default {
         const b = await request.json().catch(() => ({}));
         let phone = String(b.phone || "").replace(/\D/g, ""); if (phone.length > 10) phone = phone.slice(-10);
         if (phone.length !== 10) return json({ error: "WhatsApp no valido" }, 400);
-        let row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(phone).first();
+        let row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(lk(phone)).first();
         if (!row) {
           const token = genToken();
-          await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent) VALUES (?,?,?,0,1)").bind(phone, String(b.name || "Cliente"), token).run();
+          await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent,tenant_id) VALUES (?,?,?,0,1,?)").bind(lk(phone), String(b.name || "Cliente"), token, tenantId).run();
           row = { card_token: token };
         }
         return json({ token: row.card_token });
@@ -610,15 +784,15 @@ export default {
         if (!isAdmin && sess.role !== "mesero") return json({ error: "No autorizado" }, 403);
         const b = await request.json().catch(() => ({}));
         let phone = String(b.phone || "").replace(/\D/g, ""); if (phone.length > 10) phone = phone.slice(-10);
-        const row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(phone).first();
+        const row = await db.prepare("SELECT * FROM pos_loyalty WHERE phone=?").bind(lk(phone)).first();
         if (!row) return json({ error: "Cliente no encontrado" }, 404);
         if (row.rewards_earned <= row.rewards_redeemed) return json({ error: "No tiene recompensas disponibles" }, 400);
-        await db.prepare("UPDATE pos_loyalty SET rewards_redeemed=rewards_redeemed+1, updated_at=datetime('now') WHERE phone=?").bind(phone).run();
+        await db.prepare("UPDATE pos_loyalty SET rewards_redeemed=rewards_redeemed+1, updated_at=datetime('now') WHERE phone=?").bind(lk(phone)).run();
         return json({ ok: true });
       }
       // ===== EQUIPO CON WHATSAPP (para avisos de comanda y "listo") =====
       if (path === "/api/team-wa" && request.method === "GET") {
-        const rows = (await db.prepare("SELECT id, name, role, whatsapp, wa_notify FROM users WHERE active=1").all()).results || [];
+        const rows = (await db.prepare("SELECT id, name, role, whatsapp, wa_notify FROM users WHERE active=1 AND tenant_id=?").bind(tenantId).all()).results || [];
         const team = rows
           .map((u) => ({ id: u.id, name: u.name, role: u.role, whatsapp: String(u.whatsapp || "").replace(/\D/g, "").slice(-10), notify: u.wa_notify !== 0 }))
           .filter((u) => u.whatsapp.length === 10 && u.notify);
@@ -642,7 +816,7 @@ export default {
           if (String(u.whatsapp || "").replace(/\D/g, "").length !== 10)
             return json({ error: `${u.name} no tiene WhatsApp registrado. Agrégalo en Usuarios.` }, 400);
         }
-        await db.prepare("INSERT INTO pos_settings (key,value) VALUES ('whatsapp_on_duty',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(uid).run();
+        await setSetting("whatsapp_on_duty", uid);
         return json({ ok: true });
       }
       if (path === "/api/settings" && request.method === "GET") {
@@ -655,7 +829,7 @@ export default {
         const b = await request.json().catch(() => ({}));
         for (const [k, v] of Object.entries(b)) {
           if (k.startsWith("void_pin")) continue; // la clave del sistema solo se cambia en /api/void-pin
-          await db.prepare("INSERT INTO pos_settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, String(v ?? "")).run();
+          await setSetting(k, v);
         }
         return json({ ok: true });
       }
@@ -664,24 +838,24 @@ export default {
       const DELIVERY_STEPS = ["recibido", "preparando", "salio", "en_camino", "entregado"];
       if (path === "/api/drivers" && request.method === "GET") {
         if (!isAdmin && sess.role !== "mesero") return json({ error: "No autorizado" }, 403);
-        const { results } = await db.prepare("SELECT id, name, username FROM users WHERE role='repartidor' AND active=1 ORDER BY name").all();
+        const { results } = await db.prepare("SELECT id, name, username FROM users WHERE role='repartidor' AND active=1 AND tenant_id=? ORDER BY name").bind(tenantId).all();
         return json(results || []);
       }
       const dm = path.match(/^\/api\/orders\/([^\/]+)\/delivery$/);
       if (dm && request.method === "PATCH") {
         const oid = decodeURIComponent(dm[1]);
-        const o = await db.prepare("SELECT * FROM orders WHERE id=?").bind(oid).first();
+        const o = await db.prepare("SELECT * FROM orders WHERE id=? AND tenant_id=?").bind(oid, tenantId).first();
         if (!o) return json({ error: "Pedido no encontrado" }, 404);
         const b = await request.json().catch(() => ({}));
         if (b.driver_id !== undefined) {
           if (!isAdmin && sess.role !== "mesero") return json({ error: "No autorizado" }, 403);
-          await db.prepare("UPDATE orders SET driver_id=?, delivery_status=COALESCE(delivery_status,'recibido'), updated_at=datetime('now') WHERE id=?")
-            .bind(b.driver_id || null, oid).run();
+          await db.prepare("UPDATE orders SET driver_id=?, delivery_status=COALESCE(delivery_status,'recibido'), updated_at=datetime('now') WHERE id=? AND tenant_id=?")
+            .bind(b.driver_id || null, oid, tenantId).run();
         }
         if (b.delivery_status !== undefined) {
           if (!DELIVERY_STEPS.includes(b.delivery_status)) return json({ error: "Estatus no válido" }, 400);
           if (!isAdmin && sess.role !== "mesero" && sess.user_id !== o.driver_id) return json({ error: "No autorizado" }, 403);
-          await db.prepare("UPDATE orders SET delivery_status=?, updated_at=datetime('now') WHERE id=?").bind(b.delivery_status, oid).run();
+          await db.prepare("UPDATE orders SET delivery_status=?, updated_at=datetime('now') WHERE id=? AND tenant_id=?").bind(b.delivery_status, oid, tenantId).run();
         }
         return json({ ok: true });
       }
@@ -704,19 +878,50 @@ export default {
       }
 
       // ===== CLIENTES (se arman con los datos de las órdenes) =====
+      if (path === "/api/loyalty-dashboard" && request.method === "GET") {
+        if (!isAdmin) return json({ error: "Solo el administrador puede ver este panel" }, 403);
+        const dayStart = (await db.prepare("SELECT datetime(date('now','-6 hours'),'+6 hours','-1 second') AS d").first()).d;
+        const todayRows = (await db.prepare(
+          "SELECT type, COUNT(*) c FROM pos_loyalty_events WHERE tenant_id=? AND created_at > ? GROUP BY type"
+        ).bind(tenantId, dayStart).all()).results || [];
+        const stampsToday = todayRows.find((r) => r.type === "stamp")?.c || 0;
+        const rewardsToday = todayRows.find((r) => r.type === "reward")?.c || 0;
+        const totals = await db.prepare(
+          "SELECT COUNT(*) wallets, COALESCE(SUM(stamps),0) stamps_now, COALESCE(SUM(rewards_earned),0) rewards_earned, COALESCE(SUM(rewards_redeemed),0) rewards_redeemed FROM pos_loyalty WHERE tenant_id=? AND consent=1"
+        ).bind(tenantId).first();
+        const allTime = await db.prepare(
+          "SELECT SUM(CASE WHEN type='stamp' THEN 1 ELSE 0 END) stamps, SUM(CASE WHEN type='reward' THEN 1 ELSE 0 END) rewards FROM pos_loyalty_events WHERE tenant_id=?"
+        ).bind(tenantId).first();
+        const returning = await db.prepare(
+          "SELECT COUNT(*) c FROM pos_loyalty WHERE tenant_id=? AND consent=1 AND stamps + rewards_earned + rewards_redeemed >= 2"
+        ).bind(tenantId).first();
+        const feed = (await db.prepare(
+          "SELECT name, type, created_at FROM pos_loyalty_events WHERE tenant_id=? ORDER BY created_at DESC LIMIT 10"
+        ).bind(tenantId).all()).results || [];
+        const st = await getSettings();
+        return json({
+          stamps_today: stampsToday, rewards_today: rewardsToday,
+          active_wallets: totals?.wallets || 0,
+          returning_customers: returning?.c || 0,
+          all_time_stamps: allTime?.stamps || 0, all_time_rewards: allTime?.rewards || 0,
+          rewards_redeemed: totals?.rewards_redeemed || 0,
+          loyalty_goal: Number(st.loyalty_goal) || 10, loyalty_reward: st.loyalty_reward || "",
+          feed: feed.map((f) => ({ name: String(f.name || "Cliente").replace(/\s*\(\d{10}\)\s*$/, ""), type: f.type, created_at: f.created_at })),
+        });
+      }
       if (path === "/api/customers" && request.method === "GET") {
         const { results } = await db.prepare(
           `SELECT o.customer_phone AS phone,
                   (SELECT o2.customer_name FROM orders o2
-                    WHERE o2.customer_phone = o.customer_phone ORDER BY o2.created_at DESC LIMIT 1) AS name,
+                    WHERE o2.customer_phone = o.customer_phone AND o2.tenant_id = o.tenant_id ORDER BY o2.created_at DESC LIMIT 1) AS name,
                   COUNT(*) AS visits,
                   COALESCE(SUM(CASE WHEN o.status='paid' THEN o.total ELSE 0 END),0) AS spent,
                   MAX(o.created_at) AS last_visit
              FROM orders o
-            WHERE o.customer_phone IS NOT NULL AND TRIM(o.customer_phone) != ''
+            WHERE o.tenant_id = ? AND o.customer_phone IS NOT NULL AND TRIM(o.customer_phone) != ''
             GROUP BY o.customer_phone
             ORDER BY last_visit DESC`
-        ).all();
+        ).bind(tenantId).all();
         return json((results || []).map((c) => ({
           ...c, name: String(c.name || "").replace(/\s*\(\d{10}\)\s*$/, "").trim() || "Cliente",
         })));
@@ -794,7 +999,7 @@ export default {
       }
       if (path === "/api/photos/status" && request.method === "GET") {
         const deny = needAdmin(); if (deny) return deny;
-        const rows = (await db.prepare("SELECT image FROM menu_items WHERE active=1").all()).results || [];
+        const rows = (await db.prepare("SELECT image FROM menu_items WHERE active=1 AND tenant_id=?").bind(tenantId).all()).results || [];
         const c = { total: rows.length, sin_foto: 0, drive: 0, d1: 0, r2: 0, otras: 0 };
         for (const r of rows) {
           const v = String(r.image || "");
@@ -808,8 +1013,8 @@ export default {
         if (!env.PHOTOS) return json({ error: "R2 no está conectado. Revisa el paso 1 del README (bucket rush-fotos)." }, 400);
         const LOTE = 8; // pocas por vuelta para no pasar el límite de Cloudflare
         const rows = (await db.prepare(
-          "SELECT id, name, image FROM menu_items WHERE active=1 AND image IS NOT NULL AND image != '' AND image NOT LIKE '/img/r2/%'"
-        ).all()).results || [];
+          "SELECT id, name, image FROM menu_items WHERE active=1 AND tenant_id=? AND image IS NOT NULL AND image != '' AND image NOT LIKE '/img/r2/%'"
+        ).bind(tenantId).all()).results || [];
         const pend = rows.filter((r) => driveId(r.image) || String(r.image).startsWith("data:image/") || String(r.image).startsWith("/img/drive/"));
         const fallos = [];
         let hechas = 0;
@@ -839,7 +1044,7 @@ export default {
       if (path === "/api/menu" && request.method === "GET") {
         let items = [];
         try {
-          const { results } = await db.prepare("SELECT * FROM menu_items WHERE active = 1 ORDER BY sort_order, name").all();
+          const { results } = await db.prepare("SELECT * FROM menu_items WHERE active = 1 AND tenant_id=? ORDER BY sort_order, name").bind(tenantId).all();
           items = (results || []).map((i) => ({ ...i, image: imgOut(i.image) }));
         } catch (e) {}
         return json(items);
@@ -853,7 +1058,7 @@ export default {
 
       // Lo más pedido en los últimos 30 días (como "Destacados" de Starbucks)
       if (path === "/api/menu-popular" && request.method === "GET") {
-        const { results } = await db.prepare("SELECT items FROM orders WHERE created_at >= datetime('now','-30 day')").all();
+        const { results } = await db.prepare("SELECT items FROM orders WHERE tenant_id=? AND created_at >= datetime('now','-30 day')").bind(tenantId).all();
         const tally = {};
         for (const o of results || []) {
           let its; try { its = JSON.parse(o.items || "[]"); } catch (e) { continue; }
@@ -869,7 +1074,7 @@ export default {
         const price = Number(b.price);
         if (!name) return json({ error: "El nombre es obligatorio" }, 400);
         if (!(price >= 0)) return json({ error: "El precio no es válido" }, 400);
-        const dup = await db.prepare("SELECT id FROM menu_items WHERE active=1 AND lower(trim(name))=lower(?)").bind(name).first();
+        const dup = await db.prepare("SELECT id FROM menu_items WHERE active=1 AND tenant_id=? AND lower(trim(name))=lower(?)").bind(tenantId, name).first();
         if (dup) return json({ error: "Ya existe un producto con ese nombre" }, 409);
         let dest = DESTS.includes(b.destination) ? b.destination : "cocina";
         let catText = String(b.category || "").trim() || "General";
@@ -886,8 +1091,8 @@ export default {
         const image = okImg ? rawImg.slice(0, 400000) : null;
         const id = crypto.randomUUID();
         await db.prepare(
-          "INSERT INTO menu_items (id, name, category, category_id, price, description, destination, active, sort_order, image) VALUES (?,?,?,?,?,?,?,1,0,?)"
-        ).bind(id, name, catText, catId, price, String(b.description || ""), dest, image).run();
+          "INSERT INTO menu_items (id, name, category, category_id, price, description, destination, active, sort_order, image, tenant_id) VALUES (?,?,?,?,?,?,?,1,0,?,?)"
+        ).bind(id, name, catText, catId, price, String(b.description || ""), dest, image, tenantId).run();
         return json({ id }, 201);
       }
 
@@ -905,7 +1110,7 @@ export default {
       const mm = path.match(/^\/api\/menu\/([^\/]+)$/);
       if (mm && request.method === "PATCH") {
         const pid = decodeURIComponent(mm[1]);
-        const cur = await db.prepare("SELECT * FROM menu_items WHERE id=?").bind(pid).first();
+        const cur = await db.prepare("SELECT * FROM menu_items WHERE id=? AND tenant_id=?").bind(pid, tenantId).first();
         if (!cur) return json({ error: "Producto no encontrado" }, 404);
         const b = await request.json().catch(() => ({}));
         const onlySoldOut = Object.keys(b).length === 1 && b.sold_out !== undefined;
@@ -944,17 +1149,17 @@ export default {
         const name = String(b.name || "").trim();
         if (!name) return json({ error: "El nombre es obligatorio" }, 400);
         const dest = DESTS.includes(b.destination) ? b.destination : "cocina";
-        const mx = await db.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM pos_menu_sections").first();
+        const mx = await db.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM pos_menu_sections WHERE tenant_id=?").bind(tenantId).first();
         const id = newId("sec");
-        await db.prepare("INSERT INTO pos_menu_sections (id,name,icon,destination,sort_order) VALUES (?,?,?,?,?)")
-          .bind(id, name, String(b.icon || "🍽️"), dest, (mx?.m || 0) + 1).run();
+        await db.prepare("INSERT INTO pos_menu_sections (id,name,icon,destination,sort_order,tenant_id) VALUES (?,?,?,?,?,?)")
+          .bind(id, name, String(b.icon || "🍽️"), dest, (mx?.m || 0) + 1, tenantId).run();
         return json({ id }, 201);
       }
       const sm = path.match(/^\/api\/menu-sections\/([^\/]+)$/);
       if (sm && request.method === "PATCH") {
         const deny = needAdmin(); if (deny) return deny;
         const sid = decodeURIComponent(sm[1]);
-        const cur = await db.prepare("SELECT * FROM pos_menu_sections WHERE id=?").bind(sid).first();
+        const cur = await db.prepare("SELECT * FROM pos_menu_sections WHERE id=? AND tenant_id=?").bind(sid, tenantId).first();
         if (!cur) return json({ error: "Sección no encontrada" }, 404);
         const b = await request.json().catch(() => ({}));
         if (b.move === "up" || b.move === "down") {
@@ -986,9 +1191,9 @@ export default {
       if (sm && request.method === "DELETE") {
         const deny = needAdmin(); if (deny) return deny;
         const sid = decodeURIComponent(sm[1]);
-        const n = await db.prepare("SELECT COUNT(*) AS c FROM pos_menu_categories WHERE section_id=?").bind(sid).first();
+        const n = await db.prepare("SELECT COUNT(*) AS c FROM pos_menu_categories WHERE section_id=? AND tenant_id=?").bind(sid, tenantId).first();
         if (n?.c) return json({ error: "Primero elimina o mueve las categorías de esta sección" }, 400);
-        await db.prepare("DELETE FROM pos_menu_sections WHERE id=?").bind(sid).run();
+        await db.prepare("DELETE FROM pos_menu_sections WHERE id=? AND tenant_id=?").bind(sid, tenantId).run();
         return json({ ok: true });
       }
 
@@ -998,21 +1203,21 @@ export default {
         const b = await request.json().catch(() => ({}));
         const name = String(b.name || "").trim();
         if (!name) return json({ error: "El nombre es obligatorio" }, 400);
-        const sec = await db.prepare("SELECT id FROM pos_menu_sections WHERE id=?").bind(b.section_id).first();
+        const sec = await db.prepare("SELECT id FROM pos_menu_sections WHERE id=? AND tenant_id=?").bind(b.section_id, tenantId).first();
         if (!sec) return json({ error: "Sección no encontrada" }, 404);
         const dup = await db.prepare("SELECT id FROM pos_menu_categories WHERE section_id=? AND lower(trim(name))=lower(?)").bind(sec.id, name).first();
         if (dup) return json({ error: "Esa categoría ya existe en la sección" }, 409);
         const mx = await db.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM pos_menu_categories WHERE section_id=?").bind(sec.id).first();
         const id = newId("cat");
-        await db.prepare("INSERT INTO pos_menu_categories (id,section_id,name,sort_order) VALUES (?,?,?,?)")
-          .bind(id, sec.id, name, (mx?.m || 0) + 1).run();
+        await db.prepare("INSERT INTO pos_menu_categories (id,section_id,name,sort_order,tenant_id) VALUES (?,?,?,?,?)")
+          .bind(id, sec.id, name, (mx?.m || 0) + 1, tenantId).run();
         return json({ id }, 201);
       }
       const cm = path.match(/^\/api\/menu-categories\/([^\/]+)$/);
       if (cm && request.method === "PATCH") {
         const deny = needAdmin(); if (deny) return deny;
         const cid = decodeURIComponent(cm[1]);
-        const cur = await db.prepare("SELECT * FROM pos_menu_categories WHERE id=?").bind(cid).first();
+        const cur = await db.prepare("SELECT * FROM pos_menu_categories WHERE id=? AND tenant_id=?").bind(cid, tenantId).first();
         if (!cur) return json({ error: "Categoría no encontrada" }, 404);
         const b = await request.json().catch(() => ({}));
         if (b.move === "up" || b.move === "down") {
@@ -1024,7 +1229,7 @@ export default {
           await db.prepare("UPDATE menu_items SET category=? WHERE category_id=?").bind(b.name.trim(), cid).run();
         }
         if (b.section_id && b.section_id !== cur.section_id) {
-          const sec = await db.prepare("SELECT * FROM pos_menu_sections WHERE id=?").bind(b.section_id).first();
+          const sec = await db.prepare("SELECT * FROM pos_menu_sections WHERE id=? AND tenant_id=?").bind(b.section_id, tenantId).first();
           if (!sec) return json({ error: "Sección no encontrada" }, 404);
           await db.prepare("UPDATE pos_menu_categories SET section_id=? WHERE id=?").bind(sec.id, cid).run();
           const ids = await idsInCategories([cid]);
@@ -1048,7 +1253,7 @@ export default {
       if (path === "/api/tables" && request.method === "GET") {
         let tables = [];
         try {
-          const { results } = await db.prepare("SELECT * FROM tables WHERE active = 1").all();
+          const { results } = await db.prepare("SELECT * FROM tables WHERE active = 1 AND tenant_id=?").bind(tenantId).all();
           tables = results || [];
         } catch (e) {}
         if (tables.length === 0) tables = [{ id: "t1", name: "Mesa 1", capacity: 4, type: "mesa", status: "open" }];
@@ -1061,7 +1266,7 @@ export default {
         const id = m[1], sub = m[2];
 
         if (!id && request.method === "GET") {
-          const { results } = await db.prepare("SELECT * FROM orders WHERE status != 'paid' ORDER BY created_at DESC").all();
+          const { results } = await db.prepare("SELECT * FROM orders WHERE status != 'paid' AND tenant_id=? ORDER BY created_at DESC").bind(tenantId).all();
           return json(results.map(parseOrder));
         }
 
@@ -1076,16 +1281,16 @@ export default {
           const who = await db.prepare("SELECT name FROM users WHERE id=?").bind(sess.user_id).first().catch(() => null);
           const whoName = (who && who.name) || sess.username || "";
           await db.prepare(
-            `INSERT INTO orders (id, custom_folio, table_id, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
+            `INSERT INTO orders (id, custom_folio, table_id, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at, tenant_id)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'),?)`
           ).bind(newId, b.custom_folio || null, b.table_id || null, b.customer_name || "Mostrador",
-                 b.customer_phone || "", notes, JSON.stringify(items), total, total, b.channel || "restaurante", b.loyalty_consent ? 1 : 0).run();
-          await db.prepare("UPDATE orders SET created_by=?, created_by_name=? WHERE id=?").bind(sess.user_id || null, whoName, newId).run();
+                 b.customer_phone || "", notes, JSON.stringify(items), total, total, b.channel || "restaurante", b.loyalty_consent ? 1 : 0, tenantId).run();
+          await db.prepare("UPDATE orders SET created_by=?, created_by_name=? WHERE id=? AND tenant_id=?").bind(sess.user_id || null, whoName, newId, tenantId).run();
           return json({ id: newId, created_by_name: whoName }, 201);
         }
 
         if (id && sub === "payments" && request.method === "POST") {
-          const o = await db.prepare("SELECT * FROM orders WHERE id = ?").bind(id).first();
+          const o = await db.prepare("SELECT * FROM orders WHERE id = ? AND tenant_id=?").bind(id, tenantId).first();
           if (!o) return json({ error: "Orden no encontrada" }, 404);
           if (o.status === "paid") return json({ error: "Esta cuenta ya fue cobrada" }, 409);
           let method = "efectivo";
@@ -1096,9 +1301,9 @@ export default {
             loyalty = await addStamp(String(o.customer_phone).replace(/\D/g, "").slice(-10), (o.customer_name || "Cliente").replace(/\s*\(\d{10}\)\s*$/, ""));
           await db.batch([
             db.prepare(
-              `INSERT INTO payments (order_id, method, amount, cash_amount, card_amount, terminal_amount, created_by)
-               VALUES (?,?,?,?,?,0,?)`
-            ).bind(id, method, o.total, method === "efectivo" ? o.total : 0, method === "tarjeta" ? o.total : 0, sess.username),
+              `INSERT INTO payments (order_id, method, amount, cash_amount, card_amount, terminal_amount, created_by, tenant_id)
+               VALUES (?,?,?,?,?,0,?,?)`
+            ).bind(id, method, o.total, method === "efectivo" ? o.total : 0, method === "tarjeta" ? o.total : 0, sess.username, tenantId),
             db.prepare(
               `UPDATE orders SET status='paid', payment_status='paid', payment_method=?,
                closed_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
@@ -1108,14 +1313,14 @@ export default {
         }
 
         if (id && !sub && request.method === "GET") {
-          const o = await db.prepare("SELECT * FROM orders WHERE id = ?").bind(id).first();
+          const o = await db.prepare("SELECT * FROM orders WHERE id = ? AND tenant_id=?").bind(id, tenantId).first();
           return o ? json(parseOrder(o)) : json({ error: "No encontrada" }, 404);
         }
 
         // Actualizar: status, items, notes, add_items/add_notes (agregar a la misma comanda), ready (cocina|barra)
         if (id && !sub && request.method === "PATCH") {
           const b = await request.json();
-          const cur = await db.prepare("SELECT * FROM orders WHERE id = ?").bind(id).first();
+          const cur = await db.prepare("SELECT * FROM orders WHERE id = ? AND tenant_id=?").bind(id, tenantId).first();
           if (!cur) return json({ error: "No encontrada" }, 404);
           let items = JSON.parse(cur.items || "[]");
           let notes = cur.notes;
@@ -1155,7 +1360,7 @@ export default {
 
         if (id && !sub && request.method === "DELETE") {
           if (!isAdmin) return json({ error: "Solo el administrador puede borrar órdenes" }, 403);
-          await db.prepare("DELETE FROM orders WHERE id=?").bind(id).run();
+          await db.prepare("DELETE FROM orders WHERE id=? AND tenant_id=?").bind(id, tenantId).run();
           return json({ ok: true });
         }
       }
@@ -1174,9 +1379,9 @@ export default {
         const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
         const folio = channel.slice(0, 3).toUpperCase() + "-" + p2(d.getUTCHours()) + p2(d.getUTCMinutes());
         await db.prepare(
-          `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
-        ).bind(id, folio, String(b.customer_name || channel).trim(), String(b.customer_phone || ""), notes, JSON.stringify(items), total, total, channel, b.loyalty_consent ? 1 : 0).run();
+          `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at, tenant_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'),?)`
+        ).bind(id, folio, String(b.customer_name || channel).trim(), String(b.customer_phone || ""), notes, JSON.stringify(items), total, total, channel, b.loyalty_consent ? 1 : 0, tenantId).run();
         return json({ id, folio }, 201);
       }
 
@@ -1185,13 +1390,13 @@ export default {
       const clock = async () => await db.prepare(
         "SELECT datetime(date('now','-6 hours'),'+6 hours','-1 second') AS day_start, datetime('now') AS now"
       ).first();
-      const lastCutRow = async () => await db.prepare("SELECT * FROM pos_cuts ORDER BY folio DESC LIMIT 1").first();
+      const lastCutRow = async () => await db.prepare("SELECT * FROM pos_cuts WHERE tenant_id=? ORDER BY folio DESC LIMIT 1").bind(tenantId).first();
 
       // Resumen de ventas y movimientos de caja en (start, end]
       const summarize = async (start, end) => {
         const pays = (await db.prepare(
-          "SELECT order_id, method, amount FROM payments WHERE created_at > ? AND created_at <= ?"
-        ).bind(start, end).all()).results || [];
+          "SELECT order_id, method, amount FROM payments WHERE tenant_id=? AND created_at > ? AND created_at <= ?"
+        ).bind(tenantId, start, end).all()).results || [];
         const by = { efectivo: 0, tarjeta: 0, transferencia: 0 };
         let sales = 0;
         for (const p of pays) {
@@ -1203,8 +1408,8 @@ export default {
         }
         const orders = new Set(pays.map((p) => p.order_id)).size;
         const ords = (await db.prepare(
-          "SELECT id, items FROM orders WHERE id IN (SELECT order_id FROM payments WHERE created_at > ? AND created_at <= ?)"
-        ).bind(start, end).all()).results || [];
+          "SELECT id, items FROM orders WHERE tenant_id=? AND id IN (SELECT order_id FROM payments WHERE tenant_id=? AND created_at > ? AND created_at <= ?)"
+        ).bind(tenantId, tenantId, start, end).all()).results || [];
         const byDest = { cocina: 0, barra: 0 }, tally = {};
         for (const o of ords) {
           let its; try { its = JSON.parse(o.items || "[]"); } catch (e) { continue; }
@@ -1216,8 +1421,8 @@ export default {
           }
         }
         const movements = (await db.prepare(
-          "SELECT id, type, concept, amount, created_by, created_at FROM pos_cash_movements WHERE created_at > ? AND created_at <= ? ORDER BY created_at"
-        ).bind(start, end).all()).results || [];
+          "SELECT id, type, concept, amount, created_by, created_at FROM pos_cash_movements WHERE tenant_id=? AND created_at > ? AND created_at <= ? ORDER BY created_at"
+        ).bind(tenantId, start, end).all()).results || [];
         const income = movements.filter((m) => m.type === "ingreso").reduce((x, m) => x + m.amount, 0);
         const expenses = movements.filter((m) => m.type === "egreso").reduce((x, m) => x + m.amount, 0);
         return {
@@ -1240,9 +1445,9 @@ export default {
         const date = String(url.searchParams.get("date") || (await mxDate()).d);
         const rows = (await db.prepare(
           `SELECT s.id, s.date, s.shift, s.role, s.user_id, u.name AS user_name
-           FROM pos_shifts s LEFT JOIN users u ON u.id = s.user_id WHERE s.date=? ORDER BY s.shift, s.role`
-        ).bind(date).all()).results || [];
-        const usersByRole = (await db.prepare("SELECT id, name, role FROM users WHERE active=1 AND role IN ('mesero','cocina','barra','admin','repartidor') ORDER BY name").all()).results || [];
+           FROM pos_shifts s LEFT JOIN users u ON u.id = s.user_id WHERE s.date=? AND s.tenant_id=? ORDER BY s.shift, s.role`
+        ).bind(date, tenantId).all()).results || [];
+        const usersByRole = (await db.prepare("SELECT id, name, role FROM users WHERE active=1 AND tenant_id=? AND role IN ('mesero','cocina','barra','admin','repartidor') ORDER BY name").bind(tenantId).all()).results || [];
         const mx = await mxDate();
         return json({ date, today: mx.d, current_shift: currentShiftKey(mx.h), assignments: rows, users: usersByRole, roles: SHIFT_ROLES });
       }
@@ -1252,16 +1457,16 @@ export default {
         const date = String(b.date || ""), shift = String(b.shift || ""), role = String(b.role || ""), uid = String(b.user_id || "");
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !["matutino", "vespertino"].includes(shift) || !SHIFT_ROLES.includes(role) || !uid)
           return json({ error: "Datos de turno inválidos" }, 400);
-        const existing = await db.prepare("SELECT id FROM pos_shifts WHERE date=? AND shift=? AND role=? AND user_id=?").bind(date, shift, role, uid).first();
+        const existing = await db.prepare("SELECT id FROM pos_shifts WHERE date=? AND shift=? AND role=? AND user_id=? AND tenant_id=?").bind(date, shift, role, uid, tenantId).first();
         if (existing) { await db.prepare("DELETE FROM pos_shifts WHERE id=?").bind(existing.id).run(); return json({ ok: true, assigned: false }); }
-        await db.prepare("INSERT INTO pos_shifts (id,date,shift,role,user_id) VALUES (?,?,?,?,?)").bind(crypto.randomUUID(), date, shift, role, uid).run();
+        await db.prepare("INSERT INTO pos_shifts (id,date,shift,role,user_id,tenant_id) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), date, shift, role, uid, tenantId).run();
         return json({ ok: true, assigned: true });
       }
       if (path === "/api/shifts-status" && request.method === "GET") {
         const deny = needAdmin(); if (deny) return deny;
         const mx = await mxDate();
-        const rolesWithUsers = (await db.prepare("SELECT DISTINCT role FROM users WHERE active=1 AND role IN ('mesero','cocina','barra','admin','repartidor')").all()).results.map((r) => r.role);
-        const rows = (await db.prepare("SELECT role, shift, COUNT(*) c FROM pos_shifts WHERE date=? GROUP BY role, shift").bind(mx.d).all()).results || [];
+        const rolesWithUsers = (await db.prepare("SELECT DISTINCT role FROM users WHERE active=1 AND tenant_id=? AND role IN ('mesero','cocina','barra','admin','repartidor')").bind(tenantId).all()).results.map((r) => r.role);
+        const rows = (await db.prepare("SELECT role, shift, COUNT(*) c FROM pos_shifts WHERE date=? AND tenant_id=? GROUP BY role, shift").bind(mx.d, tenantId).all()).results || [];
         const has = (role, shift) => rows.some((r) => r.role === role && r.shift === shift && r.c > 0);
         const missing = [];
         for (const role of rolesWithUsers) { if (!has(role, "matutino")) missing.push(role + ":matutino"); if (!has(role, "vespertino")) missing.push(role + ":vespertino"); }
@@ -1278,7 +1483,6 @@ export default {
         if (!st.void_pin_hash) return safeEq(String(pin || ""), "2470"); // clave inicial del sistema
         return safeEq(await hashPw(String(pin || ""), st.void_pin_salt), st.void_pin_hash);
       };
-      const setSetting = (k, v) => db.prepare("INSERT INTO pos_settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, v).run();
 
       if (path === "/api/payments/recent" && request.method === "GET") {
         if (!isAdmin) return json({ error: "Solo un administrador puede anular cobros" }, 403);
@@ -1286,11 +1490,11 @@ export default {
         const since = lc ? lc.period_end : c.day_start;
         const rows = (await db.prepare(
           `SELECT p.order_id, p.method, p.amount, p.created_at, p.created_by, o.custom_folio, o.customer_name, o.id AS oid
-           FROM payments p LEFT JOIN orders o ON o.id = p.order_id WHERE p.created_at > ? ORDER BY p.created_at DESC`
-        ).bind(since).all()).results || [];
-        const voids = (await db.prepare("SELECT folio, customer, amount, reason, authorized_by, done_by, created_at FROM pos_voids ORDER BY created_at DESC LIMIT 15").all()).results || [];
+           FROM payments p LEFT JOIN orders o ON o.id = p.order_id WHERE p.tenant_id=? AND p.created_at > ? ORDER BY p.created_at DESC`
+        ).bind(tenantId, since).all()).results || [];
+        const voids = (await db.prepare("SELECT folio, customer, amount, reason, authorized_by, done_by, created_at FROM pos_voids WHERE tenant_id=? ORDER BY created_at DESC LIMIT 15").bind(tenantId).all()).results || [];
         const st = await getSettings();
-        const duty = st.whatsapp_on_duty ? await db.prepare("SELECT name FROM users WHERE id=? AND role='admin' AND active=1").bind(st.whatsapp_on_duty).first() : null;
+        const duty = st.whatsapp_on_duty ? await db.prepare("SELECT name FROM users WHERE id=? AND role='admin' AND active=1 AND tenant_id=?").bind(st.whatsapp_on_duty, tenantId).first() : null;
         return json({ since, last_cut: lc ? lc.folio : null, on_duty: duty ? duty.name : null,
           payments: rows.map((r) => ({ ...r, orphan: !r.oid })), voids });
       }
@@ -1305,7 +1509,7 @@ export default {
         // 1) Admin en turno
         const st = await getSettings();
         if (!st.whatsapp_on_duty) return json({ error: "No hay admin en turno. Tómalo en Configuración → Admin en turno." }, 400);
-        const adm = await db.prepare("SELECT id, name, password_hash, password_salt FROM users WHERE id=? AND role='admin' AND active=1").bind(st.whatsapp_on_duty).first();
+        const adm = await db.prepare("SELECT id, name, password_hash, password_salt FROM users WHERE id=? AND role='admin' AND active=1 AND tenant_id=?").bind(st.whatsapp_on_duty, tenantId).first();
         if (!adm || !String(adm.password_hash || "").startsWith("pbkdf2$")) return json({ error: "El admin en turno no es válido. Vuelve a tomar el turno." }, 400);
         const okAdmin = safeEq(await hashPw(String(b.admin_password || ""), adm.password_salt), adm.password_hash);
         // 2) Clave del sistema
@@ -1315,31 +1519,31 @@ export default {
           return json({ error: !okAdmin && !okPin ? "Contraseña del admin y clave del sistema incorrectas" : !okAdmin ? `Contraseña de ${adm.name} incorrecta` : "Clave del sistema incorrecta" }, 403);
         }
         // 3) Solo cobros que aún no están en un corte
-        const pays = (await db.prepare("SELECT method, amount, created_at FROM payments WHERE order_id=?").bind(orderId).all()).results || [];
+        const pays = (await db.prepare("SELECT method, amount, created_at FROM payments WHERE order_id=? AND tenant_id=?").bind(orderId, tenantId).all()).results || [];
         if (!pays.length) return json({ error: "Esa orden no tiene cobros" }, 404);
         const lc = await lastCutRow();
         if (lc && pays.some((p) => p.created_at <= lc.period_end))
           return json({ error: `Este cobro ya está dentro del corte #${lc.folio}. Ya no se puede anular.` }, 409);
-        const o = await db.prepare("SELECT * FROM orders WHERE id=?").bind(orderId).first();
+        const o = await db.prepare("SELECT * FROM orders WHERE id=? AND tenant_id=?").bind(orderId, tenantId).first();
         const amount = pays.reduce((x, p) => x + (Number(p.amount) || 0), 0);
         const me = await db.prepare("SELECT name FROM users WHERE id=?").bind(sess.user_id).first().catch(() => null);
         const stmts = [
-          db.prepare("INSERT INTO pos_voids (id, order_id, folio, customer, amount, method, items, reason, authorized_by, done_by) VALUES (?,?,?,?,?,?,?,?,?,?)")
+          db.prepare("INSERT INTO pos_voids (id, order_id, folio, customer, amount, method, items, reason, authorized_by, done_by, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
             .bind(crypto.randomUUID(), orderId, o ? (o.custom_folio || orderId.slice(0, 6)) : orderId.slice(0, 6), o ? o.customer_name : "(orden ya borrada)",
-                  amount, pays.map((p) => p.method).join(", "), o ? o.items : "[]", reason, adm.name, (me && me.name) || sess.username || ""),
-          db.prepare("DELETE FROM payments WHERE order_id=?").bind(orderId),
-          db.prepare("DELETE FROM orders WHERE id=?").bind(orderId),
+                  amount, pays.map((p) => p.method).join(", "), o ? o.items : "[]", reason, adm.name, (me && me.name) || sess.username || "", tenantId),
+          db.prepare("DELETE FROM payments WHERE order_id=? AND tenant_id=?").bind(orderId, tenantId),
+          db.prepare("DELETE FROM orders WHERE id=? AND tenant_id=?").bind(orderId, tenantId),
         ];
         // 4) Quitar el sello de lealtad que dio ese cobro
         let stampRemoved = false;
         const phone = o ? String(o.customer_phone || "").replace(/\D/g, "").slice(-10) : "";
         if (o && o.loyalty_consent && phone.length === 10) {
-          const row = await db.prepare("SELECT stamps, rewards_earned FROM pos_loyalty WHERE phone=?").bind(phone).first();
+          const row = await db.prepare("SELECT stamps, rewards_earned FROM pos_loyalty WHERE phone=?").bind(lk(phone)).first();
           if (row) {
             const goal = Number(st.loyalty_goal) || 10;
             let stamps = row.stamps, earned = row.rewards_earned || 0;
             if (stamps > 0) stamps -= 1; else if (earned > 0) { earned -= 1; stamps = goal - 1; }
-            stmts.push(db.prepare("UPDATE pos_loyalty SET stamps=?, rewards_earned=?, updated_at=datetime('now') WHERE phone=?").bind(stamps, earned, phone));
+            stmts.push(db.prepare("UPDATE pos_loyalty SET stamps=?, rewards_earned=?, updated_at=datetime('now') WHERE phone=?").bind(stamps, earned, lk(phone)));
             stampRemoved = true;
           }
         }
@@ -1379,15 +1583,15 @@ export default {
         if (!concept) return json({ error: "Escribe el concepto" }, 400);
         if (!(amount > 0)) return json({ error: "El monto debe ser mayor a 0" }, 400);
         const id = crypto.randomUUID();
-        await db.prepare("INSERT INTO pos_cash_movements (id,type,concept,amount,created_by) VALUES (?,?,?,?,?)")
-          .bind(id, type, concept, amount, sess.username).run();
+        await db.prepare("INSERT INTO pos_cash_movements (id,type,concept,amount,created_by,tenant_id) VALUES (?,?,?,?,?,?)")
+          .bind(id, type, concept, amount, sess.username, tenantId).run();
         return json({ id }, 201);
       }
       const tm = path.match(/^\/api\/manual-transactions\/([^\/]+)$/);
       if (tm && request.method === "DELETE") {
         if (!isAdmin) return json({ error: "Solo el administrador puede borrar movimientos" }, 403);
         const lc = await lastCutRow();
-        const mv = await db.prepare("SELECT * FROM pos_cash_movements WHERE id=?").bind(decodeURIComponent(tm[1])).first();
+        const mv = await db.prepare("SELECT * FROM pos_cash_movements WHERE id=? AND tenant_id=?").bind(decodeURIComponent(tm[1]), tenantId).first();
         if (!mv) return json({ error: "Movimiento no encontrado" }, 404);
         if (lc && mv.created_at <= lc.period_end) return json({ error: "Ese movimiento ya entró en un corte y no se puede borrar" }, 400);
         await db.prepare("DELETE FROM pos_cash_movements WHERE id=?").bind(mv.id).run();
@@ -1396,7 +1600,7 @@ export default {
 
       if (path === "/api/cuts" && request.method === "GET") {
         if (!isAdmin) return json({ error: "Solo el administrador puede ver los cortes" }, 403);
-        const { results } = await db.prepare("SELECT * FROM pos_cuts ORDER BY folio DESC LIMIT 60").all();
+        const { results } = await db.prepare("SELECT * FROM pos_cuts WHERE tenant_id=? ORDER BY folio DESC LIMIT 60").bind(tenantId).all();
         return json((results || []).map(cutOut));
       }
       if (path === "/api/cuts" && request.method === "POST") {
@@ -1411,15 +1615,15 @@ export default {
         data.difference = counted === null ? null : counted - data.expected_cash;
         const folio = ((lc && lc.folio) || 0) + 1;
         const id = crypto.randomUUID();
-        await db.prepare("INSERT INTO pos_cuts (id, folio, period_start, period_end, data, created_by) VALUES (?,?,?,?,?,?)")
-          .bind(id, folio, data.period_start, data.period_end, JSON.stringify(data), sess.username).run();
+        await db.prepare("INSERT INTO pos_cuts (id, folio, period_start, period_end, data, created_by, tenant_id) VALUES (?,?,?,?,?,?,?)")
+          .bind(id, folio, data.period_start, data.period_end, JSON.stringify(data), sess.username, tenantId).run();
         return json(cutOut(await db.prepare("SELECT * FROM pos_cuts WHERE id=?").bind(id).first()), 201);
       }
 
       // ===== INVENTARIO (control manual de insumos) =====
       const INV_ROLES = ["admin", "cocina", "barra"];
       if (path === "/api/inventory" && request.method === "GET") {
-        const { results } = await db.prepare("SELECT * FROM pos_inventory WHERE active=1 ORDER BY name").all();
+        const { results } = await db.prepare("SELECT * FROM pos_inventory WHERE active=1 AND tenant_id=? ORDER BY name").bind(tenantId).all();
         return json((results || []).map((i) => ({ ...i, low: i.min_stock > 0 && i.stock <= i.min_stock })));
       }
       if (path === "/api/inventory" && request.method === "POST") {
@@ -1427,30 +1631,30 @@ export default {
         const b = await request.json().catch(() => ({}));
         const name = String(b.name || "").trim();
         if (!name) return json({ error: "El nombre es obligatorio" }, 400);
-        const dup = await db.prepare("SELECT id FROM pos_inventory WHERE active=1 AND lower(trim(name))=lower(?)").bind(name).first();
+        const dup = await db.prepare("SELECT id FROM pos_inventory WHERE active=1 AND tenant_id=? AND lower(trim(name))=lower(?)").bind(tenantId, name).first();
         if (dup) return json({ error: "Ya existe un insumo con ese nombre" }, 409);
         const stock = Number(b.stock) || 0, min = Number(b.min_stock) || 0;
         if (stock < 0 || min < 0) return json({ error: "Las cantidades no pueden ser negativas" }, 400);
         const id = crypto.randomUUID();
-        await db.prepare("INSERT INTO pos_inventory (id,name,unit,stock,min_stock,active) VALUES (?,?,?,?,?,1)")
-          .bind(id, name, String(b.unit || "pza"), stock, min).run();
+        await db.prepare("INSERT INTO pos_inventory (id,name,unit,stock,min_stock,active,tenant_id) VALUES (?,?,?,?,?,1,?)")
+          .bind(id, name, String(b.unit || "pza"), stock, min, tenantId).run();
         if (stock > 0)
-          await db.prepare("INSERT INTO pos_inventory_moves (id,item_id,qty,reason,created_by) VALUES (?,?,?,?,?)")
-            .bind(crypto.randomUUID(), id, stock, "Existencia inicial", sess.username).run();
+          await db.prepare("INSERT INTO pos_inventory_moves (id,item_id,qty,reason,created_by,tenant_id) VALUES (?,?,?,?,?,?)")
+            .bind(crypto.randomUUID(), id, stock, "Existencia inicial", sess.username, tenantId).run();
         return json({ id }, 201);
       }
       if (path === "/api/inventory-moves" && request.method === "GET") {
         const { results } = await db.prepare(
           `SELECT m.id, m.qty, m.reason, m.created_by, m.created_at, i.name, i.unit
              FROM pos_inventory_moves m LEFT JOIN pos_inventory i ON i.id = m.item_id
-            ORDER BY m.created_at DESC, m.rowid DESC LIMIT 30`
-        ).all();
+            WHERE m.tenant_id=? ORDER BY m.created_at DESC, m.rowid DESC LIMIT 30`
+        ).bind(tenantId).all();
         return json(results || []);
       }
       const im = path.match(/^\/api\/inventory\/([^\/]+)$/);
       if (im && request.method === "PATCH") {
         const iid = decodeURIComponent(im[1]);
-        const cur = await db.prepare("SELECT * FROM pos_inventory WHERE id=?").bind(iid).first();
+        const cur = await db.prepare("SELECT * FROM pos_inventory WHERE id=? AND tenant_id=?").bind(iid, tenantId).first();
         if (!cur) return json({ error: "Insumo no encontrado" }, 404);
         const b = await request.json().catch(() => ({}));
         if (b.delta !== undefined) {
