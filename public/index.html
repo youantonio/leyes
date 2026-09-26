@@ -273,8 +273,8 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   </div>
   <div class="card" style="margin-top:15px;">
     <h2 style="margin-top:0">🏷️ Clasificar productos</h2>
-    <div class="row" style="flex-wrap:wrap"><button class="primary" onclick="autoClassify()">✨ Sugerir clasificación automática</button><button class="success" id="saveClassBtn" onclick="saveClassification()">💾 Guardar (0)</button><button class="warning" onclick="suggestPhotosFromDrive()">📷 Sugerir fotos desde Drive</button></div>
-    <div id="photoSuggestBox"></div>
+    <div class="row" style="flex-wrap:wrap"><button class="primary" onclick="autoClassify()">✨ Sugerir clasificación automática</button><button class="success" id="saveClassBtn" onclick="saveClassification()">💾 Guardar (0)</button><button class="warning" onclick="suggestPhotosFromDrive()">📷 Sugerir fotos desde Drive</button><label class="success" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700">📂 Subir fotos en lote<input type="file" accept="image/*" multiple hidden onchange="bulkPhotos(this)"></label></div>
+    <div id="photoSuggestBox"></div><div id="bulkBox"></div>
     <div class="row" style="margin-top:10px"><input id="menuFilter" class="search" placeholder="🔎 Buscar producto" oninput="renderClassifyTable()"><select id="classifyMode" onchange="renderClassifyTable()" style="width:auto"><option value="sin">Solo sin clasificar</option><option value="todos">Todos</option></select></div>
     <div id="classifyTable" style="overflow-x:auto;margin-top:10px"></div>
   </div>
@@ -301,7 +301,12 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div class="card" style="margin-top:15px;">
     <h2 style="margin-top:0">📦 Fotos en Cloudflare R2</h2>
     <div id="r2Status" class="muted">Cargando…</div>
-    <button class="primary" id="r2Btn" style="margin-top:10px" onclick="migratePhotos()">📦 Copiar todas las fotos a R2</button>
+    <label class="row" style="gap:8px;margin-top:10px;font-weight:600"><input type="checkbox" id="cfgShowPhotos" style="width:auto"> Mostrar fotos en la carta pública</label>
+    <div class="row" style="flex-wrap:wrap;margin-top:10px">
+      <button class="primary" id="r2Btn" onclick="migratePhotos()">📦 Copiar todas las fotos a R2</button>
+      <button onclick="testPhotos()">🔍 Probar fotos de Drive</button>
+    </div>
+    <div id="photoTest" style="margin-top:8px;font-size:13px"></div>
     <div class="muted" style="font-size:12px;margin-top:6px">Copia las fotos de Drive y las subidas antiguas a tu almacenamiento propio. Se hace una sola vez; puedes volver a tocarlo si agregas fotos nuevas de Drive.</div>
   </div>
   <div class="card" style="margin-top:15px;">
@@ -356,6 +361,8 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <section id="carta" class="view hidden">
   <h1 class="title">🖼️ Editar carta</h1>
   <p class="muted" style="margin-top:-6px">Cambia la foto, el nombre y la descripción de cada producto. Los cambios se ven al instante en la carta pública.</p>
+  <label class="success" style="background:#16a34a;color:#fff;display:inline-block;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;margin-bottom:8px">📂 Subir fotos en lote (se emparejan por nombre)<input type="file" accept="image/*" multiple hidden onchange="bulkPhotos(this)"></label>
+  <div id="bulkBoxCarta"></div>
   <input id="cartaSearch" placeholder="🔍 Buscar producto..." oninput="renderCarta()" style="margin:6px 0 12px">
   <div id="cartaGrid" class="carta-grid"></div>
 </section>
@@ -948,8 +955,71 @@ async function loadSettings(){
   $("cfgBaseFee").value=settingsCache.delivery_base_fee||20; $("cfgRateKm").value=settingsCache.delivery_rate_km||8;
   $("cfgPaymentInfo").value=settingsCache.payment_info||"";
   $("publicLinkBox").value = location.origin + "/menu.html";
+  $("cfgShowPhotos").checked = settingsCache.show_photos!=="0";
   $("cfgTagline").value=settingsCache.menu_tagline||""; $("cfgHours").value=settingsCache.business_hours||"";
   loadDuty(); loadR2Status();
+}
+// ----- Subir fotos en lote: se emparejan con el producto por el nombre del archivo -----
+let bulkQueue=[];
+const stripSizes=t=>String(t||"").replace(/\.[a-z0-9]+$/i,"").replace(/\(.*?\)/g," ").replace(/\d+\s*(onzas?|oz|ml|litros?|lts?|l|g|gr|grs|pzas?)\b/gi," ");
+const STOP=new Set(["de","del","la","el","los","las","con","y","en","al","a","the"]);
+const toks=t=>normTxt(stripSizes(t)).split(" ").filter(w=>w&&!STOP.has(w)&&!/^\d+$/.test(w));
+// Empareja por palabras en común (ignora "de", tamaños, acentos y mayúsculas)
+function matchProductForFile(fname, list){
+  const f=toks(fname); if(!f.length) return null;
+  let best=null, bestScore=0;
+  for(const p of list){
+    const t=toks(p.name); if(!t.length) continue;
+    const common=f.filter(w=>t.includes(w)).length;
+    const score=common/Math.max(f.length,t.length) + (common===t.length?0.25:0);
+    if(score>bestScore){ bestScore=score; best=p; }
+  }
+  return bestScore>=0.6?best:null;
+}
+function bulkBoxEl(){ return currentView==="carta" ? $("bulkBoxCarta") : $("bulkBox"); }
+async function bulkPhotos(input){
+  const files=[...input.files]; input.value=""; if(!files.length) return;
+  const list=(products&&products.length)?products:cartaItems;
+  bulkQueue=files.map(f=>({f, url:URL.createObjectURL(f), p:matchProductForFile(f.name,list)}));
+  renderBulk();
+}
+function renderBulk(){
+  const list=(products&&products.length)?products:cartaItems;
+  const ok=bulkQueue.filter(x=>x.p).length;
+  const opts=sel=>`<option value="">— No usar —</option>`+list.map(p=>`<option value="${esc(p.id)}" ${sel&&String(sel.id)===String(p.id)?"selected":""}>${esc(p.name)}</option>`).join("");
+  bulkBoxEl().innerHTML = bulkQueue.length ? `<div class="card" style="margin-top:10px;background:#f0fdf4;border-color:#86efac">
+    <b>${bulkQueue.length} foto(s) · ${ok} emparejadas.</b> Revisa y corrige las que falten:
+    <div style="max-height:360px;overflow:auto;margin-top:8px">${bulkQueue.map((x,i)=>`<div class="row" style="gap:8px;padding:5px 0;border-bottom:1px solid #eee">
+      <img src="${x.url}" style="width:46px;height:46px;object-fit:cover;border-radius:8px">
+      <span style="flex:1;font-size:12px;word-break:break-all">${esc(x.f.name)}</span>
+      <select style="max-width:210px" onchange="bulkQueue[${i}].p=((products&&products.length)?products:cartaItems).find(p=>String(p.id)===this.value)||null;renderBulk()">${opts(x.p)}</select></div>`).join("")}</div>
+    <div class="row" style="margin-top:10px"><button class="success" id="bulkGo" style="flex:1" onclick="runBulk()">⬆️ Subir ${ok} foto(s)</button><button onclick="bulkQueue=[];renderBulk()">Cancelar</button></div></div>` : "";
+}
+async function runBulk(){
+  const jobs=bulkQueue.filter(x=>x.p); if(!jobs.length) return toast("Ninguna foto está emparejada con un producto");
+  const btn=$("bulkGo"); btn.disabled=true; let done=0, fail=[];
+  for(const x of jobs){
+    btn.textContent=`Subiendo ${done+1} de ${jobs.length}…`;
+    try{ const url=await uploadPhotoData(await fileToJpeg(x.f)); await api("/menu/"+encodeURIComponent(x.p.id),{method:"PATCH",body:JSON.stringify({image:url})}); done++; }
+    catch(e){ fail.push(x.f.name); }
+  }
+  bulkQueue.forEach(x=>URL.revokeObjectURL(x.url)); bulkQueue=[]; renderBulk();
+  toast(`✅ ${done} foto(s) subidas`+(fail.length?` · ${fail.length} fallaron`:""));
+  if(fail.length) alert("No se pudieron subir:\n\n"+fail.join("\n"));
+  await loadAll(); if(currentView==="carta") loadCarta(); else renderProductAdmin();
+}
+// ----- Diagnóstico: ¿por qué ruta sí cargan las fotos de Drive? -----
+function testPhotos(){
+  const p=products.find(x=>/\/img\/drive\//.test(x.image||""));
+  if(!p) return $("photoTest").innerHTML="No hay productos con foto de Drive para probar.";
+  const id=p.image.split("/").pop();
+  const routes=[["Tu Worker (R2 / caché)","/img/drive/"+id],["Drive thumbnail directo",`https://drive.google.com/thumbnail?id=${id}&sz=w400`],["Drive lh3 directo",`https://lh3.googleusercontent.com/d/${id}=w400`]];
+  $("photoTest").innerHTML=`Probando con <b>${esc(p.name)}</b>…<br>`+routes.map((r,i)=>`<div id="pt${i}">⏳ ${r[0]}</div>`).join("");
+  routes.forEach((r,i)=>{ const im=new Image(); im.referrerPolicy="no-referrer";
+    const t=setTimeout(()=>{ $("pt"+i).innerHTML=`⌛ ${r[0]}: no respondió`; },12000);
+    im.onload=()=>{ clearTimeout(t); $("pt"+i).innerHTML=`✅ ${r[0]}: carga bien`; };
+    im.onerror=()=>{ clearTimeout(t); $("pt"+i).innerHTML=`❌ ${r[0]}: no carga`; };
+    im.src=r[1]; });
 }
 // ----- Fotos en R2 -----
 async function loadR2Status(){
@@ -1009,6 +1079,7 @@ async function saveSettings(){
       business_lat:$("cfgLat").value||"20.1010", business_lng:$("cfgLng").value||"-98.7591",
       delivery_base_fee:Number($("cfgBaseFee").value)||0, delivery_rate_km:Number($("cfgRateKm").value)||0,
       payment_info:$("cfgPaymentInfo").value.trim(),
+      show_photos:$("cfgShowPhotos").checked?"1":"0",
       menu_tagline:$("cfgTagline").value.trim(), business_hours:$("cfgHours").value.trim(),
     })});
     toast("Configuración guardada ✅");
