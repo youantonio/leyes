@@ -1,0 +1,16 @@
+name = "app"
+main = "server.js"
+compatibility_date = "2026-03-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rush-pos-db"
+database_id = "79ed43c7-40b8-4a8a-bec5-1fd69449774b"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "rush-fotos"
