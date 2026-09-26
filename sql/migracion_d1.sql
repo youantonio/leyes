@@ -1,4 +1,4 @@
--- RUSH POS v25.0 - Base de datos (D1: rush-pos-db)
+-- RUSH POS v26.4 - Base de datos (D1: rush-pos-db)
 -- NO ES OBLIGATORIO correr nada: el Worker crea todo automáticamente al primer uso.
 -- Solo para VERIFICAR (consola SQL del dashboard, una consulta a la vez).
 
@@ -12,3 +12,5 @@ PRAGMA table_info(menu_items); -- debe aparecer sold_out
 SELECT * FROM pos_settings;
 SELECT phone, name, stamps, rewards_earned, rewards_redeemed FROM pos_loyalty ORDER BY updated_at DESC LIMIT 20;
 SELECT folio, period_start, period_end, created_by FROM pos_cuts ORDER BY folio DESC LIMIT 10;
+PRAGMA table_info(users);    -- v26.4: debe aparecer whatsapp
+SELECT value FROM pos_settings WHERE key='whatsapp_on_duty';
