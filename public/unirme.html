@@ -1,1 +1,53 @@
-
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Únete a la tarjeta de lealtad</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Playfair+Display:ital,wght@0,600;0,800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#FAF6F0;--card:#FFFFFF;--ink:#111827;--muted:#57534E;--brand:#064E3B;--accent:#D97706;--line:#E7E5E4}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Montserrat',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:var(--card);border:2px solid var(--accent);border-radius:20px;padding:32px;max-width:400px;width:100%;text-align:center}
+  .icon{font-size:52px}
+  h1{font-family:'Playfair Display',serif;font-size:26px;color:var(--brand);margin:8px 0 4px}
+  p.sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+  input{width:100%;padding:13px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;margin-top:10px;font-family:inherit}
+  button{width:100%;margin-top:16px;background:var(--brand);color:#fff;border:none;padding:14px;border-radius:11px;font-weight:800;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.6}
+  .msg{margin-top:12px;font-size:13px;font-weight:700;padding:10px;border-radius:8px}
+  .msg.err{background:#FEE2E2;color:#991B1B}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">⭐</div>
+  <h1 id="bizName">Tarjeta de lealtad</h1>
+  <p class="sub">Junta sellos en cada visita y gana recompensas. Solo necesitamos tu nombre y tu WhatsApp.</p>
+  <form id="joinForm">
+    <input id="jName" placeholder="Tu nombre" required>
+    <input id="jPhone" placeholder="WhatsApp (10 dígitos)" inputmode="numeric" maxlength="14" required>
+    <button id="jBtn" type="submit">⭐ Unirme y ver mi tarjeta</button>
+  </form>
+  <div id="jMsg"></div>
+</div>
+<script>
+const BASE=(location.pathname.match(/^(\/t\/[a-z0-9-]+\/)/)||[,'/'])[1];
+const $=id=>document.getElementById(id);
+fetch(BASE+'api/public-settings').then(r=>r.json()).then(s=>{ if(s.business_name) $('bizName').textContent=s.business_name+' · Tarjeta de lealtad'; }).catch(()=>{});
+$('joinForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const phone=$('jPhone').value.replace(/\D/g,'');
+  const msg=$('jMsg'); msg.innerHTML='';
+  if(phone.length!==10){ msg.innerHTML='<div class="msg err">Tu WhatsApp debe tener 10 dígitos.</div>'; return; }
+  const btn=$('jBtn'); btn.disabled=true; btn.textContent='Uniendo…';
+  try{
+    const r=await fetch(BASE+'api/loyalty-join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('jName').value.trim(),phone})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'No se pudo unir');
+    location.href=BASE+'tarjeta.html?token='+encodeURIComponent(d.card_token);
+  }catch(err){ msg.innerHTML='<div class="msg err">'+err.message+'</div>'; btn.disabled=false; btn.textContent='⭐ Unirme y ver mi tarjeta'; }
+});
+</script>
+</body>
+</html>
