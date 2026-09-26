@@ -1,4 +1,4 @@
-RUSH POS v26.3 — "The Rush: Club · Café · Cocina"
+RUSH POS v27.0 — "The Rush: Club · Café · Cocina"
 Fecha: 25 de septiembre de 2026
 Plataforma: Cloudflare Workers + D1 (`rush-pos-db`)
 Estado de las versiones
@@ -8,6 +8,8 @@ v26.0	Rediseño, repartidores, envío, WhatsApp local.
 v26.1	Emparejador de fotos por nombre, aceptar URLs además de subir archivo.
 v26.2	19 fotos identificadas y renombradas en Drive.
 v26.3	Candidata a estable. Corrige que los pedidos externos no sumaban sello de lealtad, y que la tarjeta digital no se actualizaba sola. 19 fotos sin nombre revisadas una por una e identificadas visualmente; 16 quedaron renombradas en tu Drive y agregadas al catálogo (118 fotos en total). Las 3 restantes eran duplicados de fotos que ya tenías. Fotos de Drive emparejadas automáticamente por nombre; ahora las fotos también se pueden pegar como URL, no solo subir archivo. Rediseño visual del menú público, fotos de producto, repartidores con ubicación en vivo (gratis), envío automático, plantillas de WhatsApp, canje de recompensa, notas por producto. Probada con pruebas automatizadas del servidor y regresión completa de versiones anteriores. Falta confirmarla en producción.
+v26.4	Candidata a estable. WhatsApp de pedidos según el admin en turno, configurable en el panel. Corrige el mensaje de WhatsApp roto del menú público, precios manipulables, folios repetidos y la ventana de WhatsApp bloqueada en iPhone. Agrega mesa/cancha. Falta confirmarla en producción.
+v27.0	Candidata a estable. Fotos en Cloudflare R2 (con respaldo automático desde Drive), rol Editor de carta, y carta pública rediseñada con la base de Gemini conectada a todo el sistema. Falta confirmarla en producción.
 No hay versión marcada como estable todavía.
 ---
 1. Menú público — rediseño completo (`/menu.html`)
@@ -97,4 +99,67 @@ Causa real, confirmada con una prueba: el formulario 🛵 Capturar pedido extern
 Corregido:
 El modal de pedido externo ahora tiene la misma casilla ✅ "Inscribir a tarjeta de lealtad" que ya tenían los otros dos flujos.
 Probé el escenario exacto: pedido externo con lealtad → cobrar → la tarjeta pasa de 0 a 1 sello correctamente.
+Además corregí que la tarjeta no se refrescaba sola. Si el mesero le mostraba el link al cliente antes de cobrar, la página se quedaba congelada en "0 sellos" aunque el cobro sí hubiera sumado el sello por dentro — solo hacía falta recargar. Ahora `/tarjeta.html` se actualiza sola cada 15 segundos y tiene un botón "↻ Actualizar" para revisarlo al instante.
+
+v26.4 — WhatsApp del admin en turno + correcciones
+Fecha: 25 de septiembre de 2026
+Nuevo: WhatsApp según el admin en turno
+Usuarios: cada administrador tiene su WhatsApp (botón 📱 WhatsApp, o al crear el usuario).
+Configuración → 📲 Admin en turno: eliges quién recibe los pedidos, o tocas 🙋 Tomar el turno yo.
+Arriba, junto a tu nombre, se ve a quién le están llegando los pedidos. Tócalo para ir a Configuración.
+Si nadie está en turno (o su número se borra), los pedidos llegan al WhatsApp general de respaldo.
+Errores corregidos
+Mensaje de WhatsApp roto: el menú público mandaba el texto con `\n` literales en vez de saltos de línea. Corregido.
+Teléfono con espacios: "771 123 4567" se rechazaba. Ahora se limpia solo.
+Precios manipulables: el servidor aceptaba el precio que mandaba el navegador (alguien podía pedir a $0). Ahora el precio siempre sale de D1.
+WhatsApp bloqueado en iPhone: Safari bloqueaba la ventana que se abría sola. Ahora sale una pantalla de "¡Pedido recibido!" con botón para enviar.
+Link de seguimiento perdido: antes aparecía 2 segundos en un aviso. Ahora queda en la pantalla de confirmación.
+Folios repetidos: dos pedidos en el mismo minuto tenían el mismo folio, y la hora salía en UTC. Ahora usa hora de México + 2 letras (ej. `WEB-2509-1917-2E`).
+Mesa o cancha: el pedido "Estoy en el club" ahora pregunta mesa/cancha y se ve en Cocina/Barra.
+D1
+No tienes que correr SQL. El Worker agrega solo la columna `whatsapp` en `users` y la configuración `whatsapp_on_duty`.
+Prueba rápida
+Usuarios → 📱 WhatsApp a tu usuario admin.
+Configuración → 🙋 Tomar el turno yo.
+Haz un pedido desde `/menu.html` → debe abrir WhatsApp hacia tu número, con saltos de línea bien.
+
+---
+v27.0 — Fotos en R2, Editor de carta y carta rediseñada
+Fecha: 25 de septiembre de 2026
+⚠️ Paso 1 ANTES de desplegar: crear el bucket de R2
+Cloudflare → R2 Object Storage → Create bucket.
+Nombre exacto: `rush-fotos` → Create.
+Ya está en `wrangler.toml` (binding `PHOTOS`). Ahora sí, sube los archivos y despliega.
+Si despliegas sin crear el bucket, Cloudflare marca error. Si prefieres esperar, borra el bloque `[[r2_buckets]]` de `wrangler.toml`: las fotos seguirán viéndose por el proxy, solo que sin R2.
+Paso 2: copiar las fotos a R2 (una sola vez)
+Admin → Configuración → 📦 Fotos en Cloudflare R2 → Copiar todas las fotos a R2.
+Va de 8 en 8 y te muestra el avance. Al final te dice si alguna no se pudo copiar.
+Cómo funcionan las fotos ahora
+Por qué no se veían: Google rompió el formato `uc?export=view`. Ya no se usa.
+Proxy: cualquier link de Drive se muestra como `/img/drive/ID` desde tu Worker. El Worker la trae de Drive (formato `thumbnail`, y si falla, `lh3`), la guarda en caché 30 días y la copia sola a R2 la primera vez que alguien la ve.
+Fotos nuevas: al subir desde Menú o Editar carta, se guardan directo en R2 (`/img/r2/...`), ya no dentro de la base D1.
+Sin R2 conectado: todo sigue funcionando como antes (las subidas se guardan en D1).
+Nuevo rol: Editor de carta
+Usuarios → crear con rol Editor de carta.
+Al entrar solo ve 🖼️ Editar carta: subir o pegar link de foto, quitar foto, cambiar nombre y descripción.
+No puede cambiar precios, agotados, categorías, usuarios ni nada más (el servidor lo bloquea, no solo la pantalla).
+El admin también tiene esta vista.
+Carta pública rediseñada (`/menu.html`)
+Base visual de Gemini (verde esmeralda + ámbar, Playfair + Montserrat), conectada a todo:
+Secciones como botones grandes (salen de tus secciones del admin) + categorías como pastillas.
+Tarjetas con foto grande; si no hay foto, un fondo de color con ícono.
+Modo noche automático después de las 2 PM, con botón 🌙/☀️.
+Comanda separada por Barra y Cocina, con cantidades y 📝 nota por producto.
+Notas separadas: las de cocina llegan solo a cocina y las de barra solo a barra.
+En el club (mesa/cancha) · A domicilio directo (con costo de envío) · Rappi · Uber Eats.
+WhatsApp al admin en turno, seguimiento de entrega y link a la tarjeta de lealtad al terminar.
+Frase de bienvenida y horario editables en Configuración → Carta pública.
+D1
+No tienes que correr SQL. El Worker agrega solo las configuraciones `menu_tagline` y `business_hours`.
+Prueba rápida
+Crea el bucket y despliega.
+Abre `/menu.html`: las fotos de Drive ya deben verse.
+Configuración → Copiar fotos a R2.
+Crea un usuario Editor de carta, entra con él y cambia una foto.
+Haz un pedido de prueba con una bebida y un platillo, con nota en cada estación.
 Además corregí que la tarjeta no se refrescaba sola. Si el mesero le mostraba el link al cliente antes de cobrar, la página se quedaba congelada en "0 sellos" aunque el cobro sí hubiera sumado el sello por dentro — solo hacía falta recargar. Ahora `/tarjeta.html` se actualiza sola cada 15 segundos y tiene un botón "↻ Actualizar" para revisarlo al instante.
