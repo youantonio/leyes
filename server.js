@@ -1,5 +1,76 @@
 // RUSH POS v24.3 - Cloudflare Worker + D1
-const ROLES = ["admin", "mesero", "cocina", "barra", "repartidor"];
+const ROLES = ["admin", "mesero", "cocina", "barra", "repartidor", "editor"];
+
+// ===== FOTOS: Google Drive → proxy con caché → Cloudflare R2 =====
+// Extrae el ID de cualquier link de Drive (uc?id=, /file/d/ID, open?id=, thumbnail?id=, lh3/d/ID)
+function driveId(u) {
+  const s = String(u || "");
+  if (!/drive\.google\.com|googleusercontent\.com/.test(s)) return null;
+  const m = s.match(/[?&]id=([\w-]{20,})/) || s.match(/\/d\/([\w-]{20,})/);
+  return m ? m[1] : null;
+}
+// Lo que ve el navegador: los links de Drive pasan por /img/drive/ID (nuestro Worker)
+function imgOut(u) {
+  if (!u) return u;
+  const id = driveId(u);
+  return id ? "/img/drive/" + id : u;
+}
+const IMG_CACHE = "public, max-age=2592000, immutable";
+function isValidImg(v) {
+  return v.startsWith("data:image/") || v.startsWith("https://") || v.startsWith("http://") || v.startsWith("/img/");
+}
+async function fetchDriveImage(id) {
+  const urls = [
+    `https://drive.google.com/thumbnail?id=${id}&sz=w1200`,
+    `https://lh3.googleusercontent.com/d/${id}=w1200`,
+  ];
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { redirect: "follow" });
+      const ct = r.headers.get("content-type") || "";
+      if (r.ok && ct.startsWith("image/")) return { buf: await r.arrayBuffer(), ct };
+    } catch (e) {}
+  }
+  return null;
+}
+function dataUrlToBytes(dataUrl) {
+  const m = String(dataUrl).match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
+  if (!m) return null;
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { bytes, ct: m[1] };
+}
+const extFor = (ct) => (ct.includes("png") ? "png" : ct.includes("webp") ? "webp" : "jpg");
+async function serveImage(path, env, ctx) {
+  const noImg = () => new Response("Foto no encontrada", { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
+  // /img/r2/<clave> → archivo propio en R2
+  if (path.startsWith("/img/r2/")) {
+    if (!env.PHOTOS) return noImg();
+    const key = decodeURIComponent(path.slice(8));
+    const obj = await env.PHOTOS.get(key);
+    if (!obj) return noImg();
+    return new Response(obj.body, { headers: { "Content-Type": obj.httpMetadata?.contentType || "image/jpeg", "Cache-Control": IMG_CACHE } });
+  }
+  // /img/drive/<ID> → primero R2 (si ya se copió), luego caché de Cloudflare, luego Drive
+  const m = path.match(/^\/img\/drive\/([\w-]{20,})$/);
+  if (!m) return noImg();
+  const id = m[1];
+  if (env.PHOTOS) {
+    const obj = await env.PHOTOS.get("drive/" + id);
+    if (obj) return new Response(obj.body, { headers: { "Content-Type": obj.httpMetadata?.contentType || "image/jpeg", "Cache-Control": IMG_CACHE } });
+  }
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = new Request("https://rush-img-cache/drive/" + id);
+  if (cache) { const hit = await cache.match(key); if (hit) return hit; }
+  const got = await fetchDriveImage(id);
+  if (!got) return noImg();
+  const resp = new Response(got.buf, { headers: { "Content-Type": got.ct, "Cache-Control": IMG_CACHE } });
+  if (cache) ctx.waitUntil(cache.put(key, resp.clone()));
+  // Se guarda sola en R2 la primera vez que alguien la ve
+  if (env.PHOTOS) ctx.waitUntil(env.PHOTOS.put("drive/" + id, got.buf, { httpMetadata: { contentType: got.ct } }));
+  return resp;
+}
 const SESSION_MS = 24 * 60 * 60 * 1000;
 let sessionsReady = false;
 let menuSchemaReady2 = false;
@@ -80,6 +151,8 @@ export default {
 
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+    // Fotos de producto (R2 / proxy de Drive)
+    if (path.startsWith("/img/") && request.method === "GET") return serveImage(path, env, ctx);
     // Archivos estáticos
     if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
 
@@ -97,13 +170,16 @@ export default {
         ).run();
         try { await db.prepare("ALTER TABLE orders ADD COLUMN channel TEXT DEFAULT 'restaurante'").run(); } catch (e) {}
         try { await db.prepare("ALTER TABLE orders ADD COLUMN loyalty_consent INTEGER DEFAULT 0").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE users ADD COLUMN whatsapp TEXT").run(); } catch (e) {}
         const defSettings = [
           ["business_name", "The Rush - Club, Cafe & Cocina"],
-          ["whatsapp_order_number", ""], ["rappi_link", ""], ["uber_link", ""],
+          ["whatsapp_order_number", ""], ["whatsapp_on_duty", ""], ["rappi_link", ""], ["uber_link", ""],
           ["loyalty_goal", "10"], ["loyalty_reward", "Un cafe o postre de cortesia"],
           ["business_lat", "20.1010"], ["business_lng", "-98.7591"],
           ["delivery_base_fee", "20"], ["delivery_rate_km", "8"],
           ["payment_info", ""],
+          ["menu_tagline", "Tu ritual empieza aquí, entre espuma y aroma"],
+          ["business_hours", "Abierto de 8:00 a.m. a 11:00 p.m."],
         ];
         for (const [k, v] of defSettings) await db.prepare("INSERT OR IGNORE INTO pos_settings (key,value) VALUES (?,?)").bind(k, v).run();
         menuSchemaReady2 = true;
@@ -185,6 +261,17 @@ export default {
         const { results } = await db.prepare("SELECT key, value FROM pos_settings").all();
         const o = {}; for (const r of results || []) o[r.key] = r.value; return o;
       };
+      // WhatsApp que recibe los pedidos: el del admin en turno; si no hay, el número general de respaldo
+      const resolveOrderWa = async (st) => {
+        const clean = (v) => String(v || "").replace(/\D/g, "").slice(-10);
+        if (st.whatsapp_on_duty) {
+          const u = await db.prepare("SELECT name, whatsapp FROM users WHERE id=? AND active=1 AND role='admin'")
+            .bind(st.whatsapp_on_duty).first().catch(() => null);
+          if (u && clean(u.whatsapp).length === 10) return { number: clean(u.whatsapp), name: u.name, source: "turno" };
+        }
+        const g = clean(st.whatsapp_order_number);
+        return g.length === 10 ? { number: g, name: null, source: "general" } : { number: "", name: null, source: "ninguno" };
+      };
       const haversineKm = (lat1, lng1, lat2, lng2) => {
         const R = 6371, toRad = (d) => (d * Math.PI) / 180;
         const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
@@ -240,17 +327,19 @@ export default {
       // ===== PUBLICO (sin sesion): pagina de pedidos y tarjeta de lealtad =====
       if (path === "/api/public-settings" && request.method === "GET") {
         const st = await getSettings();
+        const wa = await resolveOrderWa(st);
         return json({
-          business_name: st.business_name, whatsapp_order_number: st.whatsapp_order_number,
+          business_name: st.business_name, whatsapp_order_number: wa.number,
           rappi_link: st.rappi_link, uber_link: st.uber_link,
           loyalty_goal: Number(st.loyalty_goal) || 10, loyalty_reward: st.loyalty_reward,
+          menu_tagline: st.menu_tagline || "", business_hours: st.business_hours || "",
         });
       }
       if (path === "/api/public-menu" && request.method === "GET") {
         const its = ((await db.prepare("SELECT id,name,category,category_id,price,description,destination,image FROM menu_items WHERE active=1 AND sold_out=0 ORDER BY sort_order, name").all()).results) || [];
         const secs = ((await db.prepare("SELECT * FROM pos_menu_sections ORDER BY sort_order, name").all()).results) || [];
         const cats = ((await db.prepare("SELECT * FROM pos_menu_categories ORDER BY sort_order, name").all()).results) || [];
-        return json({ items: its, structure: secs.map((sc) => ({ ...sc, categories: cats.filter((c) => c.section_id === sc.id) })) });
+        return json({ items: its.map((i) => ({ ...i, image: imgOut(i.image) })), structure: secs.map((sc) => ({ ...sc, categories: cats.filter((c) => c.section_id === sc.id) })) });
       }
       if (path === "/api/public-order" && request.method === "POST") {
         const b = await request.json().catch(() => ({}));
@@ -262,6 +351,20 @@ export default {
         if (phone.length !== 10) return json({ error: "WhatsApp a 10 digitos" }, 400);
         const name = String(b.customer_name || "Cliente").trim() || "Cliente";
         const channel = ["restaurante", "domicilio_directo"].includes(b.channel) ? b.channel : "restaurante";
+        // Precios SIEMPRE desde la base de datos (nunca confiar en el precio que manda el navegador)
+        const reqIds = [...new Set(items0.map((i) => String(i.menu_item_id || "")).filter(Boolean))].slice(0, 80);
+        if (!reqIds.length) return json({ error: "Productos no válidos" }, 400);
+        const dbItems = ((await db.prepare(`SELECT id, name, price, destination FROM menu_items WHERE active=1 AND id IN (${reqIds.map(() => "?").join(",")})`)
+          .bind(...reqIds).all()).results) || [];
+        const byId = Object.fromEntries(dbItems.map((r) => [String(r.id), r]));
+        const missing = items0.filter((i) => !byId[String(i.menu_item_id)]);
+        if (missing.length) return json({ error: "Ya no está disponible: " + missing.map((i) => i.name || "producto").join(", ") + ". Recarga el menú." }, 409);
+        const itemsSafe = items0.slice(0, 80).map((i) => {
+          const r = byId[String(i.menu_item_id)];
+          return { menu_item_id: String(r.id), name: r.name, qty: Math.min(99, Math.max(1, Math.floor(Number(i.qty) || 1))),
+                   unit_price: Number(r.price) || 0, destination: r.destination || "cocina", ...(i.note ? { note: String(i.note).slice(0, 140) } : {}) };
+        });
+        const tableTxt = String(b.table || "").trim().slice(0, 40);
         let shipping = 0, dLat = null, dLng = null, addrText = "";
         if (channel === "domicilio_directo") {
           const a = b.address || {};
@@ -276,20 +379,33 @@ export default {
           }
         }
         const notes = JSON.stringify({
-          type: channel === "domicilio_directo" ? "Domicilio (directo)" : "Restaurante",
-          cocina: String(b.notes || "").trim(), barra: "",
+          type: channel === "domicilio_directo" ? "Domicilio (directo)" : ("Restaurante" + (tableTxt ? " · " + tableTxt : "")),
+          cocina: String(b.notes || "").trim().slice(0, 300), barra: String(b.notes_barra || "").trim().slice(0, 300),
         });
-        const total = calcTotal(items0) + shipping;
+        const total = calcTotal(itemsSafe) + shipping;
         const id = crypto.randomUUID(), trackToken = crypto.randomUUID().replace(/-/g, "");
-        const dd = new Date(), p2b = (n) => String(n).padStart(2, "0");
-        const folio = "WEB-" + p2b(dd.getUTCDate()) + p2b(dd.getUTCMonth() + 1) + "-" + p2b(dd.getUTCHours()) + p2b(dd.getUTCMinutes());
+        // Hora de México (UTC-6, sin horario de verano) + 2 letras al azar para que no se repita el folio en el mismo minuto
+        const dd = new Date(Date.now() - 6 * 3600 * 1000), p2b = (n) => String(n).padStart(2, "0");
+        const folio = "WEB-" + p2b(dd.getUTCDate()) + p2b(dd.getUTCMonth() + 1) + "-" + p2b(dd.getUTCHours()) + p2b(dd.getUTCMinutes())
+          + "-" + trackToken.slice(0, 2).toUpperCase();
         await db.prepare(
           `INSERT INTO orders (id, custom_folio, customer_name, customer_phone, notes, items, subtotal, total, channel,
              loyalty_consent, delivery_status, delivery_lat, delivery_lng, shipping_cost, tracking_token, delivery_address, receiver_name, created_at, updated_at)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
-        ).bind(id, folio, name, phone, notes, JSON.stringify(items0), calcTotal(items0), total, channel, b.loyalty_consent ? 1 : 0,
+        ).bind(id, folio, name, phone, notes, JSON.stringify(itemsSafe), calcTotal(itemsSafe), total, channel, b.loyalty_consent ? 1 : 0,
                channel === "domicilio_directo" ? "recibido" : null, dLat, dLng, shipping, trackToken, addrText, String(b.receiver_name || "").trim()).run();
-        return json({ id, folio, shipping, track_token: trackToken }, 201);
+        const waTo = await resolveOrderWa(await getSettings());
+        // Tarjeta de lealtad: se crea (sin sello) para que el cliente tenga su link desde ya; el sello se suma al cobrar
+        let cardToken = null;
+        if (b.loyalty_consent) {
+          const row = await db.prepare("SELECT card_token FROM pos_loyalty WHERE phone=?").bind(phone).first();
+          if (row) cardToken = row.card_token;
+          else {
+            cardToken = genToken();
+            await db.prepare("INSERT INTO pos_loyalty (phone,name,card_token,stamps,consent) VALUES (?,?,?,0,1)").bind(phone, name, cardToken).run();
+          }
+        }
+        return json({ id, folio, shipping, total, track_token: trackToken, whatsapp_to: waTo.number, card_token: cardToken }, 201);
       }
       if (path === "/api/loyalty-card" && request.method === "GET") {
         const token = url.searchParams.get("token") || "";
@@ -376,7 +492,7 @@ export default {
 
         if (!uid && request.method === "GET") {
           const { results } = await db.prepare(
-            "SELECT id, username, name, role, active, created_at, password_hash FROM users ORDER BY name"
+            "SELECT id, username, name, role, active, created_at, password_hash, whatsapp FROM users ORDER BY name"
           ).all();
           return json((results || []).map(({ password_hash, ...u }) => ({
             ...u, legacy: !String(password_hash || "").startsWith("pbkdf2$"),
@@ -392,6 +508,8 @@ export default {
           if (!name || !username) return json({ error: "Nombre y usuario son obligatorios" }, 400);
           if (password.length < 4) return json({ error: "La contraseña debe tener al menos 4 caracteres" }, 400);
           if (!ROLES.includes(role)) return json({ error: "Rol no válido" }, 400);
+          const wa = String(b.whatsapp || "").replace(/\D/g, "").slice(-10);
+          if (wa && wa.length !== 10) return json({ error: "El WhatsApp debe tener 10 dígitos" }, 400);
           const dup = await db.prepare("SELECT id FROM users WHERE lower(username)=lower(?)").bind(username).first();
           if (dup) return json({ error: "Ese usuario ya existe" }, 409);
           const salt = newSalt();
@@ -401,6 +519,7 @@ export default {
             `INSERT INTO users (id, username, name, role, password_hash, password_salt, active, created_at, updated_at, approved)
              VALUES (?,?,?,?,?,?,1,datetime('now'),datetime('now'),1)`
           ).bind(id, username, name, role, hash, salt).run();
+          if (wa) await db.prepare("UPDATE users SET whatsapp=? WHERE id=?").bind(wa, id).run();
           return json({ id }, 201);
         }
 
@@ -421,6 +540,11 @@ export default {
             if (!a && target.role === "admin" && (await otherAdmins(uid)) === 0)
               return json({ error: "No puedes desactivar al único administrador" }, 400);
             sets.push("active=?"); vals.push(a);
+          }
+          if (b.whatsapp !== undefined) {
+            const wa = String(b.whatsapp || "").replace(/\D/g, "").slice(-10);
+            if (wa && wa.length !== 10) return json({ error: "El WhatsApp debe tener 10 dígitos" }, 400);
+            sets.push("whatsapp=?"); vals.push(wa);
           }
           let passChanged = false;
           if (b.password !== undefined) {
@@ -472,6 +596,25 @@ export default {
         if (!row) return json({ error: "Cliente no encontrado" }, 404);
         if (row.rewards_earned <= row.rewards_redeemed) return json({ error: "No tiene recompensas disponibles" }, 400);
         await db.prepare("UPDATE pos_loyalty SET rewards_redeemed=rewards_redeemed+1, updated_at=datetime('now') WHERE phone=?").bind(phone).run();
+        return json({ ok: true });
+      }
+      // ===== ADMIN EN TURNO: quién recibe los pedidos por WhatsApp =====
+      if (path === "/api/on-duty" && request.method === "GET") {
+        const st = await getSettings();
+        const wa = await resolveOrderWa(st);
+        return json({ user_id: st.whatsapp_on_duty || "", name: wa.name, number: wa.number, source: wa.source });
+      }
+      if (path === "/api/on-duty" && request.method === "POST") {
+        if (!isAdmin) return json({ error: "Solo un administrador puede tomar el turno" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const uid = b.user_id === "" ? "" : String(b.user_id || sess.user_id);
+        if (uid) {
+          const u = await db.prepare("SELECT id, name, role, active, whatsapp FROM users WHERE id=?").bind(uid).first();
+          if (!u || !u.active || u.role !== "admin") return json({ error: "Ese usuario no es un administrador activo" }, 400);
+          if (String(u.whatsapp || "").replace(/\D/g, "").length !== 10)
+            return json({ error: `${u.name} no tiene WhatsApp registrado. Agrégalo en Usuarios.` }, 400);
+        }
+        await db.prepare("INSERT INTO pos_settings (key,value) VALUES ('whatsapp_on_duty',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(uid).run();
         return json({ ok: true });
       }
       if (path === "/api/settings" && request.method === "GET") return json(await getSettings());
@@ -602,11 +745,67 @@ export default {
         return (results || []).map((r) => r.id);
       };
 
+      // ===== FOTOS (R2) =====
+      if (path === "/api/photo-upload" && request.method === "POST") {
+        if (!isAdmin && sess.role !== "editor") return json({ error: "No autorizado" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const d = dataUrlToBytes(b.data);
+        if (!d) return json({ error: "Imagen no válida" }, 400);
+        if (d.bytes.length > 3 * 1024 * 1024) return json({ error: "La foto pesa más de 3 MB" }, 400);
+        if (!env.PHOTOS) return json({ url: String(b.data), storage: "d1" }); // sin R2: se guarda como antes
+        const key = `up/${crypto.randomUUID()}.${extFor(d.ct)}`;
+        await env.PHOTOS.put(key, d.bytes, { httpMetadata: { contentType: d.ct } });
+        return json({ url: "/img/r2/" + key, storage: "r2" });
+      }
+      if (path === "/api/photos/status" && request.method === "GET") {
+        const deny = needAdmin(); if (deny) return deny;
+        const rows = (await db.prepare("SELECT image FROM menu_items WHERE active=1").all()).results || [];
+        const c = { total: rows.length, sin_foto: 0, drive: 0, d1: 0, r2: 0, otras: 0 };
+        for (const r of rows) {
+          const v = String(r.image || "");
+          if (!v) c.sin_foto++; else if (v.startsWith("/img/r2/")) c.r2++; else if (driveId(v)) c.drive++;
+          else if (v.startsWith("data:image/")) c.d1++; else c.otras++;
+        }
+        return json({ r2_conectado: !!env.PHOTOS, ...c });
+      }
+      if (path === "/api/photos/migrate" && request.method === "POST") {
+        const deny = needAdmin(); if (deny) return deny;
+        if (!env.PHOTOS) return json({ error: "R2 no está conectado. Revisa el paso 1 del README (bucket rush-fotos)." }, 400);
+        const LOTE = 8; // pocas por vuelta para no pasar el límite de Cloudflare
+        const rows = (await db.prepare(
+          "SELECT id, name, image FROM menu_items WHERE active=1 AND image IS NOT NULL AND image != '' AND image NOT LIKE '/img/r2/%'"
+        ).all()).results || [];
+        const pend = rows.filter((r) => driveId(r.image) || String(r.image).startsWith("data:image/") || String(r.image).startsWith("/img/drive/"));
+        const fallos = [];
+        let hechas = 0;
+        for (const r of pend.slice(0, LOTE)) {
+          const v = String(r.image);
+          let key = null;
+          const did = driveId(v) || (v.match(/^\/img\/drive\/([\w-]{20,})$/) || [])[1];
+          if (did) {
+            key = "drive/" + did;
+            if (!(await env.PHOTOS.head(key))) {
+              const got = await fetchDriveImage(did);
+              if (!got) { fallos.push(r.name); continue; }
+              await env.PHOTOS.put(key, got.buf, { httpMetadata: { contentType: got.ct } });
+            }
+          } else {
+            const d = dataUrlToBytes(v);
+            if (!d) { fallos.push(r.name); continue; }
+            key = `up/${r.id}.${extFor(d.ct)}`;
+            await env.PHOTOS.put(key, d.bytes, { httpMetadata: { contentType: d.ct } });
+          }
+          await db.prepare("UPDATE menu_items SET image=? WHERE id=?").bind("/img/r2/" + key, r.id).run();
+          hechas++;
+        }
+        return json({ hechas, fallos, pendientes: Math.max(0, pend.length - hechas - fallos.length) });
+      }
+
       if (path === "/api/menu" && request.method === "GET") {
         let items = [];
         try {
           const { results } = await db.prepare("SELECT * FROM menu_items WHERE active = 1 ORDER BY sort_order, name").all();
-          items = results || [];
+          items = (results || []).map((i) => ({ ...i, image: imgOut(i.image) }));
         } catch (e) {}
         return json(items);
       }
@@ -648,7 +847,7 @@ export default {
           catId = cat.id; catText = cat.name; dest = cat.destination;
         }
         const rawImg = String(b.image || "");
-        const okImg = rawImg.startsWith("data:image/") || rawImg.startsWith("https://") || rawImg.startsWith("http://");
+        const okImg = isValidImg(rawImg);
         const image = okImg ? rawImg.slice(0, 400000) : null;
         const id = crypto.randomUUID();
         await db.prepare(
@@ -675,7 +874,9 @@ export default {
         if (!cur) return json({ error: "Producto no encontrado" }, 404);
         const b = await request.json().catch(() => ({}));
         const onlySoldOut = Object.keys(b).length === 1 && b.sold_out !== undefined;
-        if (!(onlySoldOut && ["admin", "cocina", "barra"].includes(sess.role))) {
+        const onlyCarta = Object.keys(b).length > 0 && Object.keys(b).every((k) => ["name", "description", "image"].includes(k));
+        if (sess.role === "editor" && !onlyCarta) return json({ error: "El editor de carta solo puede cambiar foto, nombre y descripción" }, 403);
+        if (!(onlySoldOut && ["admin", "cocina", "barra"].includes(sess.role)) && !(onlyCarta && sess.role === "editor")) {
           const deny = needAdmin(); if (deny) return deny;
         }
         const sets = [], vals = [];
@@ -690,7 +891,7 @@ export default {
         }
         if (b.image !== undefined) {
           const val = String(b.image || "");
-          const okImg = val.startsWith("data:image/") || val.startsWith("https://") || val.startsWith("http://");
+          const okImg = isValidImg(val);
           const image = okImg ? val.slice(0, 400000) : null;
           sets.push("image=?"); vals.push(image);
         }
