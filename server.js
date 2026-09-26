@@ -171,6 +171,21 @@ export default {
         try { await db.prepare("ALTER TABLE orders ADD COLUMN channel TEXT DEFAULT 'restaurante'").run(); } catch (e) {}
         try { await db.prepare("ALTER TABLE orders ADD COLUMN loyalty_consent INTEGER DEFAULT 0").run(); } catch (e) {}
         try { await db.prepare("ALTER TABLE users ADD COLUMN whatsapp TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE users ADD COLUMN wa_notify INTEGER DEFAULT 1").run(); } catch (e) {}
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_voids (
+             id TEXT PRIMARY KEY, order_id TEXT, folio TEXT, customer TEXT, amount REAL, method TEXT,
+             items TEXT, reason TEXT, authorized_by TEXT, done_by TEXT, created_at TEXT DEFAULT (datetime('now')))`
+        ).run();
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN created_by TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN created_by_name TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN delivered_at TEXT").run(); } catch (e) {}
+        try { await db.prepare("ALTER TABLE orders ADD COLUMN delivered_by_name TEXT").run(); } catch (e) {}
+        await db.prepare(
+          `CREATE TABLE IF NOT EXISTS pos_shifts (
+             id TEXT PRIMARY KEY, date TEXT NOT NULL, shift TEXT NOT NULL, role TEXT NOT NULL,
+             user_id TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')))`
+        ).run();
         const defSettings = [
           ["business_name", "The Rush - Club, Cafe & Cocina"],
           ["whatsapp_order_number", ""], ["whatsapp_on_duty", ""], ["rappi_link", ""], ["uber_link", ""],
@@ -494,7 +509,7 @@ export default {
 
         if (!uid && request.method === "GET") {
           const { results } = await db.prepare(
-            "SELECT id, username, name, role, active, created_at, password_hash, whatsapp FROM users ORDER BY name"
+            "SELECT id, username, name, role, active, created_at, password_hash, whatsapp, wa_notify FROM users ORDER BY name"
           ).all();
           return json((results || []).map(({ password_hash, ...u }) => ({
             ...u, legacy: !String(password_hash || "").startsWith("pbkdf2$"),
@@ -543,6 +558,7 @@ export default {
               return json({ error: "No puedes desactivar al único administrador" }, 400);
             sets.push("active=?"); vals.push(a);
           }
+          if (b.wa_notify !== undefined) { sets.push("wa_notify=?"); vals.push(b.wa_notify ? 1 : 0); }
           if (b.whatsapp !== undefined) {
             const wa = String(b.whatsapp || "").replace(/\D/g, "").slice(-10);
             if (wa && wa.length !== 10) return json({ error: "El WhatsApp debe tener 10 dígitos" }, 400);
@@ -600,6 +616,16 @@ export default {
         await db.prepare("UPDATE pos_loyalty SET rewards_redeemed=rewards_redeemed+1, updated_at=datetime('now') WHERE phone=?").bind(phone).run();
         return json({ ok: true });
       }
+      // ===== EQUIPO CON WHATSAPP (para avisos de comanda y "listo") =====
+      if (path === "/api/team-wa" && request.method === "GET") {
+        const rows = (await db.prepare("SELECT id, name, role, whatsapp, wa_notify FROM users WHERE active=1").all()).results || [];
+        const team = rows
+          .map((u) => ({ id: u.id, name: u.name, role: u.role, whatsapp: String(u.whatsapp || "").replace(/\D/g, "").slice(-10), notify: u.wa_notify !== 0 }))
+          .filter((u) => u.whatsapp.length === 10 && u.notify);
+        const st = await getSettings();
+        return json({ me: sess.user_id, on_duty: st.whatsapp_on_duty || "", team });
+      }
+
       // ===== ADMIN EN TURNO: quién recibe los pedidos por WhatsApp =====
       if (path === "/api/on-duty" && request.method === "GET") {
         const st = await getSettings();
@@ -619,11 +645,18 @@ export default {
         await db.prepare("INSERT INTO pos_settings (key,value) VALUES ('whatsapp_on_duty',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(uid).run();
         return json({ ok: true });
       }
-      if (path === "/api/settings" && request.method === "GET") return json(await getSettings());
+      if (path === "/api/settings" && request.method === "GET") {
+        const st = { ...(await getSettings()) };
+        delete st.void_pin_hash; delete st.void_pin_salt;
+        return json(st);
+      }
       if (path === "/api/settings" && request.method === "PATCH") {
         if (!isAdmin) return json({ error: "Solo el administrador puede editar la configuracion" }, 403);
         const b = await request.json().catch(() => ({}));
-        for (const [k, v] of Object.entries(b)) await db.prepare("INSERT INTO pos_settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, String(v ?? "")).run();
+        for (const [k, v] of Object.entries(b)) {
+          if (k.startsWith("void_pin")) continue; // la clave del sistema solo se cambia en /api/void-pin
+          await db.prepare("INSERT INTO pos_settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, String(v ?? "")).run();
+        }
         return json({ ok: true });
       }
 
@@ -1040,12 +1073,15 @@ export default {
           const total = calcTotal(items);
           const newId = crypto.randomUUID();
           const notes = b.notes && typeof b.notes === "object" ? JSON.stringify(b.notes) : String(b.notes || "");
+          const who = await db.prepare("SELECT name FROM users WHERE id=?").bind(sess.user_id).first().catch(() => null);
+          const whoName = (who && who.name) || sess.username || "";
           await db.prepare(
             `INSERT INTO orders (id, custom_folio, table_id, customer_name, customer_phone, notes, items, subtotal, total, channel, loyalty_consent, created_at, updated_at)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
           ).bind(newId, b.custom_folio || null, b.table_id || null, b.customer_name || "Mostrador",
                  b.customer_phone || "", notes, JSON.stringify(items), total, total, b.channel || "restaurante", b.loyalty_consent ? 1 : 0).run();
-          return json({ id: newId }, 201);
+          await db.prepare("UPDATE orders SET created_by=?, created_by_name=? WHERE id=?").bind(sess.user_id || null, whoName, newId).run();
+          return json({ id: newId, created_by_name: whoName }, 201);
         }
 
         if (id && sub === "payments" && request.method === "POST") {
@@ -1068,7 +1104,7 @@ export default {
                closed_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
             ).bind(method, id),
           ]);
-          return json({ ok: true, paid: o.total, loyalty });
+          return json({ ok: true, paid: o.total, method, loyalty, folio: o.custom_folio || o.id.slice(0, 6) });
         }
 
         if (id && !sub && request.method === "GET") {
@@ -1098,6 +1134,14 @@ export default {
             items = items.map((i) => ((i.destination || "cocina") === b.ready ? { ...i, done: true } : i));
             itemsChanged = true;
           }
+          let deliveredNow = false;
+          if (b.delivered && !cur.delivered_at) {
+            if (!["admin", "mesero"].includes(sess.role)) return json({ error: "Solo mesero o admin pueden marcar entregado" }, 403);
+            const me2 = await db.prepare("SELECT name FROM users WHERE id=?").bind(sess.user_id).first().catch(() => null);
+            await db.prepare("UPDATE orders SET delivered_at=datetime('now'), delivered_by_name=? WHERE id=?")
+              .bind((me2 && me2.name) || sess.username || "", id).run();
+            deliveredNow = true;
+          }
           let status = b.status || cur.status;
           if (itemsChanged && !b.status) {
             const allDone = items.length > 0 && items.every((i) => i.done);
@@ -1106,7 +1150,7 @@ export default {
           const total = calcTotal(items);
           await db.prepare("UPDATE orders SET status=?, items=?, subtotal=?, total=?, notes=?, updated_at=datetime('now') WHERE id=?")
             .bind(status, JSON.stringify(items), total, total, notes, id).run();
-          return json({ ok: true, status });
+          return json({ ok: true, status, delivered: deliveredNow });
         }
 
         if (id && !sub && request.method === "DELETE") {
@@ -1186,6 +1230,134 @@ export default {
         };
       };
       const cutOut = (r) => ({ id: r.id, folio: r.folio, created_by: r.created_by, created_at: r.created_at, ...JSON.parse(r.data || "{}") });
+
+      // ===== TURNOS (mínimo 2 al día: matutino y vespertino) =====
+      const SHIFT_ROLES = ["mesero", "cocina", "barra", "admin", "repartidor"];
+      const mxDate = async () => (await db.prepare("SELECT date(datetime('now','-6 hours')) AS d, strftime('%H', datetime('now','-6 hours')) AS h").first());
+      const currentShiftKey = (hour) => (Number(hour) < 15 ? "matutino" : "vespertino");
+      if (path === "/api/shifts" && request.method === "GET") {
+        const deny = needAdmin(); if (deny) return deny;
+        const date = String(url.searchParams.get("date") || (await mxDate()).d);
+        const rows = (await db.prepare(
+          `SELECT s.id, s.date, s.shift, s.role, s.user_id, u.name AS user_name
+           FROM pos_shifts s LEFT JOIN users u ON u.id = s.user_id WHERE s.date=? ORDER BY s.shift, s.role`
+        ).bind(date).all()).results || [];
+        const usersByRole = (await db.prepare("SELECT id, name, role FROM users WHERE active=1 AND role IN ('mesero','cocina','barra','admin','repartidor') ORDER BY name").all()).results || [];
+        const mx = await mxDate();
+        return json({ date, today: mx.d, current_shift: currentShiftKey(mx.h), assignments: rows, users: usersByRole, roles: SHIFT_ROLES });
+      }
+      if (path === "/api/shifts" && request.method === "POST") {
+        const deny = needAdmin(); if (deny) return deny;
+        const b = await request.json().catch(() => ({}));
+        const date = String(b.date || ""), shift = String(b.shift || ""), role = String(b.role || ""), uid = String(b.user_id || "");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !["matutino", "vespertino"].includes(shift) || !SHIFT_ROLES.includes(role) || !uid)
+          return json({ error: "Datos de turno inválidos" }, 400);
+        const existing = await db.prepare("SELECT id FROM pos_shifts WHERE date=? AND shift=? AND role=? AND user_id=?").bind(date, shift, role, uid).first();
+        if (existing) { await db.prepare("DELETE FROM pos_shifts WHERE id=?").bind(existing.id).run(); return json({ ok: true, assigned: false }); }
+        await db.prepare("INSERT INTO pos_shifts (id,date,shift,role,user_id) VALUES (?,?,?,?,?)").bind(crypto.randomUUID(), date, shift, role, uid).run();
+        return json({ ok: true, assigned: true });
+      }
+      if (path === "/api/shifts-status" && request.method === "GET") {
+        const deny = needAdmin(); if (deny) return deny;
+        const mx = await mxDate();
+        const rolesWithUsers = (await db.prepare("SELECT DISTINCT role FROM users WHERE active=1 AND role IN ('mesero','cocina','barra','admin','repartidor')").all()).results.map((r) => r.role);
+        const rows = (await db.prepare("SELECT role, shift, COUNT(*) c FROM pos_shifts WHERE date=? GROUP BY role, shift").bind(mx.d).all()).results || [];
+        const has = (role, shift) => rows.some((r) => r.role === role && r.shift === shift && r.c > 0);
+        const missing = [];
+        for (const role of rolesWithUsers) { if (!has(role, "matutino")) missing.push(role + ":matutino"); if (!has(role, "vespertino")) missing.push(role + ":vespertino"); }
+        const cur = currentShiftKey(mx.h);
+        const missingNow = rolesWithUsers.filter((role) => !has(role, cur));
+        const st = await getSettings();
+        const onDutyOk = !!st.whatsapp_on_duty && missingNow.length === 0 ? true : null;
+        return json({ date: mx.d, current_shift: cur, complete: missing.length === 0, missing, missing_now: missingNow, on_duty_set: !!st.whatsapp_on_duty });
+      }
+
+      // ===== ANULAR COBROS (clave del admin en turno + clave del sistema) =====
+      const checkPin = async (pin) => {
+        const st = await getSettings();
+        if (!st.void_pin_hash) return safeEq(String(pin || ""), "2470"); // clave inicial del sistema
+        return safeEq(await hashPw(String(pin || ""), st.void_pin_salt), st.void_pin_hash);
+      };
+      const setSetting = (k, v) => db.prepare("INSERT INTO pos_settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, v).run();
+
+      if (path === "/api/payments/recent" && request.method === "GET") {
+        if (!isAdmin) return json({ error: "Solo un administrador puede anular cobros" }, 403);
+        const c = await clock(), lc = await lastCutRow();
+        const since = lc ? lc.period_end : c.day_start;
+        const rows = (await db.prepare(
+          `SELECT p.order_id, p.method, p.amount, p.created_at, p.created_by, o.custom_folio, o.customer_name, o.id AS oid
+           FROM payments p LEFT JOIN orders o ON o.id = p.order_id WHERE p.created_at > ? ORDER BY p.created_at DESC`
+        ).bind(since).all()).results || [];
+        const voids = (await db.prepare("SELECT folio, customer, amount, reason, authorized_by, done_by, created_at FROM pos_voids ORDER BY created_at DESC LIMIT 15").all()).results || [];
+        const st = await getSettings();
+        const duty = st.whatsapp_on_duty ? await db.prepare("SELECT name FROM users WHERE id=? AND role='admin' AND active=1").bind(st.whatsapp_on_duty).first() : null;
+        return json({ since, last_cut: lc ? lc.folio : null, on_duty: duty ? duty.name : null,
+          payments: rows.map((r) => ({ ...r, orphan: !r.oid })), voids });
+      }
+
+      if (path === "/api/void-payment" && request.method === "POST") {
+        if (!isAdmin) return json({ error: "Solo un administrador puede anular cobros" }, 403);
+        const b = await request.json().catch(() => ({}));
+        const orderId = String(b.order_id || "");
+        const reason = String(b.reason || "").trim().slice(0, 200);
+        if (!orderId) return json({ error: "Falta la orden" }, 400);
+        if (!reason) return json({ error: "Escribe el motivo de la anulación" }, 400);
+        // 1) Admin en turno
+        const st = await getSettings();
+        if (!st.whatsapp_on_duty) return json({ error: "No hay admin en turno. Tómalo en Configuración → Admin en turno." }, 400);
+        const adm = await db.prepare("SELECT id, name, password_hash, password_salt FROM users WHERE id=? AND role='admin' AND active=1").bind(st.whatsapp_on_duty).first();
+        if (!adm || !String(adm.password_hash || "").startsWith("pbkdf2$")) return json({ error: "El admin en turno no es válido. Vuelve a tomar el turno." }, 400);
+        const okAdmin = safeEq(await hashPw(String(b.admin_password || ""), adm.password_salt), adm.password_hash);
+        // 2) Clave del sistema
+        const okPin = await checkPin(b.pin);
+        if (!okAdmin || !okPin) {
+          await new Promise((r) => setTimeout(r, 1200)); // frena intentos repetidos
+          return json({ error: !okAdmin && !okPin ? "Contraseña del admin y clave del sistema incorrectas" : !okAdmin ? `Contraseña de ${adm.name} incorrecta` : "Clave del sistema incorrecta" }, 403);
+        }
+        // 3) Solo cobros que aún no están en un corte
+        const pays = (await db.prepare("SELECT method, amount, created_at FROM payments WHERE order_id=?").bind(orderId).all()).results || [];
+        if (!pays.length) return json({ error: "Esa orden no tiene cobros" }, 404);
+        const lc = await lastCutRow();
+        if (lc && pays.some((p) => p.created_at <= lc.period_end))
+          return json({ error: `Este cobro ya está dentro del corte #${lc.folio}. Ya no se puede anular.` }, 409);
+        const o = await db.prepare("SELECT * FROM orders WHERE id=?").bind(orderId).first();
+        const amount = pays.reduce((x, p) => x + (Number(p.amount) || 0), 0);
+        const me = await db.prepare("SELECT name FROM users WHERE id=?").bind(sess.user_id).first().catch(() => null);
+        const stmts = [
+          db.prepare("INSERT INTO pos_voids (id, order_id, folio, customer, amount, method, items, reason, authorized_by, done_by) VALUES (?,?,?,?,?,?,?,?,?,?)")
+            .bind(crypto.randomUUID(), orderId, o ? (o.custom_folio || orderId.slice(0, 6)) : orderId.slice(0, 6), o ? o.customer_name : "(orden ya borrada)",
+                  amount, pays.map((p) => p.method).join(", "), o ? o.items : "[]", reason, adm.name, (me && me.name) || sess.username || ""),
+          db.prepare("DELETE FROM payments WHERE order_id=?").bind(orderId),
+          db.prepare("DELETE FROM orders WHERE id=?").bind(orderId),
+        ];
+        // 4) Quitar el sello de lealtad que dio ese cobro
+        let stampRemoved = false;
+        const phone = o ? String(o.customer_phone || "").replace(/\D/g, "").slice(-10) : "";
+        if (o && o.loyalty_consent && phone.length === 10) {
+          const row = await db.prepare("SELECT stamps, rewards_earned FROM pos_loyalty WHERE phone=?").bind(phone).first();
+          if (row) {
+            const goal = Number(st.loyalty_goal) || 10;
+            let stamps = row.stamps, earned = row.rewards_earned || 0;
+            if (stamps > 0) stamps -= 1; else if (earned > 0) { earned -= 1; stamps = goal - 1; }
+            stmts.push(db.prepare("UPDATE pos_loyalty SET stamps=?, rewards_earned=?, updated_at=datetime('now') WHERE phone=?").bind(stamps, earned, phone));
+            stampRemoved = true;
+          }
+        }
+        await db.batch(stmts);
+        return json({ ok: true, amount, authorized_by: adm.name, stamp_removed: stampRemoved });
+      }
+
+      if (path === "/api/void-pin" && request.method === "POST") {
+        if (!isAdmin) return json({ error: "Solo un administrador puede anular cobros" }, 403);
+        const b = await request.json().catch(() => ({}));
+        if (!(await checkPin(b.current))) { await new Promise((r) => setTimeout(r, 1200)); return json({ error: "La clave actual no es correcta" }, 403); }
+        const next = String(b.next || "");
+        if (!/^\d{4,8}$/.test(next)) return json({ error: "La clave nueva debe ser de 4 a 8 números" }, 400);
+        const salt = newSalt();
+        await setSetting("void_pin_salt", salt);
+        await setSetting("void_pin_hash", await hashPw(next, salt));
+        return json({ ok: true });
+      }
 
       if (path === "/api/dashboard" && request.method === "GET") {
         const c = await clock();
