@@ -205,6 +205,8 @@
 <div id="toast" class="toast hidden" role="status"></div>
 
 <script>
+const BASE=(location.pathname.match(/^(\/t\/[a-z0-9-]+\/)/)||[,'/'])[1];
+
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let settings={}, structure=[], items=[], cart=[];
@@ -220,12 +222,12 @@ function toggleTheme(){ const d=!document.body.classList.contains('night-mode');
 
 // ---------- Datos ----------
 async function boot(){
-  try{ settings=await (await fetch('/api/public-settings')).json(); }catch(e){ settings={}; }
+  try{ settings=await (await fetch(BASE+'api/public-settings')).json(); }catch(e){ settings={}; }
   if(settings.menu_tagline) $('tagline').textContent='“'+settings.menu_tagline+'”';
   if(settings.business_hours) $('hours').textContent=settings.business_hours;
   $('goalTxt').textContent=settings.loyalty_goal||10;
   $('deliveryLinks').innerHTML=[settings.rappi_link?`<a href="${esc(settings.rappi_link)}" target="_blank" rel="noopener">🧡 Pide en Rappi</a>`:'', settings.uber_link?`<a href="${esc(settings.uber_link)}" target="_blank" rel="noopener">🚗 Pide en Uber Eats</a>`:''].join('');
-  try{ const r=await (await fetch('/api/public-menu')).json(); items=r.items||[]; structure=r.structure||[]; }
+  try{ const r=await (await fetch(BASE+'api/public-menu')).json(); items=r.items||[]; structure=r.structure||[]; }
   catch(e){ $('menuContainer').innerHTML='<p class="empty">No pudimos cargar la carta. Revisa tu conexión y recarga la página.</p>'; return; }
   renderModes(); renderCategories(); renderMenu(); updateCartUI();
 }
@@ -355,7 +357,7 @@ async function locateAddress(){
     const d=await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`)).json();
     if(!d.length){ geoPoint=null; shipCost=0; $('shipQuote').textContent='No encontramos esa dirección exacta. El costo de envío se confirma por WhatsApp.'; return refreshTotal(); }
     geoPoint={lat:Number(d[0].lat),lng:Number(d[0].lon)};
-    const r=await (await fetch('/api/shipping-quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(geoPoint)})).json();
+    const r=await (await fetch(BASE+'api/shipping-quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(geoPoint)})).json();
     shipCost=Number(r.cost)||0; $('shipQuote').innerHTML=`📍 Ubicado · ~${r.km} km · Envío: <b>$${shipCost}</b>`;
   }catch(e){ shipCost=0; $('shipQuote').textContent='No pudimos calcular el envío automático; se confirma por WhatsApp.'; }
   refreshTotal();
@@ -375,7 +377,7 @@ async function sendOrder(){
   const nB=$('notesBarra').classList.contains('hidden')?'':$('notesBarra').value.trim();
   const btn=$('sendBtn'); btn.disabled=true; btn.textContent='Enviando…';
   try{
-    const r=await fetch('/api/public-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    const r=await fetch(BASE+'api/public-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       items:cart.map(x=>({menu_item_id:x.menu_item_id,name:x.name,qty:x.qty,note:x.note||undefined})),
       customer_name:name, customer_phone:phone, channel:isDom?'domicilio_directo':'restaurante', table:mesa,
       notes:nC, notes_barra:nB, loyalty_consent:$('cConsent').checked?1:0,
@@ -391,8 +393,8 @@ async function sendOrder(){
       ? `<a class="whatsapp-btn" href="https://wa.me/52${d.whatsapp_to}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">📲 Enviar comanda por WhatsApp</a>`
       : `<p class="hint" style="font-size:14px;margin-top:10px">Tu pedido ya está en nuestro sistema ✅. Te escribimos al WhatsApp que nos diste.</p>`;
     const links=[];
-    if(isDom&&d.track_token) links.push(`<a class="secondary-btn" href="/seguimiento.html?token=${esc(d.track_token)}" target="_blank" rel="noopener">🛵 Seguir mi pedido</a>`);
-    if(d.card_token) links.push(`<a class="secondary-btn" href="/tarjeta.html?token=${esc(d.card_token)}" target="_blank" rel="noopener">⭐ Ver mi tarjeta de lealtad</a>`);
+    if(isDom&&d.track_token) links.push(`<a class="secondary-btn" href="${BASE}seguimiento.html?token=${esc(d.track_token)}" target="_blank" rel="noopener">🛵 Seguir mi pedido</a>`);
+    if(d.card_token) links.push(`<a class="secondary-btn" href="${BASE}tarjeta.html?token=${esc(d.card_token)}" target="_blank" rel="noopener">⭐ Ver mi tarjeta de lealtad</a>`);
     $('doneLinks').innerHTML=links.join('');
     cart=[]; shipCost=0; geoPoint=null; ['notesCocina','notesBarra','cTable'].forEach(k=>$(k).value='');
     updateCartUI(); renderMenu(); closeModal('cartModal'); $('doneModal').classList.add('open');
@@ -404,7 +406,4 @@ boot();
 </script>
 </body>
 </html>
-
-</script>
-</body>
 </html>
