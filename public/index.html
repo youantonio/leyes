@@ -65,6 +65,14 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   .ticket-preview{width:72mm;max-width:72mm;margin:0 auto!important;border:none!important;padding:3mm 0;font-size:11px;page-break-after:always;break-after:page}
   .ticket-preview:last-child{page-break-after:auto;break-after:auto}
 }
+.carta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.carta-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.carta-card .ph{aspect-ratio:4/3;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:40px;color:#9ca3af;position:relative}
+.carta-card .ph img{width:100%;height:100%;object-fit:cover}
+.carta-card .body{padding:12px;display:flex;flex-direction:column;gap:8px}
+.carta-card textarea{min-height:60px;resize:vertical}
+.carta-card .photo-actions{display:flex;gap:6px;flex-wrap:wrap}
+.carta-card .photo-actions label{flex:1;text-align:center;background:#f3f4f6;border-radius:8px;padding:8px;font-size:13px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
@@ -90,6 +98,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     </div>
     <div class="row">
       <span id="userPill" class="pill">● Conectado</span>
+      <span id="dutyPill" class="pill hidden" style="cursor:pointer" title="Quién recibe los pedidos por WhatsApp" onclick="goConfig()"></span>
       <button onclick="logout()">Salir</button>
     </div>
   </div>
@@ -277,10 +286,33 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <h2 style="margin-top:0">Marca y pedidos</h2>
     <div class="grid">
       <label>Nombre del negocio:<input id="cfgName"></label>
-      <label>WhatsApp para pedidos directos (10 dígitos):<input id="cfgWaNumber" maxlength="10" placeholder="Ej. 7711234567"></label>
+      <label>WhatsApp general de respaldo (10 dígitos):<input id="cfgWaNumber" maxlength="10" placeholder="Se usa si no hay admin en turno"></label>
       <label>Link de Rappi:<input id="cfgRappi" placeholder="https://..."></label>
       <label>Link de Uber Eats:<input id="cfgUber" placeholder="https://..."></label>
     </div>
+  </div>
+  <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">🖼️ Carta pública</h2>
+    <div class="grid">
+      <label>Frase de bienvenida:<input id="cfgTagline" placeholder="Tu ritual empieza aquí..."></label>
+      <label>Horario:<input id="cfgHours" placeholder="Abierto de 8:00 a.m. a 11:00 p.m."></label>
+    </div>
+  </div>
+  <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">📦 Fotos en Cloudflare R2</h2>
+    <div id="r2Status" class="muted">Cargando…</div>
+    <button class="primary" id="r2Btn" style="margin-top:10px" onclick="migratePhotos()">📦 Copiar todas las fotos a R2</button>
+    <div class="muted" style="font-size:12px;margin-top:6px">Copia las fotos de Drive y las subidas antiguas a tu almacenamiento propio. Se hace una sola vez; puedes volver a tocarlo si agregas fotos nuevas de Drive.</div>
+  </div>
+  <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">📲 Admin en turno (recibe los pedidos por WhatsApp)</h2>
+    <div id="dutyStatus" class="muted" style="margin-bottom:10px">Cargando…</div>
+    <div class="grid">
+      <label>Administrador en turno:<select id="dutySelect"></select></label>
+      <button class="primary" onclick="saveDuty($('dutySelect').value)">Guardar turno</button>
+      <button class="success" onclick="saveDuty('ME')">🙋 Tomar el turno yo</button>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Los pedidos de la página pública llegan al WhatsApp del admin en turno. Si nadie está en turno, llegan al número general de respaldo. El WhatsApp de cada admin se registra en <b>Usuarios</b>.</div>
   </div>
   <div class="card" style="margin-top:15px;">
     <h2 style="margin-top:0">⭐ Programa de lealtad</h2>
@@ -321,6 +353,13 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="myDeliveries" class="grid"></div>
 </section>
 
+<section id="carta" class="view hidden">
+  <h1 class="title">🖼️ Editar carta</h1>
+  <p class="muted" style="margin-top:-6px">Cambia la foto, el nombre y la descripción de cada producto. Los cambios se ven al instante en la carta pública.</p>
+  <input id="cartaSearch" placeholder="🔍 Buscar producto..." oninput="renderCarta()" style="margin:6px 0 12px">
+  <div id="cartaGrid" class="carta-grid"></div>
+</section>
+
 <section id="usuarios" class="view hidden">
   <h1 class="title">Gestión de Usuarios</h1>
   <div class="card">
@@ -328,8 +367,9 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
       <input id="uName" placeholder="Nombre completo">
       <input id="uUsername" placeholder="Usuario">
       <input id="uPassword" type="password" placeholder="Contraseña">
+      <input id="uWhatsapp" maxlength="10" inputmode="numeric" placeholder="WhatsApp 10 dígitos (admins en turno)">
       <select id="uRole">
-        <option value="mesero">Mesero</option><option value="cocina">Cocina</option><option value="barra">Barra</option><option value="repartidor">Repartidor</option><option value="admin">Administrador</option>
+        <option value="mesero">Mesero</option><option value="cocina">Cocina</option><option value="barra">Barra</option><option value="repartidor">Repartidor</option><option value="editor">Editor de carta</option><option value="admin">Administrador</option>
       </select>
       <button class="primary" onclick="createUser()">Crear Usuario</button>
     </div>
@@ -444,6 +484,7 @@ function isAdmin(){ return me?.role==="admin"; }
 function showApp(){
   $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
   $("userPill").textContent=`● ${me.name||me.username} (${me.role})`;
+  if(isAdmin()) refreshDutyPill(); else $("dutyPill").classList.add("hidden");
 
   let nav=[
     ["venta","🛒 Venta"],
@@ -456,11 +497,12 @@ function showApp(){
     ["lealtad","⭐ Lealtad"],
     ["inventario","📦 Inventario"],
     ["productos","🍔 Menú"],
+    ["carta","🖼️ Editar carta"],
     ["usuarios","👥 Usuarios"],
     ["config","⚙️ Configuración"],
     ["entregas","🛵 Mis entregas"]
   ];
-  const ROLE_VIEWS={ admin:null, mesero:["venta","canchas","mesas","ordenes"], cocina:["cocina"], barra:["barra"], repartidor:["entregas"] };
+  const ROLE_VIEWS={ admin:null, mesero:["venta","canchas","mesas","ordenes"], cocina:["cocina"], barra:["barra"], repartidor:["entregas"], editor:["carta"] };
   const allowed = ROLE_VIEWS[me.role]===undefined ? ["venta","ordenes"] : ROLE_VIEWS[me.role];
   if(allowed) nav = nav.filter(x=>allowed.includes(x[0]));
 
@@ -476,7 +518,7 @@ function view(id,btn){
   if(id==="barra") loadBarra(); if(id==="ordenes") loadOrders(); if(id==="caja") loadDashboard();
   if(id==="lealtad") loadLoyaltyCustomers(); if(id==="inventario") loadInventoryData();
   if(id==="productos") renderProductAdmin(); if(id==="usuarios") loadUsers();
-  if(id==="config") loadSettings(); if(id==="entregas") loadMyDeliveries();
+  if(id==="config") loadSettings(); if(id==="entregas") loadMyDeliveries(); if(id==="carta") loadCarta();
   if(id==="venta") { renderProducts(); renderTableSelect(); }
 }
 
@@ -906,7 +948,56 @@ async function loadSettings(){
   $("cfgBaseFee").value=settingsCache.delivery_base_fee||20; $("cfgRateKm").value=settingsCache.delivery_rate_km||8;
   $("cfgPaymentInfo").value=settingsCache.payment_info||"";
   $("publicLinkBox").value = location.origin + "/menu.html";
+  $("cfgTagline").value=settingsCache.menu_tagline||""; $("cfgHours").value=settingsCache.business_hours||"";
+  loadDuty(); loadR2Status();
 }
+// ----- Fotos en R2 -----
+async function loadR2Status(){
+  try{
+    const d=await api("/photos/status");
+    $("r2Status").innerHTML = (d.r2_conectado?"✅ R2 conectado":"⚠️ <b>R2 no está conectado.</b> Crea el bucket <b>rush-fotos</b> y vuelve a desplegar (README, paso 1).")
+      + `<br>${d.total} productos · <b>${d.r2}</b> ya en R2 · ${d.drive} en Drive · ${d.d1} dentro de la base · ${d.sin_foto} sin foto`;
+    $("r2Btn").disabled = !d.r2_conectado || (d.drive+d.d1===0);
+  }catch(e){ $("r2Status").textContent=e.message; }
+}
+async function migratePhotos(){
+  const btn=$("r2Btn"); btn.disabled=true; let total=0, fallos=[];
+  try{
+    for(let vuelta=0; vuelta<60; vuelta++){
+      const r=await api("/photos/migrate",{method:"POST",body:"{}"});
+      total+=r.hechas; fallos=fallos.concat(r.fallos||[]);
+      btn.textContent=`📦 Copiando… ${total} listas, faltan ${r.pendientes}`;
+      if(!r.pendientes || r.hechas===0) break;
+    }
+    toast(`✅ ${total} foto(s) copiadas a R2`+(fallos.length?` · ${fallos.length} no se pudieron`:""));
+    if(fallos.length) alert("Estas fotos no se pudieron copiar (revisa que el archivo siga en Drive y compartido):\n\n"+[...new Set(fallos)].join("\n"));
+  }catch(e){ toast(e.message); }
+  btn.textContent="📦 Copiar todas las fotos a R2"; loadR2Status(); loadAll();
+}
+// ----- Admin en turno -----
+async function loadDuty(){
+  try{
+    const [d, users] = await Promise.all([api("/on-duty"), api("/users")]);
+    usersCache = users;
+    const admins = users.filter(u=>u.role==="admin" && u.active);
+    $("dutySelect").innerHTML = `<option value="">— Nadie (usar número general) —</option>` + admins.map(u=>`<option value="${esc(u.id)}" ${String(u.id)===String(d.user_id)?"selected":""} ${u.whatsapp?"":"disabled"}>${esc(u.name)} ${u.whatsapp?"· "+esc(u.whatsapp):"· (sin WhatsApp, agrégalo en Usuarios)"}</option>`).join("");
+    $("dutyStatus").innerHTML = d.number
+      ? (d.source==="turno" ? `✅ Los pedidos llegan a <b>${esc(d.name)}</b> · ${esc(d.number)}` : `ℹ️ Nadie en turno. Llegan al número general · <b>${esc(d.number)}</b>`)
+      : `⚠️ <b>No hay ningún número configurado.</b> Los clientes no podrán mandar su pedido por WhatsApp.`;
+  }catch(e){ $("dutyStatus").textContent=e.message; }
+}
+async function saveDuty(uid){
+  try{ await api("/on-duty",{method:"POST",body:JSON.stringify(uid==='ME'?{}:{user_id:uid||""})}); toast("Turno actualizado ✅"); loadDuty(); refreshDutyPill(); }
+  catch(e){ toast(e.message); }
+}
+async function refreshDutyPill(){
+  try{
+    const d=await api("/on-duty"), el=$("dutyPill");
+    el.textContent = d.number ? `📲 Pedidos → ${d.source==="turno"?d.name:"número general"}` : "⚠️ Sin WhatsApp de pedidos";
+    el.classList.remove("hidden");
+  }catch(e){}
+}
+function goConfig(){ const b=[...document.querySelectorAll("#nav button")].find(x=>x.textContent.includes("Configuración")); if(b) view("config",b); }
 async function saveSettings(){
   const wa=$("cfgWaNumber").value.replace(/\D/g,"");
   if(wa && wa.length!==10) return toast("El WhatsApp debe tener 10 dígitos (o déjalo vacío).");
@@ -918,6 +1009,7 @@ async function saveSettings(){
       business_lat:$("cfgLat").value||"20.1010", business_lng:$("cfgLng").value||"-98.7591",
       delivery_base_fee:Number($("cfgBaseFee").value)||0, delivery_rate_km:Number($("cfgRateKm").value)||0,
       payment_info:$("cfgPaymentInfo").value.trim(),
+      menu_tagline:$("cfgTagline").value.trim(), business_hours:$("cfgHours").value.trim(),
     })});
     toast("Configuración guardada ✅");
   }catch(e){ toast(e.message); }
@@ -1037,7 +1129,7 @@ function renderClassifyTable(){
   updateSaveBtn();
   $("classifyTable").innerHTML = list.length ? `<table><thead><tr><th>Producto</th><th>Categoría</th><th>Estación</th><th>Foto</th><th></th></tr></thead><tbody>${list.map(({p,i})=>{
     const cur=pendingClass[p.id]!==undefined?pendingClass[p.id]:(p.category_id||""), d=p.destination||'cocina';
-    return `<tr><td class="row" style="gap:8px"><img src="${p.image||''}" style="width:34px;height:34px;border-radius:8px;object-fit:cover;background:#eee;${p.image?'':'display:none'}"><span><b>${esc(p.name)}</b> <span class="muted">$${p.price}</span>${catById(p.category_id)?'':`<div class="muted" style="font-size:12px">Antes: ${esc(p.category||'—')}</div>`}</span></td><td><select onchange="setPending(${i},this.value)" style="min-width:190px">${catOptions(cur)}</select></td><td><select onchange="setProductDest(${i},this.value)" style="width:auto"><option value="cocina" ${d==='cocina'?'selected':''}>🍳</option><option value="barra" ${d==='barra'?'selected':''}>☕</option></select></td><td><input type="file" accept="image/*" style="width:110px;font-size:11px" onchange="uploadProductImage(${i},this)"></td><td><button class="${p.sold_out?'success':'warning'}" onclick="toggleSoldOut(${i})">${p.sold_out?'✅ Disponible':'🚫 Agotado'}</button> <button class="danger" onclick="deactivateProduct(${i})">✕</button></td></tr>`;
+    return `<tr><td class="row" style="gap:8px"><img src="${esc(imgSrc(p.image||''))}" onerror="this.style.display='none'" style="width:34px;height:34px;border-radius:8px;object-fit:cover;background:#eee;${p.image?'':'display:none'}"><span><b>${esc(p.name)}</b> <span class="muted">$${p.price}</span>${catById(p.category_id)?'':`<div class="muted" style="font-size:12px">Antes: ${esc(p.category||'—')}</div>`}</span></td><td><select onchange="setPending(${i},this.value)" style="min-width:190px">${catOptions(cur)}</select></td><td><select onchange="setProductDest(${i},this.value)" style="width:auto"><option value="cocina" ${d==='cocina'?'selected':''}>🍳</option><option value="barra" ${d==='barra'?'selected':''}>☕</option></select></td><td><input type="file" accept="image/*" style="width:110px;font-size:11px" onchange="uploadProductImage(${i},this)"></td><td><button class="${p.sold_out?'success':'warning'}" onclick="toggleSoldOut(${i})">${p.sold_out?'✅ Disponible':'🚫 Agotado'}</button> <button class="danger" onclick="deactivateProduct(${i})">✕</button></td></tr>`;
   }).join("")}</tbody></table>` : `<p class="muted">${mode==='sin'?'✅ Todo está clasificado.':'Sin productos.'}</p>`;
 }
 const LOWER_WORDS=new Set(['de','del','la','las','el','los','y','o','en','con','al','a','un','una','para','sin']);
@@ -1064,6 +1156,77 @@ function handleImageFile(input,previewId,dataFieldId){
   }; img.src=e.target.result; };
   reader.readAsDataURL(file);
 }
+// ----- Fotos: comprimir en el navegador y subir a R2 (si no hay R2, se guarda como antes) -----
+function fileToJpeg(file, MAX=1000){
+  return new Promise((res,rej)=>{
+    const img=new Image(), reader=new FileReader();
+    reader.onerror=()=>rej(new Error("No se pudo leer la foto"));
+    reader.onload=e=>{ img.onload=()=>{
+      const scale=Math.min(1,MAX/Math.max(img.width,img.height));
+      const c=document.createElement('canvas'); c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      res(c.toDataURL('image/jpeg',0.8));
+    }; img.onerror=()=>rej(new Error("Ese archivo no es una imagen")); img.src=e.target.result; };
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadPhotoData(dataUrl){
+  if(!String(dataUrl||"").startsWith("data:image/")) return dataUrl;
+  const r = await api("/photo-upload",{method:"POST",body:JSON.stringify({data:dataUrl})});
+  return r.url;
+}
+// Links de Drive → proxy del Worker (así sí cargan en <img>)
+function imgSrc(u){
+  const v=String(u||""); if(!/drive\.google\.com|googleusercontent\.com/.test(v)) return v;
+  const m=v.match(/[?&]id=([\w-]{20,})/)||v.match(/\/d\/([\w-]{20,})/); return m?"/img/drive/"+m[1]:v;
+}
+
+// ----- Editor de carta (rol editor, también lo ve el admin) -----
+let cartaItems=[];
+async function loadCarta(){
+  try{ cartaItems = await api("/menu"); }catch(e){ cartaItems=[]; toast(e.message); }
+  renderCarta();
+}
+function renderCarta(){
+  const q=($("cartaSearch").value||"").toLowerCase().trim();
+  const list=cartaItems.map((p,i)=>({p,i})).filter(({p})=>!q||(p.name+" "+(p.description||"")).toLowerCase().includes(q));
+  $("cartaGrid").innerHTML = list.length ? list.map(({p,i})=>`
+    <div class="carta-card">
+      <div class="ph">${p.image?`<img src="${esc(imgSrc(p.image))}" alt="" loading="lazy" onerror="this.remove()">`:''}<span>${p.destination==='barra'?'☕':'🍽️'}</span></div>
+      <div class="body">
+        <div class="photo-actions">
+          <label>📷 Subir foto<input type="file" accept="image/*" hidden onchange="cartaPhoto(${i},this)"></label>
+          <label onclick="cartaPhotoUrl(${i})">🔗 Pegar link</label>
+          ${p.image?`<label onclick="cartaSave(${i},{image:''})">🗑️</label>`:''}
+        </div>
+        <input id="cn_${i}" value="${esc(p.name)}" placeholder="Nombre">
+        <textarea id="cd_${i}" placeholder="Descripción (lo que el cliente lee en la carta)">${esc(p.description||'')}</textarea>
+        <button class="primary" onclick="cartaSave(${i})">💾 Guardar texto</button>
+      </div>
+    </div>`).join("") : "<p class='muted'>No hay productos con esa búsqueda.</p>";
+}
+async function cartaSave(i, body){
+  const p=cartaItems[i]; if(!p) return;
+  if(!body){
+    const name=$("cn_"+i).value.trim();
+    if(!name) return toast("El nombre no puede quedar vacío");
+    body={name, description:$("cd_"+i).value.trim()};
+  }
+  try{ await api("/menu/"+encodeURIComponent(p.id),{method:"PATCH",body:JSON.stringify(body)}); toast("Guardado ✅"); await loadCarta(); }
+  catch(e){ toast(e.message); }
+}
+async function cartaPhoto(i,input){
+  const f=input.files[0]; if(!f) return;
+  try{ toast("Subiendo foto…"); const url=await uploadPhotoData(await fileToJpeg(f)); await cartaSave(i,{image:url}); }
+  catch(e){ toast(e.message); }
+}
+function cartaPhotoUrl(i){
+  const u=prompt("Pega el link de la foto (Google Drive o cualquier https://):");
+  if(!u) return;
+  if(!/^https?:\/\//.test(u.trim())) return toast("El link debe empezar con https://");
+  cartaSave(i,{image:u.trim()});
+}
+
 const DRIVE_PHOTOS = {
   "Agua de Jamaica de 16 onzas": "https://drive.google.com/uc?export=view&id=1Q3wmn41BgGg9DBCQ8LFWqPGCKHB3hFFC",
   "Caramel macchiato": "https://drive.google.com/uc?export=view&id=14-2b9R81pa1MrwAV7hKHD3FOOFD1XYDO",
@@ -1210,7 +1373,7 @@ function renderPhotoSuggestBox(){
   const ids=Object.keys(pendingPhotos);
   if(!ids.length){ $('photoSuggestBox').innerHTML=''; return; }
   $('photoSuggestBox').innerHTML = `<div class="card" style="margin-top:10px;background:#fffbeb;border-color:#fcd34d"><b>${ids.length} foto(s) sugeridas de Drive:</b><div class="grid" style="margin-top:8px">`+
-    ids.map(id=>{ const p=products.find(x=>x.id===id); return `<div class="row" style="gap:8px;border:1px solid #eee;border-radius:10px;padding:6px"><img src="${pendingPhotos[id]}" style="width:44px;height:44px;object-fit:cover;border-radius:8px"><span style="flex:1">${esc(p?p.name:id)}</span><button onclick="delete pendingPhotos['${id}'];renderPhotoSuggestBox()">✕</button></div>`; }).join('')+
+    ids.map(id=>{ const p=products.find(x=>x.id===id); return `<div class="row" style="gap:8px;border:1px solid #eee;border-radius:10px;padding:6px"><img src="${esc(imgSrc(pendingPhotos[id]))}" style="width:44px;height:44px;object-fit:cover;border-radius:8px"><span style="flex:1">${esc(p?p.name:id)}</span><button onclick="delete pendingPhotos['${id}'];renderPhotoSuggestBox()">✕</button></div>`; }).join('')+
     `</div><button class="success" style="width:100%;margin-top:10px" onclick="applyPendingPhotos()">💾 Aplicar estas ${ids.length} fotos</button></div>`;
 }
 async function applyPendingPhotos(){
@@ -1227,7 +1390,8 @@ async function createProduct(){
   if(!name) return toast("Escribe el nombre del producto.");
   if(price===""||!(Number(price)>=0)) return toast("Escribe el precio.");
   try{
-    await api("/menu",{method:"POST",body:JSON.stringify({name, category_id:$("pCategory").value||null, price:Number(price), description:$("pDesc").value.trim(), image:window.pImageData||null})});
+    const image = window.pImageData ? await uploadPhotoData(window.pImageData) : null;
+    await api("/menu",{method:"POST",body:JSON.stringify({name, category_id:$("pCategory").value||null, price:Number(price), description:$("pDesc").value.trim(), image})});
     toast("Producto creado ✅"); ["pName","pPrice","pDesc"].forEach(k=>$(k).value="");
     window.pImageData=null; $('pImagePreview').style.display='none'; $('pImageFile').value=''; $('pNameSuggest').innerHTML='';
     await loadAll(); renderProductAdmin();
@@ -1239,13 +1403,13 @@ async function setProductDest(i,dest){
   catch(e){ toast(e.message); }
 }
 async function uploadProductImage(i,input){
-  const p=products[i]; if(!p) return;
-  handleImageFile(input,'pImagePreview','__tmpImg');
-  setTimeout(async()=>{
-    if(!window.__tmpImg) return;
-    try{ await api("/menu/"+encodeURIComponent(p.id),{method:"PATCH",body:JSON.stringify({image:window.__tmpImg})}); window.__tmpImg=null; toast("Foto actualizada ✅"); await loadAll(); renderProductAdmin(); }
-    catch(e){ toast(e.message); }
-  },300);
+  const p=products[i]; if(!p||!input.files[0]) return;
+  try{
+    toast("Subiendo foto…");
+    const url=await uploadPhotoData(await fileToJpeg(input.files[0]));
+    await api("/menu/"+encodeURIComponent(p.id),{method:"PATCH",body:JSON.stringify({image:url})});
+    toast("Foto actualizada ✅"); await loadAll(); renderProductAdmin();
+  }catch(e){ toast(e.message); }
 }
 async function toggleSoldOut(i){
   const p=products[i]; if(!p) return;
@@ -1276,20 +1440,30 @@ function renameCategory(id){ const c=catById(id); const n=prompt("Nuevo nombre d
 function moveCategory(id,dir){ menuAction("PATCH","/menu-categories/"+encodeURIComponent(id),{move:dir}); }
 function deleteCategory(id){ if(confirm("¿Eliminar la categoría? Sus productos quedarán 'sin clasificar' (no se borran).")) return menuAction("DELETE","/menu-categories/"+encodeURIComponent(id),null,"Categoría eliminada"); }
 
-const ROLE_LABEL={admin:"Administrador",mesero:"Mesero",cocina:"Cocina",barra:"Barra",repartidor:"Repartidor"};
+const ROLE_LABEL={admin:"Administrador",mesero:"Mesero",cocina:"Cocina",barra:"Barra",repartidor:"Repartidor",editor:"Editor de carta"};
 async function loadUsers(){
   try{
     usersCache = await api("/users");
-    $("users").innerHTML = usersCache.length ? `<div class="card" style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${usersCache.map((u,i)=>`<tr><td>${esc(u.name)}</td><td><b>${esc(u.username)}</b></td><td>${esc(ROLE_LABEL[u.role]||u.role)}</td><td>${u.legacy?'⚠️ Falta contraseña nueva':(u.active?'🟢 Activo':'⚪ Inactivo')}</td><td style="white-space:nowrap"><button class="warning" onclick="changePassword(${i})">🔑 Contraseña</button> <button class="danger" onclick="deleteUser(${i})">🗑️</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Sin usuarios.</p>";
+    $("users").innerHTML = usersCache.length ? `<div class="card" style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>WhatsApp</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${usersCache.map((u,i)=>`<tr><td>${esc(u.name)}</td><td><b>${esc(u.username)}</b></td><td>${esc(ROLE_LABEL[u.role]||u.role)}</td><td>${u.whatsapp?esc(u.whatsapp):'<span class="muted">—</span>'}</td><td>${u.legacy?'⚠️ Falta contraseña nueva':(u.active?'🟢 Activo':'⚪ Inactivo')}</td><td style="white-space:nowrap"><button onclick="changeWhatsapp(${i})">📱 WhatsApp</button> <button class="warning" onclick="changePassword(${i})">🔑 Contraseña</button> <button class="danger" onclick="deleteUser(${i})">🗑️</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Sin usuarios.</p>";
   }catch(e){ $("users").innerHTML=`<p class="muted">${esc(e.message)}</p>`; }
 }
 async function createUser(){
-  const b={name:$("uName").value.trim(), username:$("uUsername").value.trim(), password:$("uPassword").value, role:$("uRole").value};
+  const b={name:$("uName").value.trim(), username:$("uUsername").value.trim(), password:$("uPassword").value, role:$("uRole").value, whatsapp:$("uWhatsapp").value.replace(/\D/g,"")};
+  if(b.whatsapp && b.whatsapp.length!==10) return toast("El WhatsApp debe tener 10 dígitos (o déjalo vacío)");
   if(!b.name||!b.username||!b.password) return toast("Completa nombre, usuario y contraseña");
   try{
     await api("/users",{method:"POST",body:JSON.stringify(b)});
-    toast("Usuario creado ✅"); $("uName").value=""; $("uUsername").value=""; $("uPassword").value=""; loadUsers();
+    toast("Usuario creado ✅"); $("uName").value=""; $("uUsername").value=""; $("uPassword").value=""; $("uWhatsapp").value=""; loadUsers();
   }catch(e){ toast(e.message); }
+}
+async function changeWhatsapp(i){
+  const u=usersCache[i]; if(!u) return;
+  const v=prompt(`WhatsApp de "${u.name}" (10 dígitos, vacío para quitarlo):`, u.whatsapp||"");
+  if(v===null) return;
+  const wa=v.replace(/\D/g,"");
+  if(wa && wa.length!==10) return toast("Deben ser 10 dígitos");
+  try{ await api("/users/"+encodeURIComponent(u.id),{method:"PATCH",body:JSON.stringify({whatsapp:wa})}); toast("WhatsApp actualizado ✅"); loadUsers(); if(isAdmin()) refreshDutyPill(); }
+  catch(e){ toast(e.message); }
 }
 async function changePassword(i){
   const u=usersCache[i]; if(!u) return;
