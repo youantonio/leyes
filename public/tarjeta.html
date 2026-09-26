@@ -27,12 +27,14 @@
 <div id="app" class="msg">Cargando tu tarjeta…</div>
 <div id="refreshRow" style="text-align:center;margin-top:14px"></div>
 <script>
+const BASE=(location.pathname.match(/^(\/t\/[a-z0-9-]+\/)/)||[,'/'])[1];
+
 const params=new URLSearchParams(location.search);
 const token=params.get('token');
 async function loadCard(){
   if(!token){ document.getElementById('app').textContent='Link inválido. Pide tu tarjeta al mesero.'; return; }
   try{
-    const r=await fetch('/api/loyalty-card?token='+encodeURIComponent(token));
+    const r=await fetch(BASE+'api/loyalty-card?token='+encodeURIComponent(token));
     const d=await r.json();
     if(!r.ok) throw new Error(d.error||'No se encontró la tarjeta');
     const goal=d.goal, stamps=d.stamps;
