@@ -98,6 +98,7 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     </div>
     <div class="row">
       <span id="userPill" class="pill">● Conectado</span>
+      <span id="shiftPill" class="pill hidden" style="cursor:pointer;background:#fca5a5;color:#7f1d1d" onclick="goTurnos()"></span>
       <span id="dutyPill" class="pill hidden" style="cursor:pointer" title="Quién recibe los pedidos por WhatsApp" onclick="goConfig()"></span>
       <button onclick="logout()">Salir</button>
     </div>
@@ -202,8 +203,26 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <label>Efectivo contado ($, opcional):<input id="cutCounted" type="number" step="0.01" placeholder="Déjalo vacío si no vas a cuadrar ahora"></label>
     <button class="danger" onclick="makeCashCut()" style="padding:14px 20px;margin-top:10px">🖨️ Cerrar e imprimir corte</button>
   </div>
+  <div class="card" style="margin-top:15px;border-color:#fca5a5">
+    <h2 style="margin-top:0">🧾 Cobros desde el último corte</h2>
+    <p class="muted" style="margin-top:-4px">Para anular un cobro (por ejemplo, de prueba) se necesitan <b>la contraseña del admin en turno</b> y <b>la clave del sistema</b>. Se borran el cobro y la orden, y se quita el sello de lealtad.</p>
+    <div id="payList" style="overflow-x:auto"></div>
+    <h3 style="margin-bottom:6px">Historial de anulaciones</h3>
+    <div id="voidList" style="overflow-x:auto"></div>
+  </div>
   <div class="card" style="margin-top:15px"><h2>Historial de cortes</h2><div id="cutsList" style="overflow-x:auto;"></div></div>
 </section>
+<div id="voidModal" class="modal hidden" onclick="if(event.target===this)closeVoid()">
+  <div class="modalbox" style="max-width:420px">
+    <div class="row between"><h2 style="margin:0;font-size:20px">🚫 Anular cobro</h2><button onclick="closeVoid()">✕</button></div>
+    <p id="voidInfo" style="margin:10px 0"></p>
+    <label>Motivo:<input id="voidReason" placeholder="Ej. Cobro de prueba" maxlength="200"></label>
+    <label id="voidAdminLbl">Contraseña del admin en turno:<input id="voidAdminPw" type="password" autocomplete="off"></label>
+    <label>Clave del sistema:<input id="voidPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    <button class="danger" id="voidGo" style="width:100%;margin-top:12px;padding:13px" onclick="confirmVoid()">🚫 Anular definitivamente</button>
+    <p class="muted" style="font-size:12px;margin-top:8px">No se puede deshacer. Queda registrado quién lo autorizó y por qué.</p>
+  </div>
+</div>
 
 <section id="lealtad" class="view hidden">
   <div class="row between"><h1 class="title" style="margin:0">⭐ Lealtad y Difusión</h1><button onclick="loadLoyaltyCustomers()">↻ Actualizar</button></div>
@@ -310,6 +329,14 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
     <div class="muted" style="font-size:12px;margin-top:6px">Copia las fotos de Drive y las subidas antiguas a tu almacenamiento propio. Se hace una sola vez; puedes volver a tocarlo si agregas fotos nuevas de Drive.</div>
   </div>
   <div class="card" style="margin-top:15px;">
+    <h2 style="margin-top:0">🔐 Clave del sistema (para anular cobros)</h2>
+    <div class="grid">
+      <label>Clave actual:<input id="pinCur" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+      <label>Clave nueva (4 a 8 números):<input id="pinNew" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+      <button class="primary" onclick="changeVoidPin()">Cambiar clave</button>
+    </div>
+  </div>
+  <div class="card" style="margin-top:15px;">
     <h2 style="margin-top:0">📲 Admin en turno (recibe los pedidos por WhatsApp)</h2>
     <div id="dutyStatus" class="muted" style="margin-bottom:10px">Cargando…</div>
     <div class="grid">
@@ -367,6 +394,13 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="cartaGrid" class="carta-grid"></div>
 </section>
 
+<section id="turnos" class="view hidden">
+  <div class="row between"><h1 class="title" style="margin:0">🗓️ Turnos de hoy</h1><input id="shiftDate" type="date" onchange="loadShifts()"></div>
+  <p class="muted" style="margin-top:-6px">Cada rol necesita mínimo 2 turnos al día: Matutino (8am–3pm) y Vespertino (3pm–11pm). Toca un nombre para asignarlo o quitarlo.</p>
+  <div id="shiftStatus"></div>
+  <div id="shiftGrid" class="grid" style="margin-top:12px"></div>
+</section>
+
 <section id="usuarios" class="view hidden">
   <h1 class="title">Gestión de Usuarios</h1>
   <div class="card">
@@ -387,6 +421,14 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </section>
 
 <!-- MODALES -->
+<div id="waModal" class="modal hidden" onclick="if(event.target===this)closeWa()">
+  <div class="modalbox" style="max-width:460px">
+    <div class="row between"><h2 id="waTitle" style="margin:0;font-size:20px">📲 Avisar por WhatsApp</h2><button onclick="closeWa()">✕</button></div>
+    <p class="muted" id="waSub" style="font-size:13px;margin:6px 0 10px"></p>
+    <div id="waList"></div>
+    <button style="width:100%;margin-top:10px" onclick="closeWa()">Listo, cerrar</button>
+  </div>
+</div>
 <div id="ticketModal" class="modal hidden">
   <div class="modalbox" style="max-width:420px; text-align:center;"><div class="row between no-print"><h2 style="margin:0">Tickets</h2><button onclick="$('ticketModal').classList.add('hidden')">✕</button></div><div id="ticketContent" style="margin:15px 0;"></div><div class="row no-print" style="margin-top:15px;"><button class="primary" style="flex:1;" onclick="window.print()">🖨️ Imprimir Doble Ticket</button><button class="success" style="flex:1;" onclick="sendTicketWhatsApp()">💬 WhatsApp</button></div></div>
 </div>
@@ -506,6 +548,7 @@ function showApp(){
     ["productos","🍔 Menú"],
     ["carta","🖼️ Editar carta"],
     ["usuarios","👥 Usuarios"],
+    ["turnos","🗓️ Turnos"],
     ["config","⚙️ Configuración"],
     ["entregas","🛵 Mis entregas"]
   ];
@@ -524,7 +567,7 @@ function view(id,btn){
   if(id==="canchas") loadCanchasData(); if(id==="mesas") renderTables(); if(id==="cocina") loadKitchen();
   if(id==="barra") loadBarra(); if(id==="ordenes") loadOrders(); if(id==="caja") loadDashboard();
   if(id==="lealtad") loadLoyaltyCustomers(); if(id==="inventario") loadInventoryData();
-  if(id==="productos") renderProductAdmin(); if(id==="usuarios") loadUsers();
+  if(id==="productos") renderProductAdmin(); if(id==="usuarios") loadUsers(); if(id==="turnos") loadShifts(); if(isAdmin() && !shiftCheckDone){ shiftCheckDone=true; checkShiftReminder(); }
   if(id==="config") loadSettings(); if(id==="entregas") loadMyDeliveries(); if(id==="carta") loadCarta();
   if(id==="venta") { renderProducts(); renderTableSelect(); }
 }
@@ -674,9 +717,11 @@ async function sendOrder(){
   if(!cart.length) return toast("Agrega productos al carrito.");
   const notes={ type:$("orderType").value, cocina:$("notesKitchen").value.trim(), barra:$("notesBarra").value.trim() };
   try{
+    const sentItems=cart.map(x=>({...x})), tableTxt=$("tableSelect").selectedOptions[0]?.textContent||"Mostrador";
     if(linkedOrder){
       await api("/orders/"+linkedOrder.id,{method:"PATCH",body:JSON.stringify({add_items:cart, add_notes:notes})});
       toast("¡Agregado a la comanda #"+(linkedOrder.custom_folio||linkedOrder.id.slice(0,6))+"!");
+      waComanda({folio:linkedOrder.custom_folio||linkedOrder.id.slice(0,6), mesa:tableLabel(linkedOrder), cliente:cleanName(linkedOrder.customer_name), items:sentItems, notes, extra:true});
     }else{
       let phone=$("customerPhone").value.replace(/\D/g,''); if(phone.length>10) phone=phone.slice(-10);
       if(phone.length<10) return toast("WhatsApp de 10 dígitos obligatorio.");
@@ -685,6 +730,7 @@ async function sendOrder(){
       const customFolio=`${p2(d.getDate())}${p2(d.getMonth()+1)}-${p2(d.getHours())}${p2(d.getMinutes())}`;
       await api("/orders",{method:"POST",body:JSON.stringify({table_id:$("tableSelect").value, customer_name:name, customer_phone:phone, notes:JSON.stringify(notes), items:cart, custom_folio:customFolio})});
       toast("¡Orden enviada!");
+      waComanda({folio:customFolio, mesa:tableTxt, cliente:name, items:sentItems, notes});
     }
     cart=[]; $("customerName").value=""; $("customerPhone").value=""; $("notesKitchen").value=""; $("notesBarra").value="";
     $("tableSelect").value=""; linkedOrder=null; offsetPeople=0; currentPerson=1;
@@ -723,14 +769,16 @@ async function loadStation(dest){
     if(!items.length) continue;
     const note = stationNote(o,dest);
     const groups = groupByPerson(items).map(g=>`<div class="kitchen-item"><b>👤 ${esc(g.person)}</b>${g.items.map(it=>`<div>${it.qty}× ${esc(it.name)}${it.note?` <span style="color:#d97706">— ${esc(it.note)}</span>`:''}</div>`).join("")}</div>`).join("");
-    html += `<div class="card" style="border-left: 6px solid ${isBar?'#2563eb':'#d97706'};"><h3>Orden #${esc(o.custom_folio||o.id.slice(0,6))} · ${esc(tableLabel(o))}</h3><p><b>Cliente:</b> ${esc(cleanName(o.customer_name))}</p><p class="muted">${esc(orderTypeLabel(o))} · 👥 ${orderPeople(o)} persona(s)</p>${note?`<p style="background:#fff7ed;padding:8px;border-radius:10px"><b>📝 Nota ${isBar?'de barra':'de cocina'}:</b> ${esc(note)}</p>`:''}<hr>${groups}<button class="success" style="width:100%;margin-top:10px" onclick="markReady('${o.id}','${dest}')">✅ ${isBar?'Bebidas':'Alimentos'} listos</button></div>`;
+    html += `<div class="card" style="border-left: 6px solid ${isBar?'#2563eb':'#d97706'};"><h3>Orden #${esc(o.custom_folio||o.id.slice(0,6))} · ${esc(tableLabel(o))}</h3><p><b>Cliente:</b> ${esc(cleanName(o.customer_name))}${o.created_by_name?` · <b>Envió:</b> ${esc(o.created_by_name)}`:(o.channel&&o.channel!=='restaurante'?' · <b>Envió:</b> carta en línea':'')}</p><p class="muted">${esc(orderTypeLabel(o))} · 👥 ${orderPeople(o)} persona(s)</p>${note?`<p style="background:#fff7ed;padding:8px;border-radius:10px"><b>📝 Nota ${isBar?'de barra':'de cocina'}:</b> ${esc(note)}</p>`:''}<hr>${groups}<button class="success" style="width:100%;margin-top:10px" onclick="markReady('${o.id}','${dest}')">✅ ${isBar?'Bebidas':'Alimentos'} listos</button></div>`;
   }
   $(isBar?"barraOrders":"kitchenOrders").innerHTML = html || `<p class='muted'>${isBar?'Sin bebidas pendientes.':'Sin alimentos pendientes.'}</p>`;
 }
 function loadKitchen(){ return loadStation('cocina'); }
 function loadBarra(){ return loadStation('barra'); }
 async function markReady(id,dest){
-  try{ await api('/orders/'+id,{method:'PATCH',body:JSON.stringify({ready:dest})}); toast("Listo ✅"); loadStation(dest); }
+  const os = await api("/orders").catch(()=>[]);
+  const o = (Array.isArray(os)?os:[]).find(x=>String(x.id)===String(id));
+  try{ await api('/orders/'+id,{method:'PATCH',body:JSON.stringify({ready:dest})}); toast("Listo ✅"); loadStation(dest); if(o) waReady(o,dest); }
   catch(e){ toast(e.message); }
 }
 
@@ -758,7 +806,7 @@ async function loadOrders(){
         ${isWeb?`<p><span class="status open">${esc(channelLabel(o.channel))}</span></p>`:''}
         <p><b>Cliente:</b> ${esc(cleanName(o.customer_name))}${o.customer_phone?` · 📱 ${esc(o.customer_phone)}`:''} · 👥 ${orderPeople(o)}</p><p>${stationBadges(o)}</p><p style="color:#555;font-size:14px;">${itemsSummary}</p>${nc?`<p class="muted">🍳 Nota: ${esc(nc)}</p>`:''}${nb?`<p class="muted">☕ Nota: ${esc(nb)}</p>`:''}<p><b>Total:</b> <b style="color:#16a34a;">$${total}</b></p>
         ${deliveryBar(o)}
-        <div class="row" style="flex-wrap:wrap;"><button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ticket</button>${o.customer_phone?`<button class="success" onclick="sendLoyaltyCard('${o.customer_phone}','${esc(cleanName(o.customer_name)).replace(/'/g,"")}')">⭐ Tarjeta</button><button class="success" onclick="redeemPrompt('${o.customer_phone}')">🎁 Canjear</button>`:''}${isWeb?`<button class="warning" onclick="openWaModal('${o.id}')">💬 Responder WhatsApp</button>`:''}<button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir</button><button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️</button>`:""}</div></div>`;
+        <div class="row" style="flex-wrap:wrap;"><button class="primary" style="flex:1;" onclick="previewTicket('${o.id}')">🖨️ Ticket</button><button class="success" onclick="waComandaFromOrder('${o.id}')">📲 Avisar</button>${(!o.channel||o.channel==='restaurante')&&!o.delivered_at?`<button class="warning" onclick="markDelivered('${o.id}')">🍽️ Entregado</button>`:''}${o.customer_phone?`<button class="success" onclick="sendLoyaltyCard('${o.customer_phone}','${esc(cleanName(o.customer_name)).replace(/'/g,"")}')">⭐ Tarjeta</button><button class="success" onclick="redeemPrompt('${o.customer_phone}')">🎁 Canjear</button>`:''}${isWeb?`<button class="warning" onclick="openWaModal('${o.id}')">💬 Responder WhatsApp</button>`:''}<button class="warning" onclick="openAddItemsModal('${o.id}')">＋ Añadir</button><button class="success" onclick="payAndClear('${o.id}')">💵 Cobrar</button>${isAdmin()?`<button class="danger" onclick="deleteOrder('${o.id}')">🗑️</button>`:""}</div></div>`;
     }).join("") || "<p class='muted'>Sin órdenes.</p>";
   }catch(e){}
 }
@@ -816,15 +864,21 @@ async function confirmAddExtraItem(){
 }
 async function payAndClear(id){
   const methods={efectivo:"💵 Efectivo",tarjeta:"💳 Tarjeta",transferencia:"📲 Transferencia"};
-  const opts=Object.entries(methods).map(([k,v])=>`${v} = ${k[0].toUpperCase()}`).join(" · ");
   let m=(prompt(`¿Cómo pagó? Escribe: efectivo, tarjeta o transferencia`,"efectivo")||"").trim().toLowerCase();
   if(!m) return;
   if(!methods[m]) return toast("Método no válido. Usa: efectivo, tarjeta o transferencia.");
+  const o=(allOrdersCache||[]).find(x=>String(x.id)===String(id));
   try{
     const r=await api(`/orders/${id}/payments`, {method:"POST", body:JSON.stringify({method:m})});
     toast(r.loyalty ? (r.loyalty.justEarned?`Cobrado ✅ · 🎉 ¡Ganó su recompensa de lealtad!`:`Cobrado ✅ · Sello ${r.loyalty.stamps}/${r.loyalty.goal}`) : "Cuenta finalizada");
     loadOrders(); if(currentView==="caja") loadDashboard();
+    if(o) waTicket(o,r);
   }catch(e){ toast(e.message); }
+}
+async function markDelivered(id){
+  const o=(allOrdersCache||[]).find(x=>String(x.id)===String(id)); if(!o) return;
+  try{ await api("/orders/"+id,{method:"PATCH",body:JSON.stringify({delivered:true})}); toast("🍽️ Marcado como entregado"); loadOrders(); waEntregado(o); }
+  catch(e){ toast(e.message); }
 }
 
 function ticketHead(o){
@@ -882,6 +936,7 @@ async function registerManualTx(){
 }
 function money(n){ return "$"+(Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 async function loadDashboard(){
+  loadPayments();
   const d = await api("/dashboard").catch(()=>null);
   if(!d) return;
   const t=d.today, p=d.pending, lc=d.last_cut;
@@ -959,6 +1014,180 @@ async function loadSettings(){
   $("cfgTagline").value=settingsCache.menu_tagline||""; $("cfgHours").value=settingsCache.business_hours||"";
   loadDuty(); loadR2Status();
 }
+// ===== ANULAR COBROS =====
+let payCache={payments:[]}, voidTarget=null;
+async function loadPayments(){
+  if(!isAdmin()) return;
+  try{ payCache=await api("/payments/recent"); }catch(e){ $("payList").textContent=e.message; return; }
+  const ps=payCache.payments||[];
+  $("payList").innerHTML = ps.length ? `<table><thead><tr><th>Hora</th><th>Orden</th><th>Cliente</th><th>Método</th><th>Monto</th><th></th></tr></thead><tbody>${ps.map((p,i)=>`<tr>
+    <td>${esc(fmtLocal(p.created_at))}</td><td>#${esc(p.custom_folio||String(p.order_id).slice(0,6))}${p.orphan?' <span class="muted">(orden borrada)</span>':''}</td>
+    <td>${esc(cleanName(p.customer_name||'—'))}</td><td>${esc(p.method)}</td><td><b>$${Number(p.amount)||0}</b></td>
+    <td><button class="danger" onclick="openVoid(${i})">🚫 Anular</button></td></tr>`).join("")}</tbody></table>`
+    : "<p class='muted'>No hay cobros desde el último corte.</p>";
+  const vs=payCache.voids||[];
+  $("voidList").innerHTML = vs.length ? `<table><thead><tr><th>Fecha</th><th>Orden</th><th>Monto</th><th>Motivo</th><th>Autorizó</th><th>Hizo</th></tr></thead><tbody>${vs.map(v=>`<tr><td>${esc(fmtLocal(v.created_at))}</td><td>#${esc(v.folio)}</td><td>$${Number(v.amount)||0}</td><td>${esc(v.reason)}</td><td>${esc(v.authorized_by)}</td><td>${esc(v.done_by)}</td></tr>`).join("")}</tbody></table>` : "<p class='muted'>Sin anulaciones.</p>";
+}
+function fmtLocal(t){ try{ return new Date(String(t).replace(' ','T')+'Z').toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return t; } }
+function openVoid(i){
+  voidTarget=(payCache.payments||[])[i]; if(!voidTarget) return;
+  if(!payCache.on_duty) return toast("No hay admin en turno. Tómalo en ⚙️ Configuración → Admin en turno.");
+  $("voidInfo").innerHTML=`Orden <b>#${esc(voidTarget.custom_folio||String(voidTarget.order_id).slice(0,6))}</b> · ${esc(cleanName(voidTarget.customer_name||'—'))} · <b>$${Number(voidTarget.amount)||0}</b> (${esc(voidTarget.method)})`;
+  $("voidAdminLbl").firstChild.textContent=`Contraseña de ${payCache.on_duty} (admin en turno):`;
+  ["voidReason","voidAdminPw","voidPin"].forEach(k=>$(k).value="");
+  $("voidModal").classList.remove("hidden"); $("voidReason").focus();
+}
+function closeVoid(){ $("voidModal").classList.add("hidden"); ["voidAdminPw","voidPin"].forEach(k=>$(k).value=""); }
+async function confirmVoid(){
+  if(!voidTarget) return;
+  const reason=$("voidReason").value.trim(), pw=$("voidAdminPw").value, pin=$("voidPin").value;
+  if(!reason) return toast("Escribe el motivo");
+  if(!pw || !pin) return toast("Faltan las dos claves");
+  const btn=$("voidGo"); btn.disabled=true; btn.textContent="Verificando…";
+  try{
+    const r=await api("/void-payment",{method:"POST",body:JSON.stringify({order_id:voidTarget.order_id, reason, admin_password:pw, pin})});
+    closeVoid(); toast(`✅ Cobro de $${r.amount} anulado · autorizó ${r.authorized_by}`+(r.stamp_removed?" · se quitó el sello":""));
+    loadDashboard(); loadPayments();
+  }catch(e){ toast(e.message); $("voidAdminPw").value=""; $("voidPin").value=""; }
+  btn.disabled=false; btn.textContent="🚫 Anular definitivamente";
+}
+async function changeVoidPin(){
+  const cur=$("pinCur").value, next=$("pinNew").value;
+  if(!/^\d{4,8}$/.test(next)) return toast("La clave nueva debe ser de 4 a 8 números");
+  try{ await api("/void-pin",{method:"POST",body:JSON.stringify({current:cur,next})}); toast("🔐 Clave del sistema actualizada"); $("pinCur").value=""; $("pinNew").value=""; }
+  catch(e){ toast(e.message); }
+}
+
+// ===== AVISOS POR WHATSAPP ENTRE EL EQUIPO =====
+// WhatsApp no deja enviar solo: cada botón abre el chat con el mensaje listo y tú tocas "enviar".
+let teamCache=null, teamAt=0;
+async function getTeam(){
+  if(teamCache && Date.now()-teamAt<60000) return teamCache;
+  try{ teamCache=await api("/team-wa"); teamAt=Date.now(); }catch(e){ teamCache={team:[],me:null,on_duty:""}; }
+  return teamCache;
+}
+const ROLE_ICON={admin:"👑",mesero:"🧑‍🍳",cocina:"🍳",barra:"☕",repartidor:"🛵",editor:"🖼️"};
+function closeWa(){ $("waModal").classList.add("hidden"); }
+function itemLines(items){ return items.map(x=>`• ${x.qty||1}x ${x.name}${x.note?` (${x.note})`:''}`).join("\n"); }
+function showWa(title, sub, rows){
+  $("waTitle").textContent=title; $("waSub").textContent=sub;
+  $("waList").innerHTML = rows.length ? rows.map(r=>`
+    <div class="row between" style="gap:8px;padding:8px 0;border-bottom:1px solid #eee">
+      <div><b>${r.icon||""} ${esc(r.label)}</b>${r.hint?`<div class="muted" style="font-size:12px">${esc(r.hint)}</div>`:""}</div>
+      <a class="btn-wa" href="${r.href}" target="_blank" rel="noopener" onclick="this.textContent='✓ Abierto';this.style.background='#6b7280'" style="background:#16a34a;color:#fff;padding:9px 12px;border-radius:10px;font-weight:700;text-decoration:none;white-space:nowrap">📲 Enviar</a>
+    </div>`).join("")
+    : `<p class="muted">Nadie del equipo tiene WhatsApp registrado todavía. El admin lo agrega en 👥 Usuarios → 📱 WhatsApp.</p>`;
+  $("waModal").classList.remove("hidden");
+}
+const waLink=(num,msg)=>`https://wa.me/52${num}?text=${encodeURIComponent(msg)}`;
+const waPick=msg=>`https://wa.me/?text=${encodeURIComponent(msg)}`;
+// 1) Comanda: a Cocina solo lo de cocina, a Barra solo lo de barra, a los admins todo
+async function waComanda(o){
+  const t=await getTeam(), notes=o.notes||{};
+  const coc=o.items.filter(x=>(x.destination||'cocina')==='cocina'), bar=o.items.filter(x=>x.destination==='barra');
+  const head=`🎾 *${o.extra?'SE AGREGÓ A LA COMANDA':'NUEVA COMANDA'} #${o.folio}*\n📍 ${o.mesa} · 👤 ${o.cliente}\n🧑‍🍳 Envió: ${me.name||me.username}`;
+  const msgC=`${head}\n\n🍳 *COCINA*\n${itemLines(coc)}${notes.cocina?`\n📝 ${notes.cocina}`:''}`;
+  const msgB=`${head}\n\n☕ *BARRA*\n${itemLines(bar)}${notes.barra?`\n📝 ${notes.barra}`:''}`;
+  const msgA=`${head}\n${coc.length?`\n🍳 *COCINA*\n${itemLines(coc)}`:''}${bar.length?`\n\n☕ *BARRA*\n${itemLines(bar)}`:''}`;
+  const rows=[];
+  t.team.filter(u=>u.id!==t.me).forEach(u=>{
+    if(u.role==='cocina' && coc.length) rows.push({icon:"🍳",label:u.name,hint:`Cocina · ${coc.length} platillo(s)`,href:waLink(u.whatsapp,msgC)});
+    if(u.role==='barra' && bar.length) rows.push({icon:"☕",label:u.name,hint:`Barra · ${bar.length} bebida(s)`,href:waLink(u.whatsapp,msgB)});
+    if(u.role==='admin') rows.push({icon:"👑",label:u.name,hint:"Admin · comanda completa"+(String(u.id)===String(t.on_duty)?" · en turno":""),href:waLink(u.whatsapp,msgA)});
+  });
+  if(coc.length) rows.push({icon:"👥",label:"Grupo de cocina",hint:"Elige el grupo o contacto en WhatsApp",href:waPick(msgC)});
+  if(bar.length) rows.push({icon:"👥",label:"Grupo de barra",hint:"Elige el grupo o contacto en WhatsApp",href:waPick(msgB)});
+  showWa(`📲 Avisar comanda #${o.folio}`, "Toca a quién avisar. Cada quien recibe solo lo que le toca.", rows);
+}
+function waComandaFromOrder(id){
+  const o=(allOrdersCache||[]).find(x=>String(x.id)===String(id)); if(!o) return;
+  const pend=(o.items||[]).filter(i=>!i.done);
+  let n={}; try{ n=typeof o.notes==='string'?JSON.parse(o.notes):(o.notes||{}); }catch(e){}
+  waComanda({folio:o.custom_folio||o.id.slice(0,6), mesa:tableLabel(o), cliente:cleanName(o.customer_name), items:pend.length?pend:(o.items||[]), notes:n});
+}
+// 2) Listo: Cocina/Barra avisan al mesero que envió y a los admins
+async function waReady(o,dest){
+  const t=await getTeam();
+  const its=(o.items||[]).filter(i=>(i.destination||'cocina')===dest);
+  const msg=`✅ *${dest==='barra'?'BEBIDAS':'ALIMENTOS'} LISTOS* · Orden #${o.custom_folio||o.id.slice(0,6)}\n📍 ${tableLabel(o)} · 👤 ${cleanName(o.customer_name)}\n\n${itemLines(its)}\n\n${dest==='barra'?'☕':'🍳'} ${me.name||me.username}`;
+  const rows=[];
+  t.team.filter(u=>u.id!==t.me).forEach(u=>{
+    if(o.created_by && String(u.id)===String(o.created_by)) rows.push({icon:"🧑‍🍳",label:u.name,hint:"Mesero que envió la orden",href:waLink(u.whatsapp,msg)});
+    else if(u.role==='admin') rows.push({icon:"👑",label:u.name,hint:"Admin"+(String(u.id)===String(t.on_duty)?" · en turno":""),href:waLink(u.whatsapp,msg)});
+    else if(u.role==='mesero' && !o.created_by) rows.push({icon:"🧑‍🍳",label:u.name,hint:"Mesero",href:waLink(u.whatsapp,msg)});
+  });
+  rows.push({icon:"👥",label:"Grupo del equipo",hint:"Elige el grupo o contacto en WhatsApp",href:waPick(msg)});
+  showWa(`✅ Avisar que está listo`, `Orden #${o.custom_folio||o.id.slice(0,6)} · ${tableLabel(o)}`, rows);
+}
+
+// 3) Entregado: mesero avisa que ya llevó el pedido a mesa/cancha
+async function waEntregado(o){
+  const t=await getTeam();
+  const coc=(o.items||[]).some(i=>(i.destination||'cocina')==='cocina'), bar=(o.items||[]).some(i=>i.destination==='barra');
+  const msg=`🍽️ *PEDIDO ENTREGADO* · Orden #${o.custom_folio||o.id.slice(0,6)}\n📍 ${tableLabel(o)} · 👤 ${cleanName(o.customer_name)}\n\nYa se le llevó al cliente ✅\n🧑‍🍳 ${me.name||me.username}`;
+  const rows=[];
+  t.team.filter(u=>u.id!==t.me).forEach(u=>{
+    if(u.role==='cocina' && coc) rows.push({icon:"🍳",label:u.name,hint:"Cocina",href:waLink(u.whatsapp,msg)});
+    if(u.role==='barra' && bar) rows.push({icon:"☕",label:u.name,hint:"Barra",href:waLink(u.whatsapp,msg)});
+    if(u.role==='admin') rows.push({icon:"👑",label:u.name,hint:"Admin"+(String(u.id)===String(t.on_duty)?" · en turno":""),href:waLink(u.whatsapp,msg)});
+  });
+  rows.push({icon:"👥",label:"Grupo del equipo",hint:"Elige el grupo o contacto en WhatsApp",href:waPick(msg)});
+  showWa(`🍽️ Avisar entrega`, `Orden #${o.custom_folio||o.id.slice(0,6)} · ${tableLabel(o)}`, rows);
+}
+// 4) Ticket cobrado: avisa a los admins que ya se cobró y quedó en el corte del día
+async function waTicket(o,r){
+  const t=await getTeam();
+  const methodLabel={efectivo:"💵 Efectivo",tarjeta:"💳 Tarjeta",transferencia:"📲 Transferencia"}[r.method]||r.method;
+  const msg=`🧾 *TICKET GENERADO Y COBRADO* · Orden #${r.folio}\n📍 ${tableLabel(o)} · 👤 ${cleanName(o.customer_name)}\n💰 Total: $${r.paid} (${methodLabel})\n✅ Ya quedó en las ventas de hoy (entra en el próximo corte de caja)\n🧑‍🍳 Cobró: ${me.name||me.username}`;
+  const rows=[];
+  t.team.filter(u=>u.role==='admin' && u.id!==t.me).forEach(u=>rows.push({icon:"👑",label:u.name,hint:"Admin"+(String(u.id)===String(t.on_duty)?" · en turno":""),href:waLink(u.whatsapp,msg)}));
+  rows.push({icon:"👥",label:"Grupo de administración",hint:"Elige el grupo o contacto en WhatsApp",href:waPick(msg)});
+  showWa(`🧾 Avisar ticket cobrado`, `Orden #${r.folio} · $${r.paid}`, rows);
+}
+
+// ===== TURNOS: mínimo 2 al día (Matutino / Vespertino), con recordatorio =====
+let shiftCheckDone=false, shiftData=null;
+function todayMx(){ const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()); return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`; }
+async function checkShiftReminder(){
+  try{
+    const s=await api("/shifts-status");
+    const pill=$("shiftPill");
+    if(!s.complete){
+      const roles={mesero:"Mesero",cocina:"Cocina",barra:"Barra",admin:"Admin",repartidor:"Repartidor"};
+      const now=s.missing_now.map(r=>roles[r]||r);
+      pill.textContent = now.length ? `⏰ Falta turno ${s.current_shift==='matutino'?'matutino':'vespertino'}: ${now.join(", ")}` : "⏰ Faltan turnos por asignar hoy";
+      pill.classList.remove("hidden");
+    } else pill.classList.add("hidden");
+    if(isAdmin() && !s.on_duty_set) toast("⚠️ Nadie está tomando el turno de WhatsApp. Ve a Configuración → Admin en turno.");
+  }catch(e){}
+}
+function goTurnos(){ const b=[...document.querySelectorAll("#nav button")].find(x=>x.textContent.includes("Turnos")); if(b) view("turnos",b); }
+async function loadShifts(){
+  if(!$("shiftDate").value) $("shiftDate").value=todayMx();
+  try{ shiftData=await api("/shifts?date="+$("shiftDate").value); }catch(e){ toast(e.message); return; }
+  renderShifts();
+}
+function renderShifts(){
+  const ROLE_LABEL2={mesero:"🧑‍🍳 Mesero",cocina:"🍳 Cocina",barra:"☕ Barra",admin:"👑 Admin",repartidor:"🛵 Repartidor"};
+  const isToday=shiftData.date===shiftData.today;
+  $("shiftStatus").innerHTML = isToday ? `<p class="muted">Turno actual ahora mismo: <b>${shiftData.current_shift==='matutino'?'☀️ Matutino':'🌙 Vespertino'}</b></p>` : "";
+  const roles=[...new Set(shiftData.users.map(u=>u.role))];
+  $("shiftGrid").innerHTML = roles.map(role=>{
+    const people=shiftData.users.filter(u=>u.role===role);
+    const cell=(shift)=>{
+      const assigned=new Set(shiftData.assignments.filter(a=>a.role===role&&a.shift===shift).map(a=>String(a.user_id)));
+      return `<div style="flex:1"><p class="muted" style="font-size:12px;font-weight:800;margin-bottom:6px">${shift==='matutino'?'☀️ MATUTINO (8am–3pm)':'🌙 VESPERTINO (3pm–11pm)'}</p>
+        ${people.map(u=>`<button type="button" onclick="toggleShift('${role}','${shift}','${u.id}')" style="display:block;width:100%;text-align:left;margin-bottom:4px;padding:8px 10px;border-radius:8px;border:1px solid ${assigned.has(String(u.id))?'#16a34a':'#e5e7eb'};background:${assigned.has(String(u.id))?'#dcfce7':'#fff'};font-weight:${assigned.has(String(u.id))?'800':'500'}">${assigned.has(String(u.id))?'✅ ':''}${esc(u.name)}</button>`).join("")||`<p class="muted" style="font-size:12px">Sin usuarios de este rol.</p>`}
+        ${!assigned.size?`<p style="color:#b91c1c;font-size:12px;margin-top:4px">⚠️ Nadie asignado</p>`:''}</div>`;
+    };
+    return `<div class="card"><h3 style="margin-top:0">${ROLE_LABEL2[role]||role}</h3><div class="row" style="gap:16px;align-items:flex-start">${cell('matutino')}${cell('vespertino')}</div></div>`;
+  }).join("") || "<p class='muted'>No hay usuarios activos con rol asignable.</p>";
+}
+async function toggleShift(role,shift,uid){
+  try{ await api("/shifts",{method:"POST",body:JSON.stringify({date:$("shiftDate").value,shift,role,user_id:uid})}); await loadShifts(); checkShiftReminder(); }
+  catch(e){ toast(e.message); }
+}
+
 // ----- Subir fotos en lote: se emparejan con el producto por el nombre del archivo -----
 let bulkQueue=[];
 const stripSizes=t=>String(t||"").replace(/\.[a-z0-9]+$/i,"").replace(/\(.*?\)/g," ").replace(/\d+\s*(onzas?|oz|ml|litros?|lts?|l|g|gr|grs|pzas?)\b/gi," ");
@@ -1515,7 +1744,7 @@ const ROLE_LABEL={admin:"Administrador",mesero:"Mesero",cocina:"Cocina",barra:"B
 async function loadUsers(){
   try{
     usersCache = await api("/users");
-    $("users").innerHTML = usersCache.length ? `<div class="card" style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>WhatsApp</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${usersCache.map((u,i)=>`<tr><td>${esc(u.name)}</td><td><b>${esc(u.username)}</b></td><td>${esc(ROLE_LABEL[u.role]||u.role)}</td><td>${u.whatsapp?esc(u.whatsapp):'<span class="muted">—</span>'}</td><td>${u.legacy?'⚠️ Falta contraseña nueva':(u.active?'🟢 Activo':'⚪ Inactivo')}</td><td style="white-space:nowrap"><button onclick="changeWhatsapp(${i})">📱 WhatsApp</button> <button class="warning" onclick="changePassword(${i})">🔑 Contraseña</button> <button class="danger" onclick="deleteUser(${i})">🗑️</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Sin usuarios.</p>";
+    $("users").innerHTML = usersCache.length ? `<div class="card" style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>WhatsApp</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${usersCache.map((u,i)=>`<tr><td>${esc(u.name)}</td><td><b>${esc(u.username)}</b></td><td>${esc(ROLE_LABEL[u.role]||u.role)}</td><td>${u.whatsapp?esc(u.whatsapp)+` <button title="Recibe avisos de comanda por WhatsApp" onclick="toggleWaNotify(${i})">${u.wa_notify===0?'🔕':'🔔'}</button>`:'<span class="muted">—</span>'}</td><td>${u.legacy?'⚠️ Falta contraseña nueva':(u.active?'🟢 Activo':'⚪ Inactivo')}</td><td style="white-space:nowrap"><button onclick="changeWhatsapp(${i})">📱 WhatsApp</button> <button class="warning" onclick="changePassword(${i})">🔑 Contraseña</button> <button class="danger" onclick="deleteUser(${i})">🗑️</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Sin usuarios.</p>";
   }catch(e){ $("users").innerHTML=`<p class="muted">${esc(e.message)}</p>`; }
 }
 async function createUser(){
@@ -1526,6 +1755,11 @@ async function createUser(){
     await api("/users",{method:"POST",body:JSON.stringify(b)});
     toast("Usuario creado ✅"); $("uName").value=""; $("uUsername").value=""; $("uPassword").value=""; $("uWhatsapp").value=""; loadUsers();
   }catch(e){ toast(e.message); }
+}
+async function toggleWaNotify(i){
+  const u=usersCache[i]; if(!u) return;
+  try{ await api("/users/"+encodeURIComponent(u.id),{method:"PATCH",body:JSON.stringify({wa_notify:u.wa_notify===0?1:0})}); toast(u.wa_notify===0?"🔔 Recibirá avisos":"🔕 Ya no recibirá avisos"); teamCache=null; loadUsers(); }
+  catch(e){ toast(e.message); }
 }
 async function changeWhatsapp(i){
   const u=usersCache[i]; if(!u) return;
