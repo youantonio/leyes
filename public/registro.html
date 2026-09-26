@@ -1,1 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RUSH POS · El sistema para tu restaurante, café o club</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,600;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#FAF6F0;--card:#FFFFFF;--ink:#111827;--muted:#57534E;--brand:#064E3B;--accent:#D97706;--line:#E7E5E4}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Montserrat',sans-serif;background:var(--bg);color:var(--ink);padding-bottom:60px}
+  header{background:linear-gradient(135deg,#064E3B,#022C22);color:#fff;text-align:center;padding:56px 20px 64px;border-bottom:4px solid var(--accent)}
+  h1{font-family:'Playfair Display',serif;font-size:44px;line-height:1.15}
+  h1 span{color:#FCD34D;font-style:italic;font-weight:400}
+  .sub{max-width:560px;margin:14px auto 0;font-size:17px;color:#D1FAE5}
+  .badge{display:inline-block;margin-top:18px;background:rgba(217,119,6,.25);border:1px solid #F59E0B;color:#FEF3C7;padding:8px 18px;border-radius:20px;font-weight:800;font-size:13px;letter-spacing:.5px}
+  .cta{display:inline-block;margin-top:26px;background:var(--accent);color:#fff;padding:15px 34px;border-radius:12px;font-weight:800;text-decoration:none;font-size:16px}
+  .wrap{max-width:960px;margin:-30px auto 0;padding:0 20px}
+  .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:40px 0}
+  .feat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .feat b{display:block;font-size:15px;margin-bottom:6px}
+  .feat p{font-size:13px;color:var(--muted);line-height:1.5}
+  .why{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;margin:32px 0}
+  .why h2{font-family:'Playfair Display',serif;color:var(--brand);margin-bottom:12px}
+  .why ul{padding-left:20px;font-size:14px;line-height:1.9;color:var(--ink)}
+  form.card{background:var(--card);border:2px solid var(--accent);border-radius:18px;padding:28px;margin:36px 0}
+  form.card h2{font-family:'Playfair Display',serif;color:var(--brand);margin-bottom:4px}
+  .muted-sm{font-size:13px;color:var(--muted);margin-bottom:18px}
+  label{display:block;font-size:13px;font-weight:700;margin-top:14px;margin-bottom:4px}
+  input{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .step-title{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;color:var(--accent);margin-top:24px;margin-bottom:6px}
+  .modules{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:6px}
+  .modchip{border:2px solid var(--line);border-radius:12px;padding:12px 10px;text-align:center;cursor:pointer;font-weight:700;font-size:13px}
+  .modchip.on{border-color:var(--brand);background:rgba(6,78,59,.08)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  button.submit{width:100%;margin-top:22px;background:var(--brand);color:#fff;border:none;padding:16px;border-radius:11px;font-weight:800;font-size:15px;cursor:pointer}
+  button.submit:disabled{opacity:.6}
+  .msg{margin-top:12px;font-size:13px;font-weight:700;padding:10px;border-radius:8px}
+  .msg.err{background:#FEE2E2;color:#991B1B}
+  .msg.ok{background:#D1FAE5;color:#065F46}
+  .footer-note{text-align:center;font-size:12px;color:var(--muted);margin-top:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>RUSH</span> POS</h1>
+  <p class="sub">El sistema todo-en-uno para restaurantes, cafeterías y clubes en México: comandas, cocina, barra, caja, lealtad y pedidos en línea, en un solo lugar.</p>
+  <div class="badge">🎁 Tu primer mes es GRATIS</div><br>
+  <a class="cta" href="#registro">Crear mi cuenta gratis →</a>
+</header>
+<div class="wrap">
+  <div class="features">
+    <div class="feat"><b>🧾 Comandas en segundos</b><p>Meseros, cocina y barra conectados en tiempo real, desde el celular o una tablet.</p></div>
+    <div class="feat"><b>📲 Avisos por WhatsApp</b><p>Cada paso del pedido se puede avisar por WhatsApp entre tu equipo, sin apps adicionales.</p></div>
+    <div class="feat"><b>⭐ Tarjeta de lealtad</b><p>Tus clientes juntan sellos automáticamente y tú decides la recompensa.</p></div>
+    <div class="feat"><b>🌐 Carta pública en línea</b><p>Tus clientes piden desde su celular, en el club o a domicilio, sin instalar nada.</p></div>
+    <div class="feat"><b>📊 Caja y reportes</b><p>Cortes de caja, ventas del día y control de inventario, siempre a la mano.</p></div>
+    <div class="feat"><b>🧩 Se adapta a tu negocio</b><p>Tú eliges qué módulos usar: cocina, barra, mesas, canchas, repartidores, lealtad.</p></div>
+  </div>
+  <div class="why">
+    <h2>Hecho para negocios como el tuyo</h2>
+    <ul>
+      <li>El sistema más completo y económico para negocios de comida en Latinoamérica.</li>
+      <li>Funciona igual de bien para un café que solo cobra en caja, que para un restaurante con cocina y barra.</li>
+      <li>Un mes gratis para probarlo con tu equipo real, sin compromiso.</li>
+      <li>El precio se confirma contigo directamente al terminar tu mes de prueba — sin sorpresas.</li>
+    </ul>
+  </div>
 
+  <form class="card" id="signupForm">
+    <h2 id="registro">Crea tu cuenta gratis</h2>
+    <p class="muted-sm">Tu negocio queda listo en menos de 2 minutos. Todo empieza vacío — tú decides cómo configurarlo en tu primer inicio de sesión.</p>
+
+    <div class="step-title">Tu negocio</div>
+    <label>Nombre del negocio</label>
+    <input id="bizName" placeholder="Ej. Café Luna" required>
+    <label>Nombre para tu dirección web</label>
+    <input id="slug" placeholder="Ej. cafe-luna" required>
+    <p class="hint" id="urlPreview">Tu sistema quedará en: <b>/t/cafe-luna/</b></p>
+
+    <div class="step-title">Tu contacto</div>
+    <div class="row2">
+      <div><label>Tu nombre</label><input id="contactName" placeholder="Tu nombre" required></div>
+      <div><label>WhatsApp (10 dígitos)</label><input id="contactPhone" inputmode="numeric" maxlength="14" placeholder="7711234567" required></div>
+    </div>
+
+    <div class="step-title">Tu usuario administrador</div>
+    <div class="row2">
+      <div><label>Usuario</label><input id="adminUser" placeholder="Ej. admin" required></div>
+      <div><label>Contraseña</label><input id="adminPass" type="password" placeholder="Mínimo 4 caracteres" required></div>
+    </div>
+
+    <div class="step-title">¿Qué módulos crees que vas a necesitar?</div>
+    <p class="hint">Puedes cambiarlo cuando quieras al entrar por primera vez.</p>
+    <div class="modules" id="modChips">
+      <div class="modchip" data-k="cocina">🍳 Cocina</div>
+      <div class="modchip" data-k="barra">☕ Barra</div>
+      <div class="modchip" data-k="mesas">🪑 Mesas</div>
+      <div class="modchip" data-k="canchas">🎾 Canchas</div>
+      <div class="modchip" data-k="repartidores">🛵 Repartidores</div>
+      <div class="modchip" data-k="loyalty">⭐ Lealtad</div>
+    </div>
+
+    <button class="submit" id="goBtn" type="submit">🎁 Crear mi negocio y empezar gratis</button>
+    <div id="formMsg"></div>
+  </form>
+  <p class="footer-note">Al registrarte aceptas que este es un servicio en construcción; el precio después del mes gratis se confirmará contigo directamente.</p>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const mods={};
+document.querySelectorAll('.modchip').forEach(el=>{
+  mods[el.dataset.k]=false;
+  el.onclick=()=>{ mods[el.dataset.k]=!mods[el.dataset.k]; el.classList.toggle('on'); };
+});
+$('slug').addEventListener('input',()=>{
+  const v=$('slug').value.toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-');
+  $('slug').value=v; $('urlPreview').innerHTML='Tu sistema quedará en: <b>/t/'+(v||'tu-negocio')+'/</b>';
+});
+$('bizName').addEventListener('input',()=>{ if(!$('slug').value) $('slug').value=$('bizName').value.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); $('slug').dispatchEvent(new Event('input')); });
+$('signupForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const msg=$('formMsg'); msg.innerHTML=''; const btn=$('goBtn');
+  const phone=$('contactPhone').value.replace(/\D/g,'');
+  if(phone.length!==10){ msg.innerHTML='<div class="msg err">Tu WhatsApp debe tener 10 dígitos.</div>'; return; }
+  btn.disabled=true; btn.textContent='Creando tu negocio…';
+  try{
+    const r=await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      business_name:$('bizName').value.trim(), slug:$('slug').value.trim(),
+      admin_name:$('contactName').value.trim(), contact_phone:phone,
+      admin_username:$('adminUser').value.trim(), admin_password:$('adminPass').value,
+      modules: mods,
+    })});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'No se pudo crear tu negocio');
+    msg.innerHTML='<div class="msg ok">🎉 ¡Listo! Te llevamos a tu sistema…</div>';
+    setTimeout(()=>{ location.href = d.url; }, 1200);
+  }catch(err){ msg.innerHTML='<div class="msg err">'+err.message+'</div>'; btn.disabled=false; btn.textContent='🎁 Crear mi negocio y empezar gratis'; }
+});
+</script>
+</body>
+</html>
