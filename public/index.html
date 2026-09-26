@@ -73,6 +73,8 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 .carta-card textarea{min-height:60px;resize:vertical}
 .carta-card .photo-actions{display:flex;gap:6px;flex-wrap:wrap}
 .carta-card .photo-actions label{flex:1;text-align:center;background:#f3f4f6;border-radius:8px;padding:8px;font-size:13px;font-weight:700;cursor:pointer}
+.modchip{border:2px solid #e5e7eb;border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;font-weight:700;font-size:13px}
+.modchip.on{border-color:var(--brand,#064E3B);background:rgba(6,78,59,.08)}
 </style>
 </head>
 <body>
@@ -225,7 +227,29 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 </div>
 
 <section id="lealtad" class="view hidden">
-  <div class="row between"><h1 class="title" style="margin:0">⭐ Lealtad y Difusión</h1><button onclick="loadLoyaltyCustomers()">↻ Actualizar</button></div>
+  <div class="row between"><h1 class="title" style="margin:0">⭐ Lealtad y Difusión</h1><button onclick="loadLoyaltyCustomers();loadLoyaltyDash()">↻ Actualizar</button></div>
+
+  <div id="loyKpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:14px"></div>
+
+  <div class="card" style="margin-top:15px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+    <img id="loyQr" src="" alt="QR" style="width:110px;height:110px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;padding:4px">
+    <div style="flex:1;min-width:220px">
+      <h3 style="margin:0 0 4px">Comparte tu tarjeta de lealtad</h3>
+      <p class="muted" style="font-size:13px;margin-bottom:8px">Tus clientes escanean el QR o abren el link para unirse sin tener que hacer un pedido.</p>
+      <input id="joinLinkBox" readonly onclick="this.select()" style="width:100%;margin-bottom:8px">
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <button onclick="copyJoinLink()">🔗 Copiar link</button>
+        <a id="joinWaBtn" href="#" target="_blank" class="success" style="padding:9px 14px;border-radius:8px;text-decoration:none;color:#fff;font-weight:700;background:#16a34a">📲 Compartir por WhatsApp</a>
+        <button onclick="window.print()">🖨️ Imprimir QR</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:15px">
+    <h3 style="margin-top:0">🕒 Actividad reciente</h3>
+    <div id="loyFeed" class="muted">Cargando…</div>
+  </div>
+
   <div class="card" style="background:#f0fdf4; border:1px solid #16a34a; margin-top:15px;">
     <h2>📢 Campaña por WhatsApp</h2>
     <textarea id="bulkMessage" rows="3" placeholder="Hola {nombre} 👋 Esta semana tenemos promoción en Rush Club Pádel..."></textarea>
@@ -401,6 +425,12 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
   <div id="shiftGrid" class="grid" style="margin-top:12px"></div>
 </section>
 
+<section id="plataforma" class="view hidden">
+  <h1 class="title">🏢 Mis restaurantes</h1>
+  <p class="muted" style="margin-top:-6px">Negocios que usan RUSH POS. Aquí puedes activar el plan de cada uno o extender su prueba mientras no haya cobro automático.</p>
+  <div id="platformList" class="grid"></div>
+</section>
+
 <section id="usuarios" class="view hidden">
   <h1 class="title">Gestión de Usuarios</h1>
   <div class="card">
@@ -470,8 +500,10 @@ table{width:100%;border-collapse:collapse;background:#fff} th,td{text-align:left
 <div id="toast" class="toast hidden"></div>
 
 <script>
-const API="/api";
+const BASE=(location.pathname.match(/^(\/t\/[a-z0-9-]+\/)/)||[,"/"])[1];
+const API=BASE+"api";
 let token=localStorage.getItem("rush_token");
+let myTenant=null; try{ myTenant=JSON.parse(localStorage.getItem("rush_tenant")||"null"); }catch(e){}
 let me=null, products=[], tables=[], cart=[], inventoryItems=[], courtsList=[], activeReservations=[], currentCategory="TODOS";
 let currentTicketData=null, allOrdersCache=[], currentPerson=1, offsetPeople=0, linkedOrder=null;
 let currentView="venta", currentSection="", chipKeys=[], menuStructure={sections:[]}, popular=[], pendingClass={};
@@ -496,6 +528,7 @@ async function api(path,opts={}){
     if(path!=="/login"){ logout(false); toast("Sesión expirada, inicia sesión de nuevo"); }
     throw new Error(data.error || "Credenciales inválidas");
   }
+  if(r.status===402 && data.error==="trial_expired"){ checkTenantThenShow(); throw new Error(data.message||"Tu prueba terminó"); }
   if(!r.ok) throw new Error(data.error || "Error de servidor");
   return data;
 }
@@ -504,10 +537,11 @@ async function login(){
   try{
     const r = await api("/login",{method:"POST",body:JSON.stringify({
       username:$("loginUser").value.trim(), password:$("loginPass").value})});
-    token=r.token; me=r.user;
+    token=r.token; me=r.user; myTenant=r.tenant||null;
     localStorage.setItem("rush_token",token);
     localStorage.setItem("rush_user",JSON.stringify(me));
-    showApp(); loadAll(); toast("✅ Acceso concedido");
+    localStorage.setItem("rush_tenant",JSON.stringify(myTenant));
+    toast("✅ Acceso concedido"); checkTenantThenShow();
   }catch(e){ toast(e.message); }
 }
 
@@ -522,13 +556,41 @@ function boot(){
   // Restaura la sesión guardada; si el servidor ya la venció, el primer request regresa al login
   if(token){
     try{ me = JSON.parse(localStorage.getItem("rush_user")||"null"); }catch(e){ me=null; }
-    if(me && me.role){ showApp(); loadAll(); return; }
+    if(me && me.role){ checkTenantThenShow(); return; }
     token=null; localStorage.removeItem("rush_token");
   }
   $("loginView").classList.remove("hidden");
 }
 
 function isAdmin(){ return me?.role==="admin"; }
+
+// ----- Estado del negocio: bloqueado por prueba, o falta configurar por primera vez -----
+let tenantModules=null;
+async function checkTenantThenShow(){
+  let st=null;
+  try{ st=await api("/tenant-status"); }catch(e){}
+  if(st && st.status==="locked"){
+    $("lockTitle").textContent = st.days_left===0 ? "Tu mes de prueba terminó" : "Tu negocio está pausado";
+    $("lockMsg").textContent = `Contacta al administrador de la plataforma para activar el plan de ${st.name}.`;
+    if(st.contact_phone) { $("lockWaBtn").href="https://wa.me/52"+st.contact_phone; }
+    $("lockView").classList.remove("hidden"); $("loginView").classList.add("hidden"); $("appView").classList.add("hidden");
+    return;
+  }
+  $("lockView").classList.add("hidden");
+  tenantModules = st ? st.modules : null;
+  if(st && !st.onboarded && isAdmin()){ showApp(); loadAll(); openOnboarding(); return; }
+  showApp(); loadAll();
+}
+function openOnboarding(){
+  document.querySelectorAll("#onbModules .modchip").forEach(el=>el.onclick=()=>el.classList.toggle("on"));
+  $("onboardModal").classList.remove("hidden");
+}
+async function saveOnboarding(){
+  const body={};
+  document.querySelectorAll("#onbModules .modchip").forEach(el=>body[el.dataset.k]=el.classList.contains("on"));
+  try{ const r=await api("/onboarding",{method:"POST",body:JSON.stringify(body)}); tenantModules=r.modules; $("onboardModal").classList.add("hidden"); toast("✅ Todo listo"); showApp(); loadAll(); }
+  catch(e){ toast(e.message); }
+}
 
 function showApp(){
   $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
@@ -549,12 +611,16 @@ function showApp(){
     ["carta","🖼️ Editar carta"],
     ["usuarios","👥 Usuarios"],
     ["turnos","🗓️ Turnos"],
+    ["plataforma","🏢 Mis restaurantes"],
     ["config","⚙️ Configuración"],
     ["entregas","🛵 Mis entregas"]
   ];
   const ROLE_VIEWS={ admin:null, mesero:["venta","canchas","mesas","ordenes"], cocina:["cocina"], barra:["barra"], repartidor:["entregas"], editor:["carta"] };
   const allowed = ROLE_VIEWS[me.role]===undefined ? ["venta","ordenes"] : ROLE_VIEWS[me.role];
   if(allowed) nav = nav.filter(x=>allowed.includes(x[0]));
+  const MOD_FOR={canchas:"canchas", mesas:"mesas", cocina:"cocina", barra:"barra", entregas:"repartidores", lealtad:"loyalty"};
+  if(tenantModules) nav = nav.filter(x=> !MOD_FOR[x[0]] || tenantModules[MOD_FOR[x[0]]]);
+  if(!(myTenant && myTenant.slug==="rush")) nav = nav.filter(x=>x[0]!=="plataforma");
 
   $("nav").innerHTML=nav.map((x,i)=>`<button class="${i===0?"active":""}" onclick="view('${x[0]}',this)">${x[1]}</button>`).join("");
   view(nav[0][0], $("nav").firstElementChild);
@@ -567,7 +633,7 @@ function view(id,btn){
   if(id==="canchas") loadCanchasData(); if(id==="mesas") renderTables(); if(id==="cocina") loadKitchen();
   if(id==="barra") loadBarra(); if(id==="ordenes") loadOrders(); if(id==="caja") loadDashboard();
   if(id==="lealtad") loadLoyaltyCustomers(); if(id==="inventario") loadInventoryData();
-  if(id==="productos") renderProductAdmin(); if(id==="usuarios") loadUsers(); if(id==="turnos") loadShifts(); if(isAdmin() && !shiftCheckDone){ shiftCheckDone=true; checkShiftReminder(); }
+  if(id==="productos") renderProductAdmin(); if(id==="usuarios") loadUsers(); if(id==="turnos") loadShifts(); if(id==="plataforma") loadPlatform(); if(id==="lealtad") loadLoyaltyDash(); if(isAdmin() && !shiftCheckDone){ shiftCheckDone=true; checkShiftReminder(); }
   if(id==="config") loadSettings(); if(id==="entregas") loadMyDeliveries(); if(id==="carta") loadCarta();
   if(id==="venta") { renderProducts(); renderTableSelect(); }
 }
@@ -789,7 +855,7 @@ function deliveryBar(o){
   const chips=steps.map(([k,ic])=>`<button type="button" class="chip ${cur===k?'active':''}" style="padding:6px 10px;font-size:12px" onclick="setDeliveryStatus('${o.id}','${k}')">${ic}</button>`).join('');
   const driverSel=`<select onchange="assignDriver('${o.id}',this.value)" style="width:auto"><option value="">Sin asignar</option>${(driversCache||[]).map(d=>`<option value="${esc(d.id)}" ${o.driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>`;
   const addr=o.delivery_address?`<div class="muted" style="font-size:13px">📍 ${esc(o.delivery_address)}${o.receiver_name?(' · Recibe: '+esc(o.receiver_name)):''}${o.shipping_cost?(' · Envío $'+o.shipping_cost):''}</div>`:'';
-  const trackLink=o.tracking_token?`<div style="font-size:12px"><a href="/seguimiento.html?token=${o.tracking_token}" target="_blank">🔗 Link de seguimiento para el cliente</a></div>`:'';
+  const trackLink=o.tracking_token?`<div style="font-size:12px"><a href="${BASE}seguimiento.html?token=${o.tracking_token}" target="_blank">🔗 Link de seguimiento para el cliente</a></div>`:'';
   return `<div class="card" style="background:#eff6ff;margin-top:8px;padding:10px">🛵 <b>Entrega a domicilio</b> ${driverSel}${addr}${trackLink}<div class="chips" style="margin-top:6px">${chips}</div></div>`;
 }
 async function loadOrders(){
@@ -911,7 +977,7 @@ async function sendLoyaltyCard(phone,name){
   if(phone.length!==10) return toast("Ese cliente no tiene WhatsApp guardado.");
   try{
     const r=await api("/loyalty-token",{method:"POST",body:JSON.stringify({phone,name})});
-    const link=location.origin+"/tarjeta.html?token="+r.token;
+    const link=location.origin+BASE+"tarjeta.html?token="+r.token;
     window.open(`https://wa.me/52${phone}?text=${encodeURIComponent(`Hola ${firstName(name)} 👋 Aquí está tu tarjeta de lealtad de The Rush 🎾☕. Cada visita suma un sello:\n${link}`)}`,'_blank');
   }catch(e){ toast(e.message); }
 }
@@ -1009,7 +1075,8 @@ async function loadSettings(){
   $("cfgLat").value=settingsCache.business_lat||"20.1010"; $("cfgLng").value=settingsCache.business_lng||"-98.7591";
   $("cfgBaseFee").value=settingsCache.delivery_base_fee||20; $("cfgRateKm").value=settingsCache.delivery_rate_km||8;
   $("cfgPaymentInfo").value=settingsCache.payment_info||"";
-  $("publicLinkBox").value = location.origin + "/menu.html";
+  $("publicLinkBox").value = location.origin + BASE + "menu.html";
+  $("joinLinkBox").value = location.origin + BASE + "unirme.html";
   $("cfgShowPhotos").checked = settingsCache.show_photos!=="0";
   $("cfgTagline").value=settingsCache.menu_tagline||""; $("cfgHours").value=settingsCache.business_hours||"";
   loadDuty(); loadR2Status();
@@ -1273,6 +1340,29 @@ async function migratePhotos(){
   }catch(e){ toast(e.message); }
   btn.textContent="📦 Copiar todas las fotos a R2"; loadR2Status(); loadAll();
 }
+// ----- Panel de Lealtad -----
+async function loadLoyaltyDash(){
+  $("joinLinkBox").value = location.origin + BASE + "unirme.html";
+  try{
+    const d=await api("/loyalty-dashboard");
+    $("loyKpis").innerHTML=[
+      ["🎟️ Sellos hoy",d.stamps_today],
+      ["🎁 Recompensas hoy",d.rewards_today],
+      ["👛 Tarjetas activas",d.active_wallets],
+      ["🔁 Clientes recurrentes",d.returning_customers],
+      ["📊 Sellos históricos",d.all_time_stamps],
+      ["🏆 Recompensas entregadas",d.all_time_rewards],
+    ].map(([label,val])=>`<div class="card" style="padding:14px"><div class="muted" style="font-size:11px;text-transform:uppercase;font-weight:800">${label}</div><div style="font-size:24px;font-weight:900;margin-top:4px">${val}</div></div>`).join("");
+    const iconFor={stamp:"🎟️",reward:"🎉"}, labelFor={stamp:"sello dado",reward:"¡ganó su recompensa!"};
+    $("loyFeed").innerHTML = d.feed.length ? d.feed.map(f=>`<div class="row between" style="padding:6px 0;border-bottom:1px dotted #e5e7eb"><span>${iconFor[f.type]||"•"} <b>${esc(f.name||"Cliente")}</b> — ${labelFor[f.type]||f.type}</span><span class="muted" style="font-size:12px">${esc(f.created_at)}</span></div>`).join("") : "<p class='muted'>Todavía no hay actividad.</p>";
+  }catch(e){ $("loyFeed").textContent=e.message; }
+  const link=$("joinLinkBox").value;
+  if(link){
+    $("loyQr").src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data="+encodeURIComponent(link);
+    $("joinWaBtn").href="https://wa.me/?text="+encodeURIComponent("¡Únete a nuestra tarjeta de lealtad! 🎾⭐ "+link);
+  }
+}
+function copyJoinLink(){ $("joinLinkBox").select(); document.execCommand("copy"); toast("Link copiado ✅"); }
 // ----- Admin en turno -----
 async function loadDuty(){
   try{
@@ -1295,6 +1385,34 @@ async function refreshDutyPill(){
     el.textContent = d.number ? `📲 Pedidos → ${d.source==="turno"?d.name:"número general"}` : "⚠️ Sin WhatsApp de pedidos";
     el.classList.remove("hidden");
   }catch(e){}
+}
+async function loadPlatform(){
+  try{ const list=await api("/platform/tenants"); renderPlatform(list); }
+  catch(e){ toast(e.message); }
+}
+function renderPlatform(list){
+  const LABEL={trial:"🟡 En prueba",active:"🟢 Activo",locked:"🔴 Bloqueado"};
+  $("platformList").innerHTML = list.length ? list.map(t=>`
+    <div class="card">
+      <div class="row between"><h3 style="margin:0">${esc(t.name)}</h3><span>${LABEL[t.plan_status]||t.plan_status}</span></div>
+      <p class="muted" style="font-size:13px">/t/${esc(t.slug)}/ · ${esc(t.contact_name||'')} ${t.contact_phone?'· '+esc(t.contact_phone):''}</p>
+      <p class="muted" style="font-size:12px">Prueba hasta: ${t.trial_ends_at?esc(t.trial_ends_at):'—'} · Registrado: ${esc(t.created_at)}</p>
+      <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button class="success" onclick="setTenantStatus('${t.id}','active')">🟢 Activar</button>
+        <button onclick="extendTenant('${t.id}')">➕ Extender prueba</button>
+        <button class="danger" onclick="setTenantStatus('${t.id}','locked')">🔴 Bloquear</button>
+        ${t.contact_phone?`<a href="https://wa.me/52${esc(t.contact_phone)}" target="_blank" class="btn-wa" style="background:#16a34a;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700">📲 Contactar</a>`:''}
+      </div>
+    </div>`).join("") : "<p class='muted'>Todavía no hay otros negocios registrados.</p>";
+}
+async function setTenantStatus(id,status){
+  try{ await api("/platform/tenants/"+id,{method:"PATCH",body:JSON.stringify({plan_status:status})}); toast("Actualizado ✅"); loadPlatform(); }
+  catch(e){ toast(e.message); }
+}
+async function extendTenant(id){
+  const d=prompt("¿Cuántos días quieres agregar a la prueba?","15"); if(!d) return;
+  try{ await api("/platform/tenants/"+id,{method:"PATCH",body:JSON.stringify({extend_days:Number(d)})}); toast("Prueba extendida ✅"); loadPlatform(); }
+  catch(e){ toast(e.message); }
 }
 function goConfig(){ const b=[...document.querySelectorAll("#nav button")].find(x=>x.textContent.includes("Configuración")); if(b) view("config",b); }
 async function saveSettings(){
@@ -1869,5 +1987,29 @@ async function myDeliveryNext(oid,status){ try{ await api(`/orders/${oid}/delive
 
 boot();
 </script>
+<div id="lockView" class="hidden" style="position:fixed;inset:0;background:#0F141C;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;z-index:999;font-family:inherit">
+  <div style="max-width:420px;text-align:center">
+    <div style="font-size:52px">⏳</div>
+    <h1 style="font-size:24px;margin:10px 0 6px" id="lockTitle">Tu mes de prueba terminó</h1>
+    <p style="color:#9CA3AF;font-size:14px;line-height:1.6" id="lockMsg">Contacta al administrador de la plataforma para activar tu plan y seguir usando el sistema.</p>
+    <a id="lockWaBtn" href="#" target="_blank" style="display:none;margin-top:18px;background:#16a34a;color:#fff;text-decoration:none;padding:13px 22px;border-radius:10px;font-weight:800">📲 Contactar por WhatsApp</a>
+    <button onclick="logout()" style="display:block;margin:14px auto 0;background:none;border:1px solid #374151;color:#9CA3AF;padding:9px 16px;border-radius:8px;cursor:pointer">Salir</button>
+  </div>
+</div>
+<div id="onboardModal" class="modal hidden">
+  <div class="modalbox" style="max-width:520px">
+    <h2 style="margin-top:0">🎉 ¡Bienvenido a RUSH POS!</h2>
+    <p class="muted">Antes de empezar, dinos qué necesita tu negocio. Podrás cambiarlo después en Configuración.</p>
+    <div id="onbModules" class="modules-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:14px 0">
+      <div class="modchip" data-k="cocina">🍳 Cocina</div>
+      <div class="modchip" data-k="barra">☕ Barra</div>
+      <div class="modchip" data-k="mesas">🪑 Mesas</div>
+      <div class="modchip" data-k="canchas">🎾 Canchas</div>
+      <div class="modchip" data-k="repartidores">🛵 Repartidores</div>
+      <div class="modchip" data-k="loyalty">⭐ Tarjeta de lealtad</div>
+    </div>
+    <button class="primary" style="width:100%;padding:13px" onclick="saveOnboarding()">Empezar a usar mi sistema →</button>
+  </div>
+</div>
 </body>
 </html>
