@@ -10,3 +10,8 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "rush-pos-db"
 database_id = "79ed43c7-40b8-4a8a-bec5-1fd69449774b"
+
+# Fotos de producto (v27.0). Crea antes el bucket "rush-fotos" en Cloudflare → R2.
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "rush-fotos"
